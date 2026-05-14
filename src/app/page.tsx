@@ -45,6 +45,8 @@ const DEFAULT_MEMBERS: Member[] = [
   { id: 6, name: "PANKAJ", payments: { SEPT: 100, OCT: 100, NOV: 100 } },
   { id: 7, name: "PAVAN", payments: { SEPT: 100, OCT: 100, NOV: 100, DEC: 100, JAN: 100 } },
   { id: 8, name: "AYUSH.S", payments: { SEPT: 100 } },
+  { id: 9, name: "RONIK", payments: {}, isHonorary: true },
+  { id: 10, name: "SURAJ", payments: {}, isHonorary: true },
 ];
 
 function normalizeMemberCode(value: string) {
@@ -583,8 +585,13 @@ export default function CleanDashboard() {
                   Auto
                 </span>
               </div>
-              <div className="rounded-full bg-green-50 px-3 py-1 text-xs font-semibold text-green-700">
+              <div
+                className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                  loggedInUser?.isHonorary ? "bg-purple-50 text-purple-700" : "bg-green-50 text-green-700"
+                }`}
+              >
                 Logged in as {loggedInUser?.name}
+                {loggedInUser?.isHonorary ? " 🌟 Honorary" : ""}
               </div>
               <button
                 type="button"
