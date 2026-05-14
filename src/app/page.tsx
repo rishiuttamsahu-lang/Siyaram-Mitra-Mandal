@@ -32,6 +32,8 @@ type Member = {
 const STORAGE_KEYS = {
   members: "siyaram_members",
   blockedMonths: "siyaram_blocked_months",
+  user: "siyaram_user",
+  admin: "siyaram_admin",
 } as const;
 
 const DEFAULT_MEMBERS: Member[] = [
@@ -129,6 +131,8 @@ export default function CleanDashboard() {
   const [paymentAmount, setPaymentAmount] = useState(String(MONTHLY_TARGET));
   const [newMemberName, setNewMemberName] = useState("");
   const [isNewMemberHonorary, setIsNewMemberHonorary] = useState(false);
+  const [editCell, setEditCell] = useState<{ id: number | null; month: Month | null }>({ id: null, month: null });
+  const [editValue, setEditValue] = useState("");
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -136,6 +140,8 @@ export default function CleanDashboard() {
     try {
       const savedMembers = window.localStorage.getItem(STORAGE_KEYS.members);
       const savedBlockedMonths = window.localStorage.getItem(STORAGE_KEYS.blockedMonths);
+      const savedUser = window.localStorage.getItem(STORAGE_KEYS.user);
+      const savedAdmin = window.localStorage.getItem(STORAGE_KEYS.admin);
 
       if (savedMembers) {
         setMembers(sanitizeMembers(JSON.parse(savedMembers)));
@@ -145,9 +151,22 @@ export default function CleanDashboard() {
         const parsedMonths = JSON.parse(savedBlockedMonths) as string[];
         setBlockedMonths(parsedMonths.filter(isMonth));
       }
+
+      // Restore login session
+      if (savedUser) {
+        const user = JSON.parse(savedUser) as Member;
+        setLoggedInUser(user);
+        setIsLoggedIn(true);
+      }
+
+      if (savedAdmin === "true") {
+        setIsAdmin(true);
+      }
     } catch {
       window.localStorage.removeItem(STORAGE_KEYS.members);
       window.localStorage.removeItem(STORAGE_KEYS.blockedMonths);
+      window.localStorage.removeItem(STORAGE_KEYS.user);
+      window.localStorage.removeItem(STORAGE_KEYS.admin);
     }
 
     const autoMonth = getCurrentTrackingMonth();
@@ -160,6 +179,21 @@ export default function CleanDashboard() {
     window.localStorage.setItem(STORAGE_KEYS.members, JSON.stringify(members));
     window.localStorage.setItem(STORAGE_KEYS.blockedMonths, JSON.stringify(blockedMonths));
   }, [members, blockedMonths]);
+
+  // Persist login state
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (isLoggedIn && loggedInUser) {
+      window.localStorage.setItem(STORAGE_KEYS.user, JSON.stringify(loggedInUser));
+    } else {
+      window.localStorage.removeItem(STORAGE_KEYS.user);
+    }
+  }, [isLoggedIn, loggedInUser]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(STORAGE_KEYS.admin, isAdmin ? "true" : "false");
+  }, [isAdmin]);
 
   useEffect(() => {
     const exitTimer = window.setTimeout(() => {
@@ -337,6 +371,45 @@ export default function CleanDashboard() {
     setIsNewMemberHonorary(false);
   };
 
+  // --- INLINE EDITING LOGIC ---
+  const handleCellClick = (memberId: number, month: Month, currentValue: number | undefined) => {
+    if (isAdmin && !blockedMonths.includes(month)) {
+      setEditCell({ id: memberId, month: month });
+      setEditValue(String(currentValue || ""));
+    }
+  };
+
+  const saveInlineEdit = () => {
+    if (editCell.id !== null && editCell.month !== null) {
+      const numValue = parseInt(editValue) || 0;
+      const monthToUpdate = editCell.month; // Store in variable for TypeScript
+      setMembers((currentMembers) =>
+        currentMembers.map((member) => {
+          if (member.id === editCell.id) {
+            return {
+              ...member,
+              payments: {
+                ...member.payments,
+                [monthToUpdate]: numValue,
+              },
+            };
+          }
+          return member;
+        })
+      );
+    }
+    setEditCell({ id: null, month: null });
+    setEditValue("");
+  };
+
+  const handleInlineKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") saveInlineEdit();
+    if (e.key === "Escape") {
+      setEditCell({ id: null, month: null });
+      setEditValue("");
+    }
+  };
+
   if (isSplashVisible) {
     return (
       <div
@@ -344,6 +417,20 @@ export default function CleanDashboard() {
           isSplashExiting ? "opacity-0" : "opacity-100"
         }`}
       >
+        <style>{`
+          @keyframes premiumFadeIn {
+            0% { opacity: 0; transform: translateY(15px); filter: blur(4px); }
+            100% { opacity: 1; transform: translateY(0); filter: blur(0); }
+          }
+          @keyframes lineExpand {
+            0% { width: 0; opacity: 0; }
+            100% { width: 12rem; opacity: 1; }
+          }
+          .animate-text-1 { animation: premiumFadeIn 1.5s cubic-bezier(0.25, 1, 0.5, 1) forwards; }
+          .animate-line { animation: lineExpand 1s ease-out 1s forwards; opacity: 0; }
+          .animate-text-2 { opacity: 0; animation: premiumFadeIn 1.5s cubic-bezier(0.25, 1, 0.5, 1) 1.5s forwards; }
+        `}</style>
+
         <div className="absolute h-[280px] w-[280px] rounded-full border border-yellow-600/30 shadow-[0_0_60px_rgba(202,138,4,0.15)] md:h-[380px] md:w-[380px]" />
         <div
           className="absolute h-[300px] w-[300px] rounded-full border-[2px] border-yellow-700/40 animate-ping md:h-[400px] md:w-[400px]"
@@ -353,21 +440,18 @@ export default function CleanDashboard() {
 
         <div className="relative z-10 flex flex-col items-center space-y-8 p-6 text-center drop-shadow-2xl">
           <h1
-            className="bg-gradient-to-r from-yellow-200 via-yellow-400 to-yellow-600 bg-clip-text text-5xl font-normal tracking-wide text-transparent animate-pulse md:text-7xl"
+            className="animate-text-1 bg-gradient-to-r from-yellow-200 via-yellow-400 to-yellow-600 bg-clip-text text-5xl font-normal tracking-wide text-transparent md:text-7xl"
             style={{ fontFamily: "'Rozha One', serif", fontWeight: 400 }}
           >
             गणपती बाप्पा मोरया
           </h1>
-          <div className="h-[2px] w-48 bg-gradient-to-r from-transparent via-yellow-600/80 to-transparent" />
+          <div className="animate-line h-[2px] w-48 bg-gradient-to-r from-transparent via-yellow-600/80 to-transparent" />
           <h2
-            className="text-3xl font-bold tracking-wider text-yellow-50 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] md:text-5xl"
+            className="animate-text-2 text-3xl font-bold tracking-wider text-yellow-50 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] md:text-5xl"
             style={{ fontFamily: "'Gotu', sans-serif", fontWeight: 400 }}
           >
-            Siyaram Mitra Mandal
+            सियाराम मित्रमंडळ
           </h2>
-          <p className="text-sm font-medium uppercase tracking-[0.35em] text-yellow-200/80">
-            Loading financial dashboard
-          </p>
         </div>
       </div>
     );
@@ -711,23 +795,50 @@ export default function CleanDashboard() {
                 {isExpanded ? (
                   <div className="border-t border-gray-50 bg-gray-50/60 px-4 pb-4 pt-3">
                     <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-                      {MONTHS.map((month) => (
-                        <div
-                          key={month}
-                          className={`rounded-lg border p-2 text-center shadow-sm ${
-                            blockedMonths.includes(month)
-                              ? "border-red-200 bg-gray-100"
-                              : "border-gray-100 bg-white"
-                          }`}
-                        >
-                          <div className="text-[10px] font-bold uppercase text-gray-400">
-                            {month} {blockedMonths.includes(month) ? "🚫" : ""}
+                      {MONTHS.map((month) => {
+                        const isBlocked = blockedMonths.includes(month);
+                        const isEditing = editCell.id === member.id && editCell.month === month;
+
+                        return (
+                          <div
+                            key={month}
+                            onClick={() => handleCellClick(member.id, month, member.payments[month])}
+                            className={`relative rounded-lg border p-2 text-center shadow-sm ${
+                              isBlocked
+                                ? "border-red-200 bg-gray-100"
+                                : isAdmin
+                                  ? "border-yellow-300 cursor-pointer bg-white hover:bg-yellow-50"
+                                  : "border-gray-100 bg-white"
+                            }`}
+                          >
+                            <div className="text-[10px] font-bold uppercase text-gray-400">
+                              {month} {isBlocked ? "🚫" : ""}
+                            </div>
+                            {isEditing ? (
+                              <input
+                                type="number"
+                                autoFocus
+                                className="w-full border-b-2 border-[#5a0000] bg-transparent text-center text-sm font-bold outline-none"
+                                value={editValue}
+                                onChange={(e) => setEditValue(e.target.value)}
+                                onBlur={saveInlineEdit}
+                                onKeyDown={handleInlineKeyDown}
+                              />
+                            ) : (
+                              <div
+                                className={`text-sm font-semibold ${
+                                  isBlocked ? "line-through text-gray-400" : "text-gray-800"
+                                }`}
+                              >
+                                {member.payments[month] ? `₹${member.payments[month]}` : "-"}
+                              </div>
+                            )}
+                            {isAdmin && !isBlocked && !isEditing && (
+                              <span className="absolute right-1 top-1 text-[8px] text-yellow-500 opacity-50">✎</span>
+                            )}
                           </div>
-                          <div className={`text-sm font-semibold ${blockedMonths.includes(month) ? "text-gray-400 line-through" : "text-gray-800"}`}>
-                            {member.payments[month] ? `₹${member.payments[month]}` : "-"}
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 ) : null}
@@ -780,11 +891,44 @@ export default function CleanDashboard() {
                         </div>
                       </td>
 
-                      {MONTHS.map((month) => (
-                        <td key={month} className="px-4 py-4 text-center text-sm text-gray-600">
-                          {member.payments[month] ? `₹${member.payments[month]}` : "-"}
-                        </td>
-                      ))}
+                      {MONTHS.map((month) => {
+                        const isBlocked = blockedMonths.includes(month);
+                        const isEditing = editCell.id === member.id && editCell.month === month;
+
+                        return (
+                          <td
+                            key={month}
+                            onClick={() => handleCellClick(member.id, month, member.payments[month])}
+                            className={`relative px-4 py-4 text-center text-sm transition-colors ${
+                              isBlocked
+                                ? "bg-gray-50 text-gray-400"
+                                : isAdmin
+                                  ? "cursor-pointer hover:bg-yellow-50 hover:shadow-inner"
+                                  : "text-gray-600"
+                            }`}
+                            title={isAdmin && !isBlocked ? "Click to edit" : ""}
+                          >
+                            {isEditing ? (
+                              <input
+                                type="number"
+                                autoFocus
+                                className="w-16 border-b-2 border-red-500 bg-transparent text-center font-bold text-[#5a0000] outline-none"
+                                value={editValue}
+                                onChange={(e) => setEditValue(e.target.value)}
+                                onBlur={saveInlineEdit}
+                                onKeyDown={handleInlineKeyDown}
+                              />
+                            ) : (
+                              <>
+                                {member.payments[month] ? `₹${member.payments[month]}` : "-"}
+                                {isAdmin && !isBlocked && !isEditing && (
+                                  <span className="absolute right-2 top-2 text-[10px] text-gray-300 group-hover:text-yellow-600">✎</span>
+                                )}
+                              </>
+                            )}
+                          </td>
+                        );
+                      })}
 
                       {member.isHonorary ? (
                         <>
