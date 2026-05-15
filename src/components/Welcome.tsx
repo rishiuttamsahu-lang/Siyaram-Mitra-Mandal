@@ -34,8 +34,10 @@ export default function Welcome({ onAuthSuccess }: { onAuthSuccess: (data: any) 
         setUser(currentUser);
         setPhase(2);
       }
-    } catch (error) {
-      setErrorMsg("Login fail ho gaya. Dobara try karein.");
+    } catch (error: any) {
+      console.error('Google sign-in error:', error);
+      const msg = error?.message || "Login fail ho gaya. Dobara try karein.";
+      setErrorMsg(msg);
     }
     setIsLoading(false);
   };
