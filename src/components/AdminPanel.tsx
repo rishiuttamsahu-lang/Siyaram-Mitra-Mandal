@@ -133,6 +133,45 @@ export default function AdminPanel({ currentUserData }: { currentUserData: any }
   const [swipeOffset, setSwipeOffset] = useState(0);
   const [isSwiping, setIsSwiping] = useState(false);
 
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [isPlaying, setIsPlaying] = useState(true);
+  const [progress, setProgress] = useState(0);
+
+  useEffect(() => {
+    setProgress(0);
+    if (videoRef.current && selectedIndex !== null) {
+      const playPromise = videoRef.current.play();
+      if (playPromise !== undefined) {
+        playPromise.then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
+      }
+    }
+  }, [selectedIndex]);
+
+  const togglePlayPause = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (videoRef.current) {
+      if (videoRef.current.paused) {
+        const playPromise = videoRef.current.play();
+        if (playPromise !== undefined) {
+          playPromise.then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
+        } else {
+          setIsPlaying(true);
+        }
+      } else {
+        videoRef.current.pause();
+        setIsPlaying(false);
+      }
+    }
+  };
+
+  const handleTimeUpdate = () => {
+    if (videoRef.current) {
+      const current = videoRef.current.currentTime;
+      const total = videoRef.current.duration;
+      setProgress((current / total) * 100 || 0);
+    }
+  };
+
   const showToast = (text: string, type: 'success' | 'error') => {
     setToastMsg({ text, type });
     setTimeout(() => setToastMsg(null), 3000);
@@ -454,7 +493,7 @@ export default function AdminPanel({ currentUserData }: { currentUserData: any }
                   <div className="w-[120px]">
                     <CustomSelect 
                       value={user.role || 'Viewer'} 
-                      onChange={(val) => handleRoleChange(user.id || user.uid, val)} 
+                      onChange={(val: string) => handleRoleChange(user.id || user.uid, val)} 
                       options={[
                         { value: 'Viewer', label: 'Viewer' },
                         { value: 'Member', label: 'Member' },
@@ -664,7 +703,26 @@ export default function AdminPanel({ currentUserData }: { currentUserData: any }
                         {isNear ? (
                           item.type?.startsWith('video') ? (
                             index === selectedIndex ? (
-                              <video controls autoPlay className="max-h-full max-w-full rounded-xl shadow-2xl border border-white/10"><source src={item.url} type="video/mp4" /></video>
+                              <div className="relative w-full h-full flex items-center justify-center bg-black">
+                                <video
+                                  ref={videoRef}
+                                  src={item.url}
+                                  playsInline
+                                  loop
+                                  onClick={togglePlayPause}
+                                  onTimeUpdate={handleTimeUpdate}
+                                  className="max-h-full max-w-full object-contain pointer-events-auto rounded-xl shadow-2xl border border-white/10"
+                                  style={{ willChange: 'transform', transform: 'translate3d(0,0,0)' }}
+                                />
+                                {!isPlaying && (
+                                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                    <div className="bg-black/50 backdrop-blur-sm rounded-full p-4"><Play className="w-12 h-12 text-white fill-white" /></div>
+                                  </div>
+                                )}
+                                <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/20 z-40">
+                                  <div className="h-full bg-white transition-all duration-75" style={{ width: `${progress}%` }} />
+                                </div>
+                              </div>
                             ) : (
                               <div className="relative flex items-center justify-center max-h-full max-w-full rounded-xl overflow-hidden">
                                 <img src={getOptimizedMediaUrl(item.url, item.type)} className="max-h-full max-w-full object-contain" alt="video-poster" />

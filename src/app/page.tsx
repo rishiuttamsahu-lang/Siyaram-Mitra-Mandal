@@ -40,6 +40,20 @@ export default function Home() {
 
   const [revealSequence, setRevealSequence] = useState(3);
 
+  // Restore the saved passcode session for the signed-in user.
+  useEffect(() => {
+    if (!user?.uid) return;
+
+    try {
+      const savedAuth = localStorage.getItem(`mandal_pass_auth_${user.uid}`);
+      if (savedAuth === 'true') {
+        setIsPasscodeVerified(true);
+      }
+    } catch {
+      // Ignore storage failures in restrictive browser modes.
+    }
+  }, [user?.uid]);
+
   const welcomeText = "Deviyon aur sajjanon, Siyaram Mitra Mandal mein aapka hardik swagat hai. Yeh portal Bappa ki aarti, visarjan aur mandal ki pavitra yaadon ko ek saath sanjone ke liye banaya gaya hai. Yahan aap mandal se judi photos aur videos dekh aur upload kar sakte hain. Yeh website keval Siyaram Mitra Mandal parivar ke sadasyon aur mataon-behnon ke liye hai, taaki sabhi ki privacy aur sammaan poori tarah surakshit rahe. Kisi baahari vyakti ko yahan pravesh ki anumati nahi hai.";
 
   // 1. Auth Listener: Isko intro se alag rakho
