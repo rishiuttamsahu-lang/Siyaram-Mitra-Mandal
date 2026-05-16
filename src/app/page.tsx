@@ -13,6 +13,7 @@ import UserProfile from '@/components/UserProfile';
 import Contribute from '@/components/Contribute';
 import UploadSection from '@/components/UploadSection';
 import ViewerHome from '@/components/ViewerHome';
+import ViewerDashboard from '@/components/ViewerDashboard'; // 🔥 Naya Sphere component import karo
 import { SpotlightNav } from '@/components/ui/spotlight-nav';
 import { LogOut, Shield } from 'lucide-react';
 
@@ -306,13 +307,26 @@ export default function Home() {
       <div className="flex-1 w-full max-w-7xl mx-auto p-4 md:p-6" style={{ paddingTop: 0 }}>
         
         {/* TAB RENDERING */}
+        {/* TAB RENDERING */}
         {activeTab === 'dashboard' && (
           userData.role?.toLowerCase() === 'viewer' ? (
-            <ViewerHome userData={userData} onExplore={() => {
-              setRevealSequence(1);
-              setActiveTab('gallery');
-            }} />
+            // 🔥 Intro phase if revealSequence == 0
+            revealSequence === 0 ? (
+              <ViewerHome 
+                userData={userData} 
+                onExplore={() => {
+                  setRevealSequence(1);
+                  setActiveTab('dashboard'); // Ab direct home pe jayega!
+                }} 
+              />
+            ) : (
+              // 🔥 Intro ke baad Sphere wala Dashboard aayega
+              <div className={`transition-opacity duration-1000 ${revealSequence >= 1 ? 'opacity-100' : 'opacity-0'}`}>
+                <ViewerDashboard userData={userData} />
+              </div>
+            )
           ) : (
+            // Admin/Member ka default dashboard
             <div className={`transition-opacity duration-1000 ${revealSequence >= 3 ? 'opacity-100' : 'opacity-0'}`}>
               <Dashboard userData={userData} />
             </div>

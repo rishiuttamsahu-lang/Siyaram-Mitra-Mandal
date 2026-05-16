@@ -13,14 +13,19 @@ export const SpotlightNav = ({ activeTab, setActiveTab, userRole }: SpotlightNav
   const [loadingTab, setLoadingTab] = useState<string | null>(null);
 
   const navItems = [
-    { id: "dashboard", label: "Home", icon: <Home size={22} />, hideForViewer: true },
+    { id: "dashboard", label: "Home", icon: <Home size={22} /> },
     { id: "gallery", label: "Vault", icon: <Library size={22} /> },
     { id: "upload", label: "Upload", icon: <Upload size={22} /> },
     { id: "contribute", label: "Donate", icon: <Coins size={22} /> },
     { id: "profile", label: "Profile", icon: <User size={22} /> },
   ];
 
-  const visibleNavItems = navItems.filter(item => !(userRole === 'Viewer' && item.hideForViewer));
+  const visibleNavItems = navItems.filter(item => {
+    if (!userRole) return true;
+    // normalize
+    const role = typeof userRole === 'string' ? userRole.toLowerCase() : '';
+    return !(role === 'viewer' && (item as any).hideForViewer);
+  });
 
   const handleTabClick = (id: string) => {
     if (activeTab !== id) {
