@@ -14,7 +14,7 @@ export default function UserProfile({ userData }: { userData: any }) {
   const [mediaToDelete, setMediaToDelete] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
-  // 🔥 NEW: Multi-Select States
+  // Multi-Select States
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isSelectMode, setIsSelectMode] = useState(false);
   const longPressTimer = useRef<NodeJS.Timeout | null>(null);
@@ -26,8 +26,12 @@ export default function UserProfile({ userData }: { userData: any }) {
   const [isUpdating, setIsUpdating] = useState(false);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
 
+  // 🔥 VIRTUALIZED SLIDER STATES
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const selectedMedia = selectedIndex !== null ? myMedia[selectedIndex] : null;
+  const [touchStart, setTouchStart] = useState(0);
+  const [swipeOffset, setSwipeOffset] = useState(0);
+  const [isSwiping, setIsSwiping] = useState(false);
 
   useEffect(() => {
     if (!userData?.uid) return;
@@ -85,9 +89,6 @@ export default function UserProfile({ userData }: { userData: any }) {
     setIsAccountPrivate(newStatus); 
     try {
       await updateDoc(doc(db, 'users', userData.uid), { isAccountPrivate: newStatus });
-      // 🔥 SMART SYNC LOGIC:
-      // Agar account PRIVATE kiya ja raha hai, toh hi saari photos lock karo.
-      // Agar PUBLIC kiya ja raha hai, toh purani locked photos ko mat chhedo.
       if (newStatus && myMedia.length > 0) {
         const batch = writeBatch(db);
         myMedia.forEach((item) => {
@@ -96,7 +97,7 @@ export default function UserProfile({ userData }: { userData: any }) {
         await batch.commit();
       }
     } catch (error: any) {
-      alert("Error updating privacy. Please check your internet or Firebase connection.");
+      alert("Error updating privacy. Please check your internet connection.");
       setIsAccountPrivate(!newStatus);
     }
   };
@@ -105,17 +106,13 @@ export default function UserProfile({ userData }: { userData: any }) {
     e.preventDefault();
     setIsUpdating(true);
     try {
-      // 1. Pehle sirf user profile update karo (photoURL, name, bio)
       await updateDoc(doc(db, 'users', userData.uid), { 
         name: displayName || "", 
         bio: bio || "",
-        photoURL: photoURL || "", // Ye ensure karo ki photoURL state yahan update ho rahi hai
+        photoURL: photoURL || "", 
         isAccountPrivate: isAccountPrivate ?? false 
       });
 
-      // 2. 🔥 SMART SYNC LOGIC:
-      // Agar account PRIVATE kiya ja raha hai, toh hi saari photos lock karo.
-      // Agar PUBLIC kiya ja raha hai, toh purani locked photos ko mat chhedo.
       if (isAccountPrivate && myMedia.length > 0) {
         const batch = writeBatch(db);
         myMedia.forEach((item) => {
@@ -126,16 +123,14 @@ export default function UserProfile({ userData }: { userData: any }) {
       }
 
       setIsEditModalOpen(false);
-      alert("Profile saved successfully! ✅"); // Feedback ke liye
     } catch (error: any) {
-      console.error("Firebase Error:", error);
       alert(`Failed to save profile: ${error.message}`);
     } finally {
       setIsUpdating(false);
     }
   };
 
-  // 🔥 Multi-Select Logic Functions
+  // Multi-Select Logic Functions
   const toggleSelection = (id: string) => {
     setSelectedIds(prev => 
       prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
@@ -147,11 +142,11 @@ export default function UserProfile({ userData }: { userData: any }) {
     setSelectedIds([id]);
   };
 
-  const handleTouchStart = (id: string) => {
+  const handleTouchStartLongPress = (id: string) => {
     longPressTimer.current = setTimeout(() => startSelectMode(id), 600);
   };
 
-  const handleTouchEnd = () => {
+  const handleTouchEndLongPress = () => {
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
   };
 
@@ -160,7 +155,7 @@ export default function UserProfile({ userData }: { userData: any }) {
     setSelectedIds([]);
   };
 
-  // 🔥 Bulk Actions
+  // Bulk Actions
   const handleBulkDelete = async () => {
     if (!window.confirm(`Delete ${selectedIds.length} items permanently?`)) return;
     try {
@@ -197,24 +192,54 @@ export default function UserProfile({ userData }: { userData: any }) {
     }
   };
 
+  // 🔥 SWIPE AND NAVIGATION LOGIC
+  const handleNext = useCallback((e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setSelectedIndex((prev) => (prev !== null && prev < myMedia.length - 1 ? prev + 1 : prev));
+  }, [myMedia.length]);
+
+  const handlePrev = useCallback((e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setSelectedIndex((prev) => (prev !== null && prev > 0 ? prev - 1 : prev));
+  }, []);
+
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (selectedIndex === null || mediaToDelete) return;
-    if (e.key === 'ArrowRight') setSelectedIndex((prev) => (prev !== null ? (prev + 1) % myMedia.length : null));
-    if (e.key === 'ArrowLeft') setSelectedIndex((prev) => (prev !== null ? (prev - 1 + myMedia.length) % myMedia.length : null));
+    if (e.key === 'ArrowRight') handleNext();
+    if (e.key === 'ArrowLeft') handlePrev();
     if (e.key === 'Escape') setSelectedIndex(null);
-  }, [selectedIndex, myMedia.length, mediaToDelete]);
+  }, [selectedIndex, myMedia.length, mediaToDelete, handleNext, handlePrev]);
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleKeyDown]);
 
+  const handleTouchStart = (e: React.TouchEvent) => {
+    setTouchStart(e.targetTouches[0].clientX);
+    setIsSwiping(true);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!touchStart) return;
+    setSwipeOffset(e.targetTouches[0].clientX - touchStart);
+  };
+
+  const handleTouchEnd = () => {
+    if (!touchStart) return;
+    setIsSwiping(false);
+    if (swipeOffset > 60) handlePrev();
+    else if (swipeOffset < -60) handleNext();
+
+    setSwipeOffset(0);
+    setTouchStart(0);
+  };
+
   const totalBytes = myMedia.reduce((acc, curr) => acc + (curr.size || 0), 0);
   const storageUsedMB = (totalBytes / (1024 * 1024)).toFixed(1);
   const storagePercent = Math.min((Number(storageUsedMB) / 500) * 100, 100);
 
   return (
-    // 🔥 FIXED: Changed bg-[#0a0202] to bg-white/gray-50 and adjusted padding (-mx-4 to bypass padding gaps)
     <main className="bg-gray-50 pt-0 min-h-screen animate-fade-in relative pb-28 -mx-4 sm:mx-0">
       
       {/* 1. Cover Photo */}
@@ -227,7 +252,6 @@ export default function UserProfile({ userData }: { userData: any }) {
         {/* 2. Overlapping Avatar & Top Actions */}
         <div className="-mt-16 mb-6 relative flex justify-between items-end">
           <div className="relative w-28 h-28 sm:w-32 sm:h-32 inline-block">
-            {/* White border for the avatar */}
             <div className="w-full h-full rounded-full border-[6px] border-gray-50 bg-white flex items-center justify-center shadow-md overflow-hidden relative">
               {photoURL ? (
                 <img src={photoURL} alt={displayName} className="w-full h-full object-cover" />
@@ -311,10 +335,10 @@ export default function UserProfile({ userData }: { userData: any }) {
                 return (
                 <div 
                   key={item.id} 
-                  onMouseDown={() => handleTouchStart(item.id)}
-                  onMouseUp={handleTouchEnd}
-                  onTouchStart={() => handleTouchStart(item.id)}
-                  onTouchEnd={handleTouchEnd}
+                  onMouseDown={() => handleTouchStartLongPress(item.id)}
+                  onMouseUp={handleTouchEndLongPress}
+                  onTouchStart={() => handleTouchStartLongPress(item.id)}
+                  onTouchEnd={handleTouchEndLongPress}
                   onClick={() => isSelectMode ? toggleSelection(item.id) : setSelectedIndex(index)}
                   className={`group relative overflow-hidden rounded-[16px] border-2 bg-gray-100 cursor-pointer transition-all ${isSelected ? 'border-[#5a0000] scale-95 shadow-inner' : 'border-gray-200 shadow-sm hover:shadow-md'}`}
                 >
@@ -331,7 +355,6 @@ export default function UserProfile({ userData }: { userData: any }) {
                     )}
                   </div>
                   
-                  {/* Selection Checkbox UI */}
                   {isSelectMode && (
                     <div className={`absolute top-1.5 right-1.5 w-5 h-5 z-40 rounded-full border-2 flex items-center justify-center ${isSelected ? 'bg-[#5a0000] border-[#5a0000]' : 'bg-white/40 border-white'}`}>
                       {isSelected && <CheckCircle2 className="w-3 h-3 text-white" />}
@@ -347,7 +370,7 @@ export default function UserProfile({ userData }: { userData: any }) {
                   {!isSelectMode && (
                     <button 
                     onClick={async (e) => {
-                      e.stopPropagation(); // Lightbox ko khulne se rokne ke liye
+                      e.stopPropagation();
                       const newStatus = !item.isPrivate;
                       try {
                         await updateDoc(doc(db, 'mandal_gallery', item.id), { isPrivate: newStatus });
@@ -375,7 +398,6 @@ export default function UserProfile({ userData }: { userData: any }) {
           </div>
         )}
 
-      {/* 🔥 FLOATING BULK ACTION BAR */}
       {isSelectMode && selectedIds.length > 0 && (
         <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[150] w-[90%] max-w-md bg-white border border-gray-200 rounded-2xl shadow-2xl p-4 flex items-center justify-around animate-fade-in">
            <button onClick={() => handleBulkLock(true)} className="flex flex-col items-center gap-1 text-gray-600 hover:text-red-600 transition-colors"><Lock size={20}/><span className="text-[10px] font-bold">LOCK</span></button>
@@ -400,7 +422,6 @@ export default function UserProfile({ userData }: { userData: any }) {
               </div>
               <div className="flex items-center gap-3 shrink-0 bg-gray-50 px-3 py-2 rounded-xl border border-gray-200">
                 <span className="text-[10px] font-bold text-gray-600 uppercase">{isAccountPrivate ? 'Stealth Mode' : 'Public'}</span>
-                {/* 🔥 FIXED SWITCH IN TAB CONTENT AS WELL */}
                 <button onClick={toggleInstantPrivacy} className={`w-10 h-5 rounded-full transition-all relative ${isAccountPrivate ? 'bg-[#5A0000]' : 'bg-gray-300'}`}>
                   <div className={`w-3.5 h-3.5 bg-white rounded-full absolute top-0.75 transition-all shadow-sm ${isAccountPrivate ? 'translate-x-5.5' : 'translate-x-1'}`} />
                 </button>
@@ -425,10 +446,6 @@ export default function UserProfile({ userData }: { userData: any }) {
         )}
       </div>
 
-      {/* ======================= */}
-      {/* MODALS                  */}
-      {/* ======================= */}
-      
       {/* Edit Profile Modal */}
       {isEditModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
@@ -458,12 +475,11 @@ export default function UserProfile({ userData }: { userData: any }) {
                 <textarea value={bio} onChange={(e) => setBio(e.target.value)} className="w-full bg-gray-50 px-4 py-3 rounded-xl border border-gray-200 text-gray-900 focus:border-[#5A0000] focus:outline-none min-h-[80px]" />
               </div>
 
-              {/* 🔥 FIXED SWITCH: Clicking this now updates local state correctly */}
               <div className="pt-2">
                 <p className="text-[10px] font-bold text-gray-400 uppercase mb-2 tracking-widest">Privacy Control</p>
                 <div 
                   className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100 cursor-pointer" 
-                  onClick={() => setIsAccountPrivate(!isAccountPrivate)} // Wait, previously it was onClick={toggleInstantPrivacy}
+                  onClick={() => setIsAccountPrivate(!isAccountPrivate)}
                 >
                   <div className="flex items-center gap-3">
                     {isAccountPrivate ? <Lock className="w-4 h-4 text-red-600" /> : <Unlock className="w-4 h-4 text-green-600" />}
@@ -486,7 +502,7 @@ export default function UserProfile({ userData }: { userData: any }) {
         </div>
       )}
 
-      {/* Lightbox Viewer */}
+      {/* 🔥 THE NEW LIGHTBOX VIEWER WITH SLIDE SWAP */}
       {selectedMedia && (
         <div className="fixed inset-0 z-[110] flex flex-col bg-black/95 backdrop-blur-xl animate-fade-in touch-none">
           <div className="absolute top-0 w-full p-4 flex justify-between items-start z-50 bg-gradient-to-b from-black/80 to-transparent pointer-events-none">
@@ -497,16 +513,51 @@ export default function UserProfile({ userData }: { userData: any }) {
             <button onClick={() => setSelectedIndex(null)} className="p-2 bg-white/10 rounded-full text-white hover:bg-white/20 transition-all pointer-events-auto"><X className="w-5 h-5" /></button>
           </div>
 
-          <div className="flex-1 relative flex items-center justify-center overflow-hidden" onClick={() => setSelectedIndex(null)}>
-            <button onClick={(e) => { e.stopPropagation(); handleKeyDown({ key: 'ArrowLeft' } as any); }} className="absolute left-4 z-50 p-3 bg-white/5 text-white rounded-full hover:bg-white/20 transition-all hidden sm:block"><ChevronLeft className="w-6 h-6" /></button>
-            <div className="relative w-full h-full max-h-[75vh] flex items-center justify-center px-4" onClick={(e) => e.stopPropagation()}>
-              {selectedMedia.type === 'video' ? (
-                <video controls autoPlay className="max-h-full max-w-full rounded-xl shadow-2xl border border-white/10"><source src={selectedMedia.url} type="video/mp4" /></video>
-              ) : (
-                <img src={selectedMedia.url} className="max-h-full max-w-full object-contain select-none rounded-xl shadow-2xl border border-white/10" alt="fullscreen" />
-              )}
+          <div 
+            className="flex-1 relative flex items-center overflow-hidden touch-none" 
+            onClick={() => setSelectedIndex(null)}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+          >
+            <button onClick={handlePrev} className="absolute left-4 z-50 p-3 bg-white/5 text-white rounded-full hover:bg-white/20 transition-all hidden sm:block"><ChevronLeft className="w-6 h-6" /></button>
+            
+            <div 
+              className="flex w-full h-full items-center will-change-transform"
+              style={{
+                transform: `translate3d(calc(-${(selectedIndex || 0) * 100}% + ${swipeOffset}px), 0, 0)`,
+                transition: isSwiping ? 'none' : 'transform 0.3s cubic-bezier(0.25, 1, 0.5, 1)'
+              }}
+            >
+              {myMedia.map((item, index) => {
+                const isNear = Math.abs(index - (selectedIndex || 0)) <= 1;
+
+                return (
+                  <div key={item.id} className="min-w-full h-full flex items-center justify-center px-4" onClick={(e) => e.stopPropagation()}>
+                    {isNear ? (
+                      item.type === 'video' ? (
+                        index === selectedIndex ? (
+                          <video controls autoPlay className="max-h-full max-w-full rounded-xl shadow-2xl border border-white/10">
+                            <source src={item.url} type="video/mp4" />
+                          </video>
+                        ) : (
+                          <div className="relative flex items-center justify-center max-h-full max-w-full rounded-xl overflow-hidden">
+                            <img src={item.thumbnail} className="max-h-full max-w-full object-contain blur-[2px]" alt="video-poster" />
+                            <Play className="absolute w-16 h-16 text-white/70" />
+                          </div>
+                        )
+                      ) : (
+                        <img src={item.url} className="max-h-full max-w-full object-contain select-none rounded-xl shadow-2xl border border-white/10 pointer-events-none" alt="fullscreen" />
+                      )
+                    ) : (
+                      <div className="w-full h-full" />
+                    )}
+                  </div>
+                );
+              })}
             </div>
-            <button onClick={(e) => { e.stopPropagation(); handleKeyDown({ key: 'ArrowRight' } as any); }} className="absolute right-4 z-50 p-3 bg-white/5 text-white rounded-full hover:bg-white/20 transition-all hidden sm:block"><ChevronRight className="w-6 h-6" /></button>
+
+            <button onClick={handleNext} className="absolute right-4 z-50 p-3 bg-white/5 text-white rounded-full hover:bg-white/20 transition-all hidden sm:block"><ChevronRight className="w-6 h-6" /></button>
           </div>
 
           <div className="w-full bg-black/80 p-4 pb-8 sm:pb-4 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-white/10 z-50">
@@ -514,7 +565,6 @@ export default function UserProfile({ userData }: { userData: any }) {
               <Trash2 className="w-4 h-4" /> <span className="font-bold text-[10px] uppercase tracking-widest hidden sm:block">Delete memory</span>
             </button>
             <div className="flex gap-2 w-full sm:w-auto">
-              {/* WhatsApp Size (SD) Button - High Visibility */}
               <a 
                 href={selectedMedia.url.replace('/upload/', '/upload/q_auto:eco,w_1080/')} 
                 target="_blank" 

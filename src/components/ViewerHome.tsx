@@ -4,12 +4,23 @@ import React, { useState, useEffect } from 'react';
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot } from 'firebase/firestore';
 
-export default function ViewerHome({ userData, onExplore }: { userData: any, onExplore: () => void }) {
+type ViewerHomeUserData = {
+  name?: string;
+  photoURL?: string;
+};
+
+type ViewerHomeProps = {
+  userData: ViewerHomeUserData;
+  onExplore: () => void;
+};
+
+export default function ViewerHome({ userData, onExplore }: ViewerHomeProps) {
   const [phase, setPhase] = useState(1);
   const [members, setMembers] = useState<string[]>([]);
   const [currentFlashMember, setCurrentFlashMember] = useState("");
   const [flashPos, setFlashPos] = useState({ top: '50%', left: '50%' });
   const [isExiting, setIsExiting] = useState(false);
+  const [canTap, setCanTap] = useState(false);
 
   // 1. Fetch Member Names for Background Animation
   useEffect(() => {
@@ -22,14 +33,20 @@ export default function ViewerHome({ userData, onExplore }: { userData: any, onE
 
   // 2. Phase Controller (Phase 1 -> Phase 2 -> Phase 3)
   useEffect(() => {
-    const timerPhase2 = setTimeout(() => setPhase(2), 7000);
-    const timerPhase3 = setTimeout(() => setPhase(3), 13000); 
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const tapLockTimer: ReturnType<typeof setTimeout> = setTimeout(() => setCanTap(true), 500);
+
+    if (phase === 1) {
+      timer = setTimeout(() => setPhase(2), 4000);
+    } else if (phase === 2) {
+      timer = setTimeout(() => setPhase(3), 6000);
+    }
 
     return () => {
-      clearTimeout(timerPhase2);
-      clearTimeout(timerPhase3);
+      if (timer) clearTimeout(timer);
+      if (tapLockTimer) clearTimeout(tapLockTimer);
     };
-  }, []);
+  }, [phase]);
 
   // 3. Background Names Flashing Logic (Safe Bounds for Mobile)
   useEffect(() => {
@@ -51,6 +68,7 @@ export default function ViewerHome({ userData, onExplore }: { userData: any, onE
 
   const handleExploreClick = (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (!canTap) return;
     setIsExiting(true);
     setTimeout(() => {
       onExplore(); 
@@ -58,8 +76,18 @@ export default function ViewerHome({ userData, onExplore }: { userData: any, onE
   };
 
   const handleScreenTap = () => {
-    if (phase === 1) setPhase(2);
-    else if (phase === 2) setPhase(3);
+    if (isExiting || !canTap) return;
+
+    if (phase === 1) {
+      setCanTap(false);
+      setPhase(2);
+    } else if (phase === 2) {
+      setCanTap(false);
+      setPhase(3);
+    } else if (phase === 3) {
+      setIsExiting(true);
+      setTimeout(() => onExplore(), 800);
+    }
   };
 
   return (
@@ -165,7 +193,7 @@ export default function ViewerHome({ userData, onExplore }: { userData: any, onE
           {/* 🔥 Sleek Explore Button */}
           <button 
             onClick={handleExploreClick}
-            className="px-8 py-3 md:px-10 md:py-3.5 bg-gradient-to-r from-yellow-600 to-yellow-400 text-black text-[9px] md:text-[10px] font-black uppercase tracking-[0.3em] rounded-full shadow-[0_8px_15px_rgba(202,138,4,0.2)] active:scale-95 transition-all hover:brightness-110"
+            className={`px-8 py-3 md:px-10 md:py-3.5 bg-gradient-to-r from-yellow-600 to-yellow-400 text-black text-[9px] md:text-[10px] font-black uppercase tracking-[0.3em] rounded-full shadow-[0_8px_15px_rgba(202,138,4,0.2)] active:scale-95 transition-all hover:brightness-110 ${canTap ? '' : 'opacity-50 cursor-not-allowed'}`}
           >
             Explore Our Memories
           </button>

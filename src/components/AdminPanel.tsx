@@ -1,12 +1,13 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot, doc, updateDoc, deleteDoc, query, orderBy, setDoc, getDoc } from 'firebase/firestore';
 import UserProfile from '@/components/UserProfile';
 import {
   Shield, ShieldAlert, Ban, RefreshCcw, Key, Mail, User, Image as ImageIcon,
-  BarChart2, Settings, Lock, Activity, Database, AlertTriangle, Trash2, Play, Search, Smartphone, Bell, UserCircle, CheckCircle2
+  BarChart2, Settings, Lock, Activity, Database, AlertTriangle, Trash2, Search, Bell, UserCircle, CheckCircle2,
+  Play, ChevronLeft, ChevronRight, X, Download, Smartphone, Unlock // 🔥 NAYE IMPORTS ADD KIYE
 } from 'lucide-react';
 
 const adminTabs = [
@@ -48,12 +49,18 @@ const DEFAULT_MEMBERS = [
   { id: 10, name: "SURAJ", payments: {}, isHonorary: true },
 ];
 
-
 export default function AdminPanel({ currentUserData }: { currentUserData: any }) {
   const [activeTab, setActiveTab] = useState("analytics");
   const [users, setUsers] = useState<any[]>([]);
   const [media, setMedia] = useState<any[]>([]);
   const [userSearch, setUserSearch] = useState("");
+  const [vaultSearch, setVaultSearch] = useState('');
+  const [vaultType, setVaultType] = useState('all');
+  const [vaultPrivacy, setVaultPrivacy] = useState('all');
+  const [vaultSort, setVaultSort] = useState('newest');
+  const [vaultUploader, setVaultUploader] = useState('all');
+  const [vaultDate, setVaultDate] = useState('all');
+  const [vaultCaption, setVaultCaption] = useState('all');
   const [toastMsg, setToastMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
   const [localPasscode, setLocalPasscode] = useState("");
@@ -68,6 +75,11 @@ export default function AdminPanel({ currentUserData }: { currentUserData: any }
   const [isRestoring, setIsRestoring] = useState(false);
   const [chandaPayments, setChandaPayments] = useState<any[]>([]);
 
+  // 🔥 VAULT SLIDER STATES
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const [touchStart, setTouchStart] = useState(0);
+  const [swipeOffset, setSwipeOffset] = useState(0);
+  const [isSwiping, setIsSwiping] = useState(false);
 
   const showToast = (text: string, type: 'success' | 'error') => {
     setToastMsg({ text, type });
@@ -82,9 +94,7 @@ export default function AdminPanel({ currentUserData }: { currentUserData: any }
     notifications: [],
   });
 
-  // Fetch Data (Fixed Permission Error)
   useEffect(() => {
-    // 🔥 FIX: Agar user Admin nahi hai, toh background mein data fetch hi mat karo
     if (currentUserData?.role !== 'Admin') return;
 
     const unsubUsers = onSnapshot(collection(db, 'users'), (snap) => {
@@ -155,7 +165,7 @@ export default function AdminPanel({ currentUserData }: { currentUserData: any }
       unsubMandalMembers();
       unsubConfigBlock();
     };
-  }, [currentUserData?.role]); // Dependency mein role add kiya
+  }, [currentUserData?.role]);
 
   const toggleBlockMonth = async (month: Month) => {
     const newBlocked = blockedMonths.includes(month)
@@ -241,21 +251,50 @@ export default function AdminPanel({ currentUserData }: { currentUserData: any }
   const payingMembersCount = mandalMembers.filter((member) => !member.isHonorary).length;
   const pendingChandaPayments = chandaPayments.filter((payment) => payment.status === 'Pending');
 
-
   const filteredUsers = users.filter(u =>
     u.name?.toLowerCase().includes(userSearch.toLowerCase()) ||
     u.email?.toLowerCase().includes(userSearch.toLowerCase())
   );
 
+  const uniqueUploaders = Array.from(new Set(media.map((m: any) => m.uploaderEmail))).filter(Boolean) as string[];
+
+  const filteredVaultMedia = media.filter((item: any) => {
+    const searchMatch = item.uploaderEmail?.toLowerCase().includes(vaultSearch.toLowerCase()) ||
+                        (item.caption && item.caption.toLowerCase().includes(vaultSearch.toLowerCase()));
+
+    const typeMatch = vaultType === 'all' ? true :
+                      vaultType === 'image' ? item.type?.startsWith('image') :
+                      item.type?.startsWith('video');
+
+    const privacyMatch = vaultPrivacy === 'all' ? true :
+                         vaultPrivacy === 'private' ? item.isPrivate === true :
+                         item.isPrivate === false;
+
+    const uploaderMatch = vaultUploader === 'all' ? true : item.uploaderEmail === vaultUploader;
+
+    const itemDate = new Date(item.timestamp?.seconds ? item.timestamp.seconds * 1000 : item.createdAt || 0);
+    const now = new Date();
+    const daysDiff = (now.getTime() - itemDate.getTime()) / (1000 * 3600 * 24);
+    let dateMatch = true;
+    if (vaultDate === '7days') dateMatch = daysDiff <= 7;
+    if (vaultDate === '30days') dateMatch = daysDiff <= 30;
+
+    const captionMatch = vaultCaption === 'all' ? true :
+                         vaultCaption === 'has_caption' ? !!item.caption :
+                         !item.caption;
+
+    return searchMatch && typeMatch && privacyMatch && uploaderMatch && dateMatch && captionMatch;
+  }).sort((a: any, b: any) => {
+    const timeA = a.timestamp?.seconds || a.createdAt || 0;
+    const timeB = b.timestamp?.seconds || b.createdAt || 0;
+    return vaultSort === 'newest' ? timeB - timeA : timeA - timeB;
+  });
+
   const activeUsers = users.filter((user) => user.lastLogin);
   const failedAttemptUsers = users.filter((user) => (user.failedAttempts || 0) > 0);
 
   const handleRoleChange = async (uid: string, newRole: string) => {
-    if (!uid) {
-      showToast("Error: User ID missing!", 'error');
-      return;
-    }
-
+    if (!uid) return;
     try {
       const isBanned = newRole === 'Banned';
       await updateDoc(doc(db, 'users', uid), {
@@ -264,7 +303,6 @@ export default function AdminPanel({ currentUserData }: { currentUserData: any }
       });
       showToast(`Role updated to ${newRole} 👑`, 'success');
     } catch (error: any) {
-      console.error("Role Error:", error);
       showToast(`Error updating role: ${error.message}`, 'error');
     }
   };
@@ -274,7 +312,6 @@ export default function AdminPanel({ currentUserData }: { currentUserData: any }
       await updateDoc(doc(db, 'chanda_payments', id), { status: 'Approved' });
       showToast('Chanda approved successfully! ✅', 'success');
     } catch (error) {
-      console.error('Error approving:', error);
       showToast('Unable to approve this payment.', 'error');
     }
   };
@@ -285,23 +322,23 @@ export default function AdminPanel({ currentUserData }: { currentUserData: any }
       await updateDoc(doc(db, 'chanda_payments', id), { status: 'Rejected' });
       showToast('Payment marked as rejected.', 'success');
     } catch (error) {
-      console.error('Error rejecting:', error);
       showToast('Unable to reject this payment.', 'error');
     }
   };
 
-  const deleteMedia = async (id: string) => {
-    if (!id) {
-      showToast("Error: Media ID missing!", 'error');
-      return;
-    }
-
-    try {
-      await deleteDoc(doc(db, 'mandal_gallery', id));
-      showToast("Media deleted successfully! 🗑️", 'success');
-    } catch (error: any) {
-      console.error("Delete Error:", error);
-      showToast(`Error deleting file: ${error.message}`, 'error');
+  const deleteMedia = async (id: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    if (!id) return;
+    if (confirm('Permanently delete this from the Vault?')) {
+      try {
+        await deleteDoc(doc(db, 'mandal_gallery', id));
+        if (selectedIndex !== null && filteredVaultMedia[selectedIndex]?.id === id) {
+          setSelectedIndex(null);
+        }
+        showToast("Media deleted successfully! 🗑️", 'success');
+      } catch (error: any) {
+        showToast(`Error deleting file: ${error.message}`, 'error');
+      }
     }
   };
 
@@ -312,7 +349,6 @@ export default function AdminPanel({ currentUserData }: { currentUserData: any }
       setSettings(newSettings);
       showToast("Settings Updated Successfully! ✅", 'success');
     } catch (error: any) {
-      console.error("Settings Error:", error);
       showToast(`Settings Error: ${error.message}`, 'error');
     }
   };
@@ -320,6 +356,49 @@ export default function AdminPanel({ currentUserData }: { currentUserData: any }
   const resetAllAttempts = () => {
     showToast("Feature integrated with backend later.", 'success');
   };
+
+  // 🔥 VAULT LIGHTBOX SLIDER LOGIC
+  const selectedMedia = selectedIndex !== null ? filteredVaultMedia[selectedIndex] : null;
+
+  const handleNext = useCallback((e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setSelectedIndex((prev) => (prev !== null && prev < filteredVaultMedia.length - 1 ? prev + 1 : prev));
+  }, [filteredVaultMedia.length]);
+
+  const handlePrev = useCallback((e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setSelectedIndex((prev) => (prev !== null && prev > 0 ? prev - 1 : prev));
+  }, []);
+
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if (selectedIndex === null) return;
+    if (e.key === 'ArrowRight') handleNext();
+    if (e.key === 'ArrowLeft') handlePrev();
+    if (e.key === 'Escape') setSelectedIndex(null);
+  }, [selectedIndex, handleNext, handlePrev]);
+
+  useEffect(() => {
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleKeyDown]);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    setTouchStart(e.targetTouches[0].clientX);
+    setIsSwiping(true);
+  };
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!touchStart) return;
+    setSwipeOffset(e.targetTouches[0].clientX - touchStart);
+  };
+  const handleTouchEnd = () => {
+    if (!touchStart) return;
+    setIsSwiping(false);
+    if (swipeOffset > 60) handlePrev();
+    else if (swipeOffset < -60) handleNext();
+    setSwipeOffset(0);
+    setTouchStart(0);
+  };
+
 
   if (currentUserData?.role !== 'Admin') {
     return (
@@ -513,7 +592,6 @@ export default function AdminPanel({ currentUserData }: { currentUserData: any }
             </div>
           </div>
           
-          {/* Manage Active Months */}
           <div className="flex flex-col gap-4 border-b border-red-100 pb-4 md:flex-row md:items-center">
             <span className="text-xs font-bold uppercase tracking-wider text-red-700">Manage Active Months:</span>
             <div className="flex flex-wrap gap-2">
@@ -550,8 +628,6 @@ export default function AdminPanel({ currentUserData }: { currentUserData: any }
           </div>
 
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-            
-            {/* Add / Update Payment */}
             <div className="rounded-xl border border-red-100 bg-white p-4 shadow-sm">
               <h3 className="mb-3 text-sm font-bold uppercase tracking-wide text-red-800">Add / Update Payment</h3>
               <form onSubmit={handleLogPayment} className="flex flex-col gap-3">
@@ -584,7 +660,6 @@ export default function AdminPanel({ currentUserData }: { currentUserData: any }
               </form>
             </div>
 
-            {/* Add New Member */}
             <div className="rounded-xl border border-red-100 bg-white p-4 shadow-sm">
               <h3 className="mb-3 text-sm font-bold uppercase tracking-wide text-red-800">Add New Member</h3>
               <form onSubmit={handleAddMember} className="flex flex-col gap-3">
@@ -596,43 +671,194 @@ export default function AdminPanel({ currentUserData }: { currentUserData: any }
                 <button type="submit" className="mt-auto rounded-lg bg-green-700 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-green-800">Add to Mandal</button>
               </form>
             </div>
-
           </div>
         </div>
       )}
 
       {/* ============================== */}
-      {/* TAB 3: MEDIA / VAULT */}
-      {activeTab === "media" && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3 animate-fade-in">
-          {media.length === 0 && <p className="text-gray-400 text-xs font-bold col-span-full py-10 text-center">Vault is empty.</p>}
-
-          {media.map((item) => (
-            <div key={item.id} className="bg-white rounded-xl overflow-hidden border border-gray-100 shadow-sm flex flex-col group relative">
-              <div className="h-24 sm:h-28 bg-black relative">
-                <img src={item.thumbnail || item.url} className="w-full h-full object-cover opacity-90" alt="media" />
-                {item.type === 'video' && <div className="absolute top-1.5 right-1.5 bg-black/60 p-1 rounded-full"><Play className="w-3 h-3 text-white" /></div>}
+      {/* TAB 3: MEDIA / VAULT (WITH LIGHTBOX FIXES) */}
+      {activeTab === 'media' && (
+        <div className="animate-in fade-in zoom-in duration-300 space-y-6">
+          <div className="bg-[#1a0505]/80 backdrop-blur-xl border border-yellow-500/30 p-4 rounded-2xl shadow-lg">
+            <div className="flex flex-col md:flex-row gap-4">
+              <div className="flex-1 relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-yellow-500/50" />
+                <input
+                  type="text"
+                  placeholder="Search by email or caption..."
+                  value={vaultSearch}
+                  onChange={(e) => setVaultSearch(e.target.value)}
+                  className="w-full bg-black/40 border border-yellow-500/20 rounded-xl py-2 pl-10 pr-4 text-sm text-yellow-100 placeholder-yellow-100/30 outline-none focus:border-yellow-400 transition-all shadow-inner"
+                />
               </div>
 
-              <div className="p-2 flex-1 flex flex-col justify-between">
-                <div className="mb-2">
-                  <p className="text-[7px] font-bold text-gray-400 uppercase tracking-wider">Uploaded By</p>
-                  <p className="text-[10px] font-black text-gray-800 truncate">{item.uploadedBy}</p>
-                  <div className="mt-1 space-y-0.5">
-                    <p className="text-[8px] text-gray-500 flex items-center gap-1">
-                      <Database className="w-2 h-2" /> {formatBytes(item.size)} • {item.quality || 'HQ'}
-                    </p>
-                    <p className="text-[8px] text-[#5A0000] font-bold flex items-center gap-1 uppercase">
-                      <Smartphone className="w-2 h-2" /> {item.deviceInfo || 'Web Browser'}
-                    </p>
-                  </div>
-                </div>
-                <button onClick={() => deleteMedia(item.id)} className="w-full py-1.5 bg-red-50 text-red-600 rounded-md text-[9px] font-bold hover:bg-red-100 flex items-center justify-center gap-1 transition-colors">
-                  <Trash2 className="w-3 h-3" /> Force Delete
-                </button>
+              <div className="flex flex-wrap gap-2 md:gap-3">
+                <select value={vaultType} onChange={(e) => setVaultType(e.target.value)} className="bg-[#2a0808] border border-yellow-500/20 rounded-xl px-3 py-2 text-xs font-bold text-yellow-100 outline-none cursor-pointer focus:border-yellow-400 uppercase tracking-widest shadow-inner">
+                  <option value="all">All Media</option>
+                  <option value="image">Images Only</option>
+                  <option value="video">Videos Only</option>
+                </select>
+
+                <select value={vaultPrivacy} onChange={(e) => setVaultPrivacy(e.target.value)} className="bg-[#2a0808] border border-yellow-500/20 rounded-xl px-3 py-2 text-xs font-bold text-yellow-100 outline-none cursor-pointer focus:border-yellow-400 uppercase tracking-widest shadow-inner">
+                  <option value="all">All Privacy</option>
+                  <option value="public">Public</option>
+                  <option value="private">Private</option>
+                </select>
+
+                <select value={vaultSort} onChange={(e) => setVaultSort(e.target.value)} className="bg-[#2a0808] border border-yellow-500/20 rounded-xl px-3 py-2 text-xs font-bold text-yellow-100 outline-none cursor-pointer focus:border-yellow-400 uppercase tracking-widest shadow-inner">
+                  <option value="newest">Newest</option>
+                  <option value="oldest">Oldest</option>
+                </select>
+
+                <select value={vaultUploader} onChange={(e) => setVaultUploader(e.target.value)} className="bg-[#2a0808] border border-yellow-500/20 rounded-xl px-3 py-2 text-xs font-bold text-yellow-100 outline-none cursor-pointer focus:border-yellow-400 uppercase tracking-widest shadow-inner max-w-[150px] truncate">
+                  <option value="all">All Uploaders</option>
+                  {uniqueUploaders.map((email: string) => (
+                    <option key={email} value={email}>{email?.split('@')[0]}</option>
+                  ))}
+                </select>
+
+                <select value={vaultDate} onChange={(e) => setVaultDate(e.target.value)} className="bg-[#2a0808] border border-yellow-500/20 rounded-xl px-3 py-2 text-xs font-bold text-yellow-100 outline-none cursor-pointer focus:border-yellow-400 uppercase tracking-widest shadow-inner">
+                  <option value="all">All Time</option>
+                  <option value="7days">Last 7 Days</option>
+                  <option value="30days">Last 30 Days</option>
+                </select>
               </div>
             </div>
-          ))}
+          </div>
+
+          {/* 🔥 FIX: Changed to grid-cols-3 for mobile */}
+          <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 sm:gap-4">
+            {filteredVaultMedia.length === 0 ? (
+              <div className="col-span-full py-12 text-center border border-white/5 rounded-2xl bg-white/5 backdrop-blur-sm">
+                <p className="text-yellow-100/50 text-sm font-bold uppercase tracking-widest">No media matches your filters</p>
+                <button
+                  onClick={() => {
+                    setVaultSearch(''); setVaultType('all'); setVaultPrivacy('all');
+                    setVaultSort('newest'); setVaultUploader('all'); setVaultDate('all'); setVaultCaption('all');
+                  }}
+                  className="mt-4 text-xs text-yellow-500 hover:text-yellow-400 underline underline-offset-4"
+                >
+                  Clear All Filters
+                </button>
+              </div>
+            ) : (
+              filteredVaultMedia.map((item: any, index: number) => (
+                <div key={item.id} onClick={() => setSelectedIndex(index)} className="relative group rounded-xl overflow-hidden border border-yellow-500/20 aspect-square bg-black shadow-lg hover:shadow-[0_0_15px_rgba(202,138,4,0.3)] transition-all cursor-pointer">
+                  {item.type?.startsWith('video') ? (
+                    <>
+                      <img src={item.thumbnail} className="w-full h-full object-cover" alt="video" loading="lazy" />
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                        <div className="rounded-full bg-black/40 backdrop-blur-md p-2">
+                          <Play className="w-4 h-4 sm:w-6 sm:h-6 fill-white text-white" />
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <img src={item.url.replace('/upload/', '/upload/q_auto:low,w_600/')} alt="Vault Media" className="w-full h-full object-cover" loading="lazy" />
+                  )}
+
+                  <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-between p-2 sm:p-3 backdrop-blur-[2px]">
+                    <div className="flex justify-between items-start gap-2">
+                      <div className="flex flex-col gap-1">
+                        <span className="text-[8px] sm:text-[10px] bg-black/60 text-yellow-400 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded backdrop-blur-md border border-yellow-500/30 truncate max-w-[80px] sm:max-w-[100px]" title={item.uploaderEmail}>
+                          {item.uploaderEmail?.split('@')[0]}
+                        </span>
+                      </div>
+                    </div>
+                    {item.isPrivate && (
+                      <div className="self-end bg-gradient-to-r from-yellow-600 to-yellow-400 text-black text-[8px] sm:text-[10px] font-black px-1.5 sm:px-2 py-0.5 sm:py-1 rounded flex items-center gap-1 shadow-md">
+                        <Lock className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Private
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+          
+          {/* 🔥 THE NEW PREMIUM LIGHTBOX VIEWER FOR ADMIN */}
+          {selectedMedia && (
+            <div className="fixed inset-0 z-[200] flex flex-col bg-black/95 backdrop-blur-xl animate-fade-in touch-none">
+              
+              <div className="absolute top-0 w-full p-4 flex justify-between items-start z-50 bg-gradient-to-b from-black/80 to-transparent pointer-events-none">
+                <div className="flex flex-col pointer-events-auto">
+                  <span className="text-white font-black uppercase tracking-widest text-sm">{selectedMedia.uploadedBy}</span>
+                  <span className="text-gray-400 text-[10px] font-bold uppercase">{new Date(selectedMedia.createdAt).toLocaleString()} • {selectedMedia.category || 'Event'}</span>
+                </div>
+                <button onClick={() => setSelectedIndex(null)} className="p-2 bg-white/10 rounded-full text-white hover:bg-white/20 transition-all pointer-events-auto">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div 
+                className="flex-1 relative flex items-center overflow-hidden touch-none" 
+                onClick={() => setSelectedIndex(null)}
+                onTouchStart={handleTouchStart}
+                onTouchMove={handleTouchMove}
+                onTouchEnd={handleTouchEnd}
+              >
+                <button onClick={handlePrev} className="absolute left-4 z-50 p-3 bg-white/5 text-white rounded-full hover:bg-white/20 transition-all hidden sm:block"><ChevronLeft className="w-6 h-6" /></button>
+                
+                <div 
+                  className="flex w-full h-full items-center will-change-transform"
+                  style={{
+                    transform: `translate3d(calc(-${(selectedIndex || 0) * 100}% + ${swipeOffset}px), 0, 0)`,
+                    transition: isSwiping ? 'none' : 'transform 0.3s cubic-bezier(0.25, 1, 0.5, 1)'
+                  }}
+                >
+                  {filteredVaultMedia.map((item: any, index: number) => {
+                    const isNear = Math.abs(index - (selectedIndex || 0)) <= 1;
+
+                    return (
+                      <div key={item.id} className="min-w-full h-full flex items-center justify-center px-4" onClick={(e) => e.stopPropagation()}>
+                        {isNear ? (
+                          item.type?.startsWith('video') ? (
+                            index === selectedIndex ? (
+                              <video controls autoPlay className="max-h-full max-w-full rounded-xl shadow-2xl border border-white/10">
+                                <source src={item.url} type="video/mp4" />
+                              </video>
+                            ) : (
+                              <div className="relative flex items-center justify-center max-h-full max-w-full rounded-xl overflow-hidden">
+                                <img src={item.thumbnail} className="max-h-full max-w-full object-contain blur-[2px]" alt="video-poster" />
+                                <Play className="absolute w-16 h-16 text-white/70" />
+                              </div>
+                            )
+                          ) : (
+                            <img src={item.url} className="max-h-full max-w-full object-contain select-none rounded-xl shadow-2xl border border-white/10 pointer-events-none" alt="fullscreen" />
+                          )
+                        ) : (
+                          <div className="w-full h-full" />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <button onClick={handleNext} className="absolute right-4 z-50 p-3 bg-white/5 text-white rounded-full hover:bg-white/20 transition-all hidden sm:block"><ChevronRight className="w-6 h-6" /></button>
+              </div>
+
+              <div className="w-full bg-black/80 p-4 pb-8 sm:pb-4 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-white/10 z-50">
+                <button onClick={(e) => deleteMedia(selectedMedia.id, e)} className="flex items-center justify-center gap-2 w-full sm:w-auto p-2.5 px-4 rounded-xl bg-red-500/10 text-red-500 hover:bg-red-500/20 transition-all border border-red-500/20 active:scale-95">
+                  <Trash2 className="w-4 h-4" /> <span className="font-bold text-[10px] uppercase tracking-widest hidden sm:block">Delete memory</span>
+                </button>
+                <div className="flex gap-2 w-full sm:w-auto">
+                  <a 
+                    href={selectedMedia.url.replace('/upload/', '/upload/q_auto:eco,w_1080/')} 
+                    target="_blank" 
+                    download 
+                    className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-[#1a1a1a] hover:bg-[#2a2a2a] text-white text-[10px] font-bold uppercase tracking-widest transition-all border border-white/10 shadow-sm"
+                    style={{ color: 'beige' }}
+                  >
+                    <Smartphone className="w-3.5 h-3.5" /> WhatsApp Size
+                  </a>
+                  <a href={selectedMedia.url} target="_blank" download className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-yellow-500 text-black text-[10px] font-black uppercase tracking-widest shadow-lg active:scale-95">
+                    <Download className="w-3.5 h-3.5" /> Original HD
+                  </a>
+                </div>
+              </div>
+            </div>
+          )}
+
         </div>
       )}
 
@@ -708,8 +934,6 @@ export default function AdminPanel({ currentUserData }: { currentUserData: any }
             <h3 className="font-black text-gray-800 flex items-center gap-2 border-b border-gray-100 pb-2 text-sm">
               <Shield className="w-4 h-4 text-[#5A0000]"/> Anti-Leak & Downloads
             </h3>
-
-
 
             <div className="flex items-center justify-between">
               <div>

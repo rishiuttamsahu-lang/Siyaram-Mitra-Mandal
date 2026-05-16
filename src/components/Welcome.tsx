@@ -2,12 +2,36 @@
 
 import React, { useState } from 'react';
 import { auth, db, googleProvider } from '@/lib/firebase';
-import { signInWithPopup } from 'firebase/auth';
+import { signInWithPopup, signOut, type User } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 
-export default function Welcome({ onAuthSuccess }: { onAuthSuccess: (data: any) => void }) {
-  const [phase, setPhase] = useState(1); // 1 = Google Login, 2 = Passcode
-  const [user, setUser] = useState<any>(null);
+type UserData = {
+  uid: string;
+  name: string;
+  email: string;
+  photoURL: string;
+  isAccountPrivate: boolean;
+  createdAt: string;
+  role: string;
+  isBanned: boolean;
+  failedAttempts: number;
+  lastLogin: string;
+  joinedAt: string;
+  history: Array<{
+    type: string;
+    text: string;
+    time: string;
+  }>;
+};
+
+type WelcomeProps = {
+  onAuthSuccess: (data: UserData) => void;
+  firebaseUser: User | null;
+};
+
+export default function Welcome({ onAuthSuccess, firebaseUser }: WelcomeProps) {
+  const [phase, setPhase] = useState<1 | 2>(firebaseUser ? 2 : 1);
+  const [user, setUser] = useState<User | null>(firebaseUser);
   const [passcode, setPasscode] = useState('');
   const [attempts, setAttempts] = useState(3);
   const [errorMsg, setErrorMsg] = useState('');
@@ -23,23 +47,25 @@ export default function Welcome({ onAuthSuccess }: { onAuthSuccess: (data: any) 
       const userSnap = await getDoc(userRef);
 
       if (userSnap.exists()) {
-        const userData = userSnap.data();
+        const userData = userSnap.data() as Partial<UserData> & { isBanned?: boolean };
         if (userData.isBanned) {
           setErrorMsg("Aapka account block kar diya gaya hai. Admin se sampark karein.");
-          auth.signOut();
-        } else {
-          onAuthSuccess(userData);
+          await signOut(auth);
+          setIsLoading(false);
+          return;
         }
-      } else {
-        setUser(currentUser);
-        setPhase(2);
       }
-    } catch (error: any) {
+
+      setUser(currentUser);
+      setAttempts(3);
+      setPhase(2);
+    } catch (error: unknown) {
       console.error('Google sign-in error:', error);
-      const msg = error?.message || "Login fail ho gaya. Dobara try karein.";
+      const msg = error instanceof Error ? error.message : "Login fail ho gaya. Dobara try karein.";
       setErrorMsg(msg);
+    } finally {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   };
 
   const verifyPasscode = async (e: React.FormEvent) => {
@@ -48,65 +74,101 @@ export default function Welcome({ onAuthSuccess }: { onAuthSuccess: (data: any) 
     setIsLoading(true);
 
     try {
+      if (!user) {
+        setErrorMsg('Session expired. Please login again.');
+        return;
+      }
+
       const userRef = doc(db, 'users', user.uid);
       const settingsSnap = await getDoc(doc(db, 'mandal_settings', 'system'));
-      const realPasscode = settingsSnap.exists() && settingsSnap.data().secretPasscode
-        ? settingsSnap.data().secretPasscode
+      const settingsData = settingsSnap.exists() ? (settingsSnap.data() as { secretPasscode?: string }) : null;
+      const realPasscode = settingsData?.secretPasscode
+        ? settingsData.secretPasscode
         : 'siyaram2026';
 
       if (passcode.trim().toLowerCase() === realPasscode.trim().toLowerCase()) {
         const userSnap = await getDoc(userRef);
-        const existingData = userSnap.exists() ? userSnap.data() : null;
+        const existingData = userSnap.exists() ? (userSnap.data() as Partial<UserData>) : null;
         const loginHistoryEntry = {
           type: 'login',
           text: 'Account logged in',
           time: new Date().toISOString(),
         };
-        const userData = {
+        const userData: UserData = {
           uid: user.uid,
-          name: user.displayName,
-          email: user.email,
+          name: user.displayName || 'Member',
+          email: user.email || '',
           photoURL: user.photoURL || '',
-          isAccountPrivate: false,
-          createdAt: new Date().toISOString(),
-          role: 'Viewer',
-          isBanned: false,
+          isAccountPrivate: existingData?.isAccountPrivate || false,
+          createdAt: existingData?.createdAt || new Date().toISOString(),
+          role: existingData?.role || 'Viewer',
+          isBanned: existingData?.isBanned || false,
           failedAttempts: 0,
           lastLogin: new Date().toISOString(),
           joinedAt: existingData?.joinedAt || new Date().toISOString(),
-          history: [loginHistoryEntry, ...(existingData?.history || [])].slice(0, 20),
+          history: [loginHistoryEntry, ...((existingData?.history as UserData['history']) || [])].slice(0, 20),
         };
+        const isNewMember = !existingData;
         await setDoc(userRef, userData, { merge: true });
+
+        if (isNewMember) {
+          try {
+            await fetch('https://api.web3forms.com/submit', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+              },
+              body: JSON.stringify({
+                access_key: 'bdb8b4b9-d252-4522-808b-f85f80ee402a',
+                subject: '🚨 New Member Joined Siyaram Mitra Mandal!',
+                from_name: 'Mandal Portal System',
+                message: `Hello Admin,\n\nEk naye member ne portal join kiya hai aur passcode verify kar liya hai.\n\n👤 Name: ${userData.name}\n📧 Email: ${userData.email}\n⏰ Time: ${new Date().toLocaleString()}\n\nAap Admin Panel me jaakar inki details check kar sakte hain.`,
+              }),
+            });
+          } catch (formError) {
+            console.error('Failed to send Web3Forms notification:', formError);
+          }
+        }
+
+        // persist passcode success so page.tsx can gate without reload
+        try {
+          localStorage.setItem(`mandal_pass_auth_${user.uid}`, 'true');
+        } catch (e) {
+          /* ignore storage errors (e.g., SSR or private mode) */
+        }
+
         onAuthSuccess(userData);
       } else {
         const userSnap = await getDoc(userRef);
-        const currentData = userSnap.data();
+        const currentData = userSnap.data() as Partial<UserData> | undefined;
         const newAttempts = (currentData?.failedAttempts || 0) + 1;
 
         if (newAttempts >= 3) {
           await setDoc(userRef, {
             uid: user.uid,
-            name: user.displayName,
-            email: user.email,
+            name: user.displayName || 'Member',
+            email: user.email || '',
             role: 'Banned',
             isBanned: true,
             failedAttempts: newAttempts,
             banReason: '3 incorrect passcode attempts'
           }, { merge: true });
           setErrorMsg('3 attempts khatam. Aapka account block kar diya gaya hai.');
-          setTimeout(() => { auth.signOut(); window.location.reload(); }, 3000);
+          setTimeout(() => { void signOut(auth); window.location.reload(); }, 3000);
         } else {
           await setDoc(userRef, { failedAttempts: newAttempts }, { merge: true });
           setAttempts(3 - newAttempts);
           setErrorMsg(`Galat Passcode! (${3 - newAttempts} attempts left)`);
         }
       }
-    } catch {
+    } catch (error) {
+      console.error('Passcode verification error:', error);
       setErrorMsg('Error connecting to server. Try again.');
+    } finally {
+      setPasscode('');
+      setIsLoading(false);
     }
-
-    setPasscode('');
-    setIsLoading(false);
   };
 
   return (
@@ -147,13 +209,14 @@ export default function Welcome({ onAuthSuccess }: { onAuthSuccess: (data: any) 
               <div className="text-center mb-2">
                 <p className="text-sm font-bold text-gray-700">Swagat hai, <span className="text-[#5a0000]">{user?.displayName}</span></p>
                 <p className="text-xs font-semibold text-gray-500 mt-1">Kripya Mandal ka Secret Passcode darj karein</p>
+                <p className="mt-2 text-[10px] font-bold uppercase tracking-widest text-gray-400">{attempts} attempts left</p>
               </div>
 
               <div>
                 <input
                   type="password"
                   placeholder="Enter Passcode"
-                  className="w-full rounded-xl border border-gray-200 px-4 py-4 text-center tracking-[0.3em] font-bold outline-none transition focus:border-red-400 focus:ring-2 focus:ring-red-100"
+                  className="w-full rounded-xl border border-gray-200 px-4 py-4 text-center tracking-[0.3em] font-bold text-black outline-none transition focus:border-red-400 focus:ring-2 focus:ring-red-100"
                   value={passcode}
                   onChange={(event) => setPasscode(event.target.value)}
                   autoFocus

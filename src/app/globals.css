@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f9fafb;
-  --foreground: #111827;
+  --background: #090202;
+  --foreground: #f8f3ea;
 }
 
 @theme inline {
@@ -14,8 +14,8 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #f9fafb;
-    --foreground: #111827;
+    --background: #090202;
+    --foreground: #f8f3ea;
   }
 }
 
@@ -29,14 +29,17 @@ html {
 
 body {
   min-height: 100vh;
-  background: var(--background);
+  background:
+    radial-gradient(circle at top, rgba(120, 28, 28, 0.55), transparent 42%),
+    radial-gradient(circle at bottom, rgba(234, 179, 8, 0.08), transparent 32%),
+    linear-gradient(180deg, #120303 0%, #090202 48%, #050101 100%);
   color: var(--foreground);
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
 }
 
 body::selection {
-  background: #b91c1c;
-  color: #ffffff;
+  background: #eab308;
+  color: #120303;
 }
 
 a {

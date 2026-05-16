@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { auth, db } from '@/lib/firebase';
-import { onAuthStateChanged } from 'firebase/auth';
+import { onAuthStateChanged, signOut, type User } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 
 import Welcome from '@/components/Welcome';
@@ -17,12 +17,22 @@ import { SpotlightNav } from '@/components/ui/spotlight-nav';
 import { LogOut, Shield } from 'lucide-react';
 
 export default function Home() {
-  const [user, setUser] = useState<any>(null);
-  const [userData, setUserData] = useState<any>(null);
+  type AppUserData = {
+    name?: string;
+    email?: string;
+    role?: string;
+    photoURL?: string;
+    isBanned?: boolean;
+  };
+
+  const [user, setUser] = useState<User | null>(null);
+  const [userData, setUserData] = useState<AppUserData | null>(null);
   
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [isPasscodeVerified, setIsPasscodeVerified] = useState(false);
 
-  const [introPhase, setIntroPhase] = useState(1);
+  const [introPhase, setIntroPhase] = useState(0);
+  const [loadingProgress, setLoadingProgress] = useState(0);
   const [typedText, setTypedText] = useState('');
   const [isTypingDone, setIsTypingDone] = useState(false);
   const [isSplashExiting, setIsSplashExiting] = useState(false);
@@ -51,7 +61,7 @@ export default function Home() {
                 setRevealSequence(3);
               }
             } else {
-              auth.signOut();
+              void signOut(auth);
             }
           } else {
             setUser(currentUser);
@@ -62,6 +72,7 @@ export default function Home() {
       } else {
         setUser(null);
         setUserData(null);
+        setIsPasscodeVerified(false);
       }
     });
     return () => unsubscribe();
@@ -78,8 +89,56 @@ export default function Home() {
     }
   }, [revealSequence]);
 
-  // 2. 🔥 FIXED INTRO SEQUENCE (Ab ye kisi login pe depend nahi karega)
+  // 2. REAL LOADING BAR + INTRO SEQUENCE
   useEffect(() => {
+    if (introPhase === 0) {
+      let isFontsLoaded = false;
+
+      const loadAllFonts = async () => {
+        if (typeof document !== 'undefined' && document.fonts) {
+          try {
+            await Promise.all([
+              document.fonts.load('400 16px "Rozha One"'),
+              document.fonts.load('400 16px "Cinzel"'),
+              document.fonts.load('700 16px "Cinzel"'),
+              document.fonts.load('900 16px "Cinzel"'),
+              document.fonts.load('400 16px "Gotu"'),
+              document.fonts.load('700 16px "Gotu"'),
+              document.fonts.load('900 16px "Gotu"')
+            ]);
+            await document.fonts.ready;
+            isFontsLoaded = true;
+          } catch (err) {
+            console.warn('Font loading issue:', err);
+            isFontsLoaded = true;
+          }
+        } else {
+          isFontsLoaded = true;
+        }
+      };
+
+      loadAllFonts();
+
+      const interval = setInterval(() => {
+        setLoadingProgress((prev) => {
+          if (!isFontsLoaded && prev >= 89) {
+            return 89;
+          }
+
+          if (isFontsLoaded && prev >= 100) {
+            clearInterval(interval);
+            setTimeout(() => setIntroPhase(1), 500);
+            return 100;
+          }
+
+          const speed = isFontsLoaded && prev >= 89 ? 11 : Math.floor(Math.random() * 15) + 5;
+          return Math.min(prev + speed, 100);
+        });
+      }, 100);
+
+      return () => clearInterval(interval);
+    }
+
     if (introPhase === 1) {
       const t1 = setTimeout(() => setIsSplashExiting(true), 4000);
       const t2 = setTimeout(() => setIntroPhase(2), 4500);
@@ -108,20 +167,51 @@ export default function Home() {
     }
   }, [introPhase]);
 
-  // 3. Skip Function (Sirf logged in users ke liye secret skip)
-  const handleSecretSkip = (targetPhase: number) => {
-    if (user) {
-      if (targetPhase === 2) setIsSplashExiting(true);
-      if (targetPhase === 3) { /* nothing extra to exit here */ }
-      if (targetPhase === 4) setIsShieldExiting(true);
-      setTimeout(() => setIntroPhase(targetPhase), 500);
-    }
+  // 3. Universal tap skip
+  const handleUniversalSkip = (targetPhase: number) => {
+    if (targetPhase === 2) setIsSplashExiting(true);
+    if (targetPhase === 4) setIsShieldExiting(true);
+    setTimeout(() => setIntroPhase(targetPhase), 300);
   };
+
+  if (introPhase === 0) {
+    return (
+      <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-[#0a0202] select-none">
+        <div className="w-64 relative mt-10">
+          <div className="absolute -top-6 left-0 w-full flex justify-center">
+            <span className="text-yellow-400 text-xs font-black tracking-widest" style={{ fontFamily: "'Cinzel', serif" }}>
+              {loadingProgress}%
+            </span>
+          </div>
+
+          <div className="h-[1px] w-full bg-white/10 rounded-full relative">
+            <div
+              className="absolute top-0 left-0 h-full bg-gradient-to-r from-transparent via-yellow-600 to-yellow-200 transition-all duration-150 ease-linear rounded-full"
+              style={{ width: `${loadingProgress}%` }}
+            >
+              <div className="absolute right-0 top-1/2 -translate-y-1/2 w-2 h-2 bg-yellow-100 rounded-full shadow-[0_0_10px_#fff,0_0_20px_#eab308,0_0_30px_#eab308] blur-[0.5px]" />
+            </div>
+          </div>
+
+          <span className="block text-center mt-4 text-yellow-500/20 text-[8px] uppercase tracking-[0.3em] font-black animate-pulse">
+            Syncing Vault...
+          </span>
+
+          <div className="absolute top-[-9999px] left-[-9999px] opacity-0 pointer-events-none select-none">
+            <span style={{ fontFamily: "'Rozha One', serif", fontWeight: 400 }}>गणपती बाप्पा मोरया</span>
+            <span style={{ fontFamily: "'Gotu', sans-serif", fontWeight: 700 }}>सियाराम मित्रमंडळ</span>
+            <span style={{ fontFamily: "'Gotu', sans-serif", fontWeight: 900 }}>Welcome</span>
+            <span style={{ fontFamily: "'Cinzel', serif", fontWeight: 900 }}>100% Secured</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Phase 1 Rendering
   if (introPhase === 1) {
     return (
-      <div onClick={() => handleSecretSkip(2)} className={`fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-gradient-to-br from-[#5a0000] via-[#3a0000] to-black px-6 transition-opacity duration-500 ${isSplashExiting ? "opacity-0" : "opacity-100"}`}>
+      <div onClick={() => handleUniversalSkip(2)} className={`fixed inset-0 z-[9999] flex items-center justify-center overflow-hidden bg-gradient-to-br from-[#5a0000] via-[#3a0000] to-black px-6 transition-opacity duration-500 cursor-pointer ${isSplashExiting ? "opacity-0" : "opacity-100"}`}>
         <style>{`
           @keyframes premiumFadeIn { 0% { opacity: 0; transform: translateY(15px); filter: blur(4px); } 100% { opacity: 1; transform: translateY(0); filter: blur(0); } }
           @keyframes lineExpand { 0% { width: 0; opacity: 0; } 100% { width: 12rem; opacity: 1; } }
@@ -145,14 +235,14 @@ export default function Home() {
   // Phase 2 Rendering (Typewriter)
   if (introPhase === 2) {
     return (
-      <div className="fixed inset-0 z-40 flex flex-col items-center justify-center overflow-hidden bg-gradient-to-br from-[#5a0000] via-[#3a0000] to-black px-6 cursor-pointer" onClick={() => handleSecretSkip(3)}>
+      <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center overflow-hidden bg-gradient-to-br from-[#5a0000] via-[#3a0000] to-black px-6 cursor-pointer" onClick={() => handleUniversalSkip(3)}>
         <div className="max-w-3xl w-full relative z-10">
           <p className="text-yellow-50/90 text-lg md:text-2xl leading-relaxed text-center min-h-[200px]" style={{ fontFamily: "'Gotu', sans-serif" }}>
             {typedText}
             {!isTypingDone && <span className="animate-pulse border-r-2 border-yellow-400 ml-1"></span>}
           </p>
         </div>
-        <button className="absolute bottom-12 text-yellow-500/50 hover:text-yellow-400 text-xs md:text-sm font-bold tracking-widest uppercase transition-colors" onClick={(e) => { e.stopPropagation(); handleSecretSkip(3); }}>
+        <button className="absolute bottom-12 text-yellow-500/50 hover:text-yellow-400 text-xs md:text-sm font-bold tracking-widest uppercase transition-colors" onClick={(e) => { e.stopPropagation(); handleUniversalSkip(3); }}>
           Tap anywhere to skip ➔
         </button>
       </div>
@@ -162,7 +252,7 @@ export default function Home() {
   // Phase 3 Rendering (Shield)
   if (introPhase === 3) {
     return (
-      <div onClick={() => handleSecretSkip(4)} className={`fixed inset-0 z-50 flex flex-col items-center justify-center overflow-hidden bg-gradient-to-br from-[#5a0000] via-[#3a0000] to-black px-6 transition-opacity duration-500 ${isShieldExiting ? 'opacity-0' : 'opacity-100'}`}>
+      <div onClick={() => handleUniversalSkip(4)} className={`fixed inset-0 z-[9999] flex flex-col items-center justify-center overflow-hidden bg-gradient-to-br from-[#5a0000] via-[#3a0000] to-black px-6 transition-opacity duration-500 cursor-pointer ${isShieldExiting ? 'opacity-0' : 'opacity-100'}`}>
         <div className="flex flex-col items-center justify-center space-y-6">
           <div className="relative flex h-28 w-28 items-center justify-center">
             <div className="absolute inset-0 rounded-full bg-yellow-400/20 animate-ping" style={{ animationDuration: '2.5s' }} />
@@ -180,8 +270,8 @@ export default function Home() {
   }
 
   // Phase 4: Final Check (Login dikhana hai ya App)
-  if (!user || !userData) {
-    return <Welcome onAuthSuccess={(data: any) => setUserData(data)} />;
+  if (!user || !userData || !isPasscodeVerified) {
+    return <Welcome key={user?.uid ?? 'guest'} firebaseUser={user} onAuthSuccess={(data) => { setUserData(data); setIsPasscodeVerified(true); }} />;
   }
 
   // MAIN APP AFTER LOGIN
@@ -193,7 +283,7 @@ export default function Home() {
         <h1 className="text-lg font-black text-[#5A0000]" style={{ fontFamily: "'Rozha One', serif" }}>सियाराम</h1>
         <div className="flex items-center gap-3">
           <span className="text-xs font-bold text-gray-600">Hi, {userData.name?.split(' ')[0] || 'User'}</span>
-          <button onClick={() => auth.signOut()} className="bg-red-50 text-red-600 p-2 rounded-full hover:bg-red-100 transition-colors">
+          <button onClick={() => { void signOut(auth); setIsPasscodeVerified(false); }} className="bg-red-50 text-red-600 p-2 rounded-full hover:bg-red-100 transition-colors">
             <LogOut className="w-4 h-4" />
           </button>
         </div>
