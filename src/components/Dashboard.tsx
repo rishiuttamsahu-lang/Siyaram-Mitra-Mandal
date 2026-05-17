@@ -1,10 +1,63 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import type { FormEvent } from "react";
 import { db } from "@/lib/firebase";
 import { collection, onSnapshot, doc, setDoc, updateDoc } from "firebase/firestore";
-import { Bell } from "lucide-react";
+import { Bell, ChevronDown, CheckCircle2 } from "lucide-react";
+
+// 🔥 PREMIUM CUSTOM DROPDOWN COMPONENT
+const CustomSelect = ({ value, onChange, options, placeholder, theme = 'light' }: { value: any, onChange: any, options: any[], placeholder?: string, theme?: 'light' | 'dark' }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) setIsOpen(false);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const selectedOption = options.find((opt) => String(opt.value) === String(value));
+  const isDark = theme === 'dark';
+
+  const triggerDark = `bg-[#2a0808]/90 backdrop-blur-md border border-white/10 px-3 sm:px-4 py-3 text-[10px] sm:text-xs font-black text-white uppercase tracking-widest hover:bg-[#3a0a0a] ${isOpen ? 'border-red-500 ring-1 ring-red-500/50' : ''}`;
+  const triggerLight = `bg-white border border-gray-200 px-4 py-2 sm:py-2.5 text-[10px] sm:text-[10px] font-black uppercase text-gray-700 hover:bg-gray-50 shadow-sm ${isOpen ? 'border-yellow-500 ring-1 ring-yellow-500/30' : ''}`;
+  const dropdownDark = 'bg-[#1a0505] border border-red-900/30 shadow-2xl';
+  const dropdownLight = 'bg-white border border-gray-100 shadow-xl';
+
+  const getOptionClass = (isSelected: boolean) => {
+    if (isDark) return isSelected ? 'bg-red-500/20 text-red-400' : 'text-gray-300 hover:bg-[#2a0808] text-white';
+    return isSelected ? 'bg-yellow-50 text-yellow-700' : 'text-gray-700 hover:bg-gray-50';
+  };
+
+  return (
+    <div className={`relative w-48 sm:w-56 ${isOpen ? 'z-[100]' : 'z-10'}`} ref={dropdownRef}>
+      <div onClick={() => setIsOpen(!isOpen)} className={`flex items-center justify-between w-full cursor-pointer select-none transition-all rounded-xl outline-none ${isDark ? triggerDark : triggerLight}`}>
+        <span className="truncate pr-4">{selectedOption ? selectedOption.label : (placeholder || 'Select...')}</span>
+        <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-300 shrink-0 ${isOpen ? 'rotate-180' : ''} ${isDark ? 'text-gray-400' : 'text-gray-400'}`} />
+      </div>
+
+      {isOpen && (
+        <div className={`absolute top-[calc(100%+6px)] right-0 min-w-full w-max rounded-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200 z-[9999] ${isDark ? dropdownDark : dropdownLight}`}>
+          <div className="max-h-60 overflow-y-auto custom-scrollbar py-1">
+            {options.map((opt, idx) => {
+              const isSelected = String(value) === String(opt.value);
+              return (
+                <div key={idx} onClick={() => { onChange(opt.value); setIsOpen(false); }} className={`px-4 py-3 cursor-pointer transition-colors text-[10px] sm:text-[10px] font-bold uppercase tracking-widest flex items-center justify-between ${getOptionClass(isSelected)}`}>
+                  <span className="whitespace-nowrap">{opt.label}</span>
+                  {isSelected && <CheckCircle2 className="w-3.5 h-3.5 ml-3 shrink-0" />}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+// 🔥 COMPONENT KHATAM
 
 const MONTHLY_TARGET = 100;
 const PREVIOUS_YEAR = 6500;
@@ -53,6 +106,16 @@ export default function Dashboard({ userData }: { userData: any }) {
   const [expandedMemberId, setExpandedMemberId] = useState<number | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [sysSettings, setSysSettings] = useState<any>(null);
+  const [sortBy, setSortBy] = useState<string>("default"); // 🔥 SORTING STATE
+  
+  // 🔥 NAYA ARRAY: Sort Options ke liye
+  const SORT_OPTIONS = [
+    { value: "default", label: "ID (Default Order)" },
+    { value: "name-asc", label: "Name (A-Z)" },
+    { value: "name-desc", label: "Name (Z-A)" },
+    { value: "paid-desc", label: "Highest Paid" },
+    { value: "due-desc", label: "Highest Due" }
+  ];
   
   const [paymentMemberId, setPaymentMemberId] = useState("");
   const [paymentMonth, setPaymentMonth] = useState<Month>(getCurrentTrackingMonth());
@@ -234,6 +297,42 @@ export default function Dashboard({ userData }: { userData: any }) {
     }
   };
 
+  // 🔥 YAHAN SE NAYA LOGIC SHURU HOTA HAI
+  const sortedMembers = useMemo(() => {
+    const monthsPassed = Math.max(0, MONTHS.indexOf(currentTrackingMonth) + 1);
+    let sorted = [...members];
+    
+    switch (sortBy) {
+      case "name-asc":
+        sorted.sort((a, b) => a.name.localeCompare(b.name));
+        break;
+      case "name-desc":
+        sorted.sort((a, b) => b.name.localeCompare(a.name));
+        break;
+      case "paid-desc":
+        sorted.sort((a, b) => {
+          const totalA = Object.values(a.payments).reduce((sum, val) => sum + (val || 0), 0);
+          const totalB = Object.values(b.payments).reduce((sum, val) => sum + (val || 0), 0);
+          return totalB - totalA; // High to Low
+        });
+        break;
+      case "due-desc":
+        sorted.sort((a, b) => {
+          const totalA = Object.values(a.payments).reduce((sum, val) => sum + (val || 0), 0);
+          const deficitA = a.isHonorary ? 0 : Math.max(0, (monthsPassed * MONTHLY_TARGET) - totalA);
+          const totalB = Object.values(b.payments).reduce((sum, val) => sum + (val || 0), 0);
+          const deficitB = b.isHonorary ? 0 : Math.max(0, (monthsPassed * MONTHLY_TARGET) - totalB);
+          return deficitB - deficitA; // High to Low Deficit
+        });
+        break;
+      default:
+        sorted.sort((a, b) => a.id - b.id); // Default by original ID
+        break;
+    }
+    return sorted;
+  }, [members, sortBy, currentTrackingMonth]);
+  // 🔥 NAYA LOGIC YAHAN KHATAM HOTA HAI
+
   return (
     <div className="min-h-screen bg-gray-50 px-4 py-6 text-gray-900 md:px-12 md:py-12 animate-fade-in" style={{ padding: 0 }}>
       <div className="mx-auto max-w-7xl space-y-6 md:space-y-8">
@@ -310,10 +409,29 @@ export default function Dashboard({ userData }: { userData: any }) {
           <SummaryCard label="Previous Year Balance" value={`₹${PREVIOUS_YEAR.toLocaleString()}`} muted />
         </div>
 
+        {/* 🔥 UNIFIED SORT TOOLBAR (Mobile + Desktop dono ke liye) */}
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 rounded-2xl border border-gray-100 bg-white shadow-sm mt-2">
+          <h2 className="text-sm font-black text-gray-800 uppercase tracking-widest flex items-center gap-2">
+            👥 Member Records
+          </h2>
+          <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto">
+            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Sort By:</span>
+            
+            {/* 🔥 NAYA PREMIUM DROPDOWN */}
+            <CustomSelect 
+              value={sortBy} 
+              onChange={setSortBy} 
+              options={SORT_OPTIONS} 
+              theme="light" 
+            />
+            
+          </div>
+        </div>
+
         {/* MOBILE VIEW LIST */}
         <div className="block space-y-3 md:hidden">
-          {members.length === 0 && <p className="text-center text-gray-400 py-4 font-bold">No members yet. Admins can add or restore them above!</p>}
-          {members.map((member) => {
+          {sortedMembers.length === 0 && <p className="text-center text-gray-400 py-4 font-bold">No members yet. Admins can add or restore them above!</p>}
+          {sortedMembers.map((member) => {
             const totalPaid = getMemberTotal(member.payments);
             const remaining = expectedTotalPerMember - totalPaid;
             const isExpanded = expandedMemberId === member.id;
@@ -375,8 +493,8 @@ export default function Dashboard({ userData }: { userData: any }) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {members.length === 0 && <tr><td colSpan={15} className="text-center text-gray-400 py-8 font-bold">No members yet. Admins can restore them using the yellow button above!</td></tr>}
-                {members.map((member) => {
+                {sortedMembers.length === 0 && <tr><td colSpan={15} className="text-center text-gray-400 py-8 font-bold">No members yet. Admins can restore them using the yellow button above!</td></tr>}
+                {sortedMembers.map((member) => {
                   const totalPaid = getMemberTotal(member.payments);
                   const remaining = expectedTotalPerMember - totalPaid;
 
