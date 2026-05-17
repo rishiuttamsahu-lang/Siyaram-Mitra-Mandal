@@ -115,24 +115,52 @@ export default function Welcome({ onAuthSuccess, firebaseUser }: WelcomeProps) {
         await setDoc(userRef, userData, { merge: true });
 
         if (isNewMember) {
-          try {
-            await fetch('https://api.web3forms.com/submit', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                Accept: 'application/json',
-              },
-              body: JSON.stringify({
-                access_key: 'bdb8b4b9-d252-4522-808b-f85f80ee402a',
-                subject: '🚨 New Member Joined Siyaram Mitra Mandal!',
-                from_name: 'Mandal Portal System',
-                message: `Hello Admin,\n\nEk naye member ne portal join kiya hai aur passcode verify kar liya hai.\n\n👤 Name: ${userData.name}\n📧 Email: ${userData.email}\n⏰ Time: ${new Date().toLocaleString()}\n\nAap Admin Panel me jaakar inki details check kar sakte hain.`,
-              }),
-            });
-          } catch (formError) {
-            console.error('Failed to send Web3Forms notification:', formError);
-          }
+          // 🔥 DUAL-KEY BACKUP FALLBACK SYSTEM (250 Quota Safeguard)
+          const sendNotification = async () => {
+            const payload = {
+              subject: '🇳🇪🇼 New Member Joined Siyaram Mitra Mandal!',
+              from_name: 'Mandal Portal System',
+              message: `Hello Admin,\n\nEk naye member ne portal join kiya hai aur passcode verify kar liya hai.\n\n👤 Name: ${userData.name}\n✉️ Email: ${userData.email}\n⏰ Time: ${new Date().toLocaleString()}\n\nAap Admin Panel me jaakar inki details check kar sakte hain.`,
+            };
+
+            try {
+              // Try with the Primary Key (New Key)
+              console.log("Attempting notification with Primary Web3Form Key...");
+              const response = await fetch('https://api.web3forms.com/submit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+                body: JSON.stringify({
+                  access_key: 'bdb8b4b9-d252-4522-808b-f85f80ee402a', // 🔑 Primary Key
+                  ...payload
+                }),
+              });
+
+              if (!response.ok) throw new Error("Primary Key quota exhausted or failed");
+              console.log("Notification sent successfully via Primary Key!");
+            } catch (primaryError) {
+              console.warn("Primary key failed, shifting to Backup Key...", primaryError);
+              
+              // 🔥 FALLBACK: Trigger via Backup Key (Old Key) if primary fails/exhausts
+              try {
+                await fetch('https://api.web3forms.com/submit', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+                  body: JSON.stringify({
+                    access_key: '6d1f3390-fce7-4341-9111-c6efb1207c3e', // 🔑 Backup Key
+                    ...payload
+                  }),
+                });
+                console.log("Notification sent successfully via Backup Key!");
+              } catch (backupError) {
+                console.error('Both Web3Forms keys failed:', backupError);
+              }
+            }
+          };
+
+          // Trigger the smart function call
+          void sendNotification();
         }
+
 
         setCachedUserData(userData);
         setCanTap(false);

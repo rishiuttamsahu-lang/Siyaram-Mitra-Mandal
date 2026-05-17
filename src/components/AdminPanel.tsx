@@ -1,13 +1,13 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot, doc, updateDoc, deleteDoc, query, orderBy, setDoc, getDoc } from 'firebase/firestore';
 import UserProfile from '@/components/UserProfile';
 import {
   Shield, ShieldAlert, Ban, RefreshCcw, Key, Mail, User, Image as ImageIcon,
   BarChart2, Settings, Lock, Activity, Database, AlertTriangle, Trash2, Search, Bell, UserCircle, CheckCircle2,
-  Play, ChevronLeft, ChevronRight, X, Download, Smartphone, Unlock, ChevronDown
+  Play, ChevronLeft, ChevronRight, X, Download, Smartphone, Unlock, ChevronDown, Coins, PlusCircle, ArrowUpRight, History
 } from 'lucide-react';
 
 // 🔥 THE NEW PREMIUM CUSTOM SELECT COMPONENT
@@ -54,9 +54,84 @@ const CustomSelect = ({ value, onChange, options, placeholder, theme = 'light' }
               options.map((opt, idx) => {
                 const isSelected = String(value) === String(opt.value);
                 return (
-                  <div key={idx} onClick={() => { onChange(opt.value); setIsOpen(false); }} className={`px-4 py-3 cursor-pointer transition-colors text-[10px] sm:text-xs font-bold uppercase tracking-wider flex items-center justify-between ${getOptionClass(isSelected)}`}>
+                  <div key={opt.value || `${opt.label}-${idx}`} onClick={() => { onChange(opt.value); setIsOpen(false); }} className={`px-4 py-3 cursor-pointer transition-colors text-[10px] sm:text-xs font-bold uppercase tracking-wider flex items-center justify-between ${getOptionClass(isSelected)}`}>
                     <span className="whitespace-nowrap">{opt.label}</span>
                     {isSelected && <CheckCircle2 className="w-3.5 h-3.5 ml-3 shrink-0" />}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const SearchableSelect = ({ value, onChange, options, placeholder }: { value: string, onChange: (v: string) => void, options: { value: string, label: string }[], placeholder?: string }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const selectedOption = options.find((opt) => String(opt.value) === String(value));
+  const filteredOptions = options.filter((opt) => opt.label.toLowerCase().includes(searchTerm.toLowerCase()));
+
+  return (
+    <div className={`relative w-full ${isOpen ? 'z-[100]' : 'z-10'}`} ref={dropdownRef}>
+      <div
+        onClick={() => {
+          setIsOpen(!isOpen);
+          setSearchTerm('');
+        }}
+        className="flex items-center justify-between w-full cursor-pointer select-none transition-all rounded-xl bg-white border border-gray-200 px-4 py-3 text-[10px] sm:text-[11px] font-bold text-black uppercase tracking-wider hover:bg-gray-100 shadow-sm"
+      >
+        <span className="truncate pr-4 text-black">{selectedOption ? selectedOption.label : (placeholder || 'Select...')}</span>
+        <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-300 shrink-0 ${isOpen ? 'rotate-180' : ''} text-gray-400`} />
+      </div>
+
+      {isOpen && (
+        <div className="absolute top-[calc(100%+6px)] left-0 min-w-full w-full bg-white border border-gray-100 shadow-2xl rounded-xl overflow-hidden z-[9999] animate-in fade-in slide-in-from-top-2 duration-150">
+          <div className="p-2 border-b border-gray-100 bg-gray-50 flex items-center gap-2">
+            <Search className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+            <input
+              type="text"
+              placeholder="Type name or email to search..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full bg-transparent text-black text-[11px] font-bold uppercase outline-none placeholder-gray-400 border-none ring-0 focus:ring-0"
+              autoFocus
+            />
+          </div>
+
+          <div className="max-h-52 overflow-y-auto custom-scrollbar py-1">
+            {filteredOptions.length === 0 ? (
+              <div className="px-4 py-3 text-[10px] font-bold text-gray-400 uppercase text-center">No matching member found</div>
+            ) : (
+              filteredOptions.map((opt, idx) => {
+                const isSelected = String(value) === String(opt.value);
+                return (
+                  <div
+                    key={opt.value || `${opt.label}-${idx}`}
+                    onClick={() => {
+                      onChange(opt.value);
+                      setIsOpen(false);
+                      setSearchTerm('');
+                    }}
+                    className={`px-4 py-2.5 cursor-pointer transition-colors text-[10px] font-bold uppercase tracking-widest flex items-center justify-between ${isSelected ? 'bg-red-50 text-[#5A0000]' : 'text-black hover:bg-gray-50'}`}
+                  >
+                    <span className="whitespace-nowrap truncate pr-2">{opt.label}</span>
+                    {isSelected && <CheckCircle2 className="w-3.5 h-3.5 text-[#5A0000] shrink-0" />}
                   </div>
                 );
               })
@@ -72,6 +147,7 @@ const adminTabs = [
   { id: "analytics", label: "Stats", icon: <BarChart2 size={14} /> },
   { id: "users", label: "Users", icon: <User size={14} /> },
   { id: "finance", label: "Finance", icon: <Database size={14} /> },
+  { id: "chanda", label: "Chanda Management", icon: <Coins size={14} /> },
   { id: "media", label: "Vault", icon: <ImageIcon size={14} /> },
   { id: "security", label: "Security", icon: <Shield size={14} /> },
   { id: "settings", label: "Website", icon: <Settings size={14} /> },
@@ -83,6 +159,23 @@ const MONTHS = ["SEPT", "OCT", "NOV", "DEC", "JAN", "FEB", "MAR", "APR", "MAY", 
 type Month = (typeof MONTHS)[number];
 
 function normalizeMemberCode(value: string) { return value.trim().toLowerCase().replace(/\s+/g, ""); }
+function toIsoDateString(value: any): string {
+  if (!value) return '';
+  if (typeof value?.toDate === 'function') return value.toDate().toISOString();
+  if (typeof value?.toMillis === 'function') return new Date(value.toMillis()).toISOString();
+  if (typeof value?.seconds === 'number') return new Date(value.seconds * 1000).toISOString();
+
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? '' : parsed.toISOString();
+}
+
+function formatLedgerDate(value: any): string {
+  const isoDate = toIsoDateString(value);
+  if (!isoDate) return 'N/A';
+  const parsed = new Date(isoDate);
+  return Number.isNaN(parsed.getTime()) ? 'N/A' : parsed.toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+}
+
 function getCurrentTrackingMonth(): Month {
   const jsMonths: Month[] = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEPT", "OCT", "NOV", "DEC"];
   return jsMonths[new Date().getMonth()];
@@ -101,7 +194,8 @@ const DEFAULT_MEMBERS = [
   { id: 10, name: "SURAJ", payments: {}, isHonorary: true },
 ];
 
-export default function AdminPanel({ currentUserData }: { currentUserData: any }) {
+export default function AdminPanel({ currentUserData, userData }: { currentUserData?: any; userData?: any }) {
+  const adminUser = currentUserData ?? userData;
   const [activeTab, setActiveTab] = useState("analytics");
   const [users, setUsers] = useState<any[]>([]);
   const [media, setMedia] = useState<any[]>([]);
@@ -126,6 +220,11 @@ export default function AdminPanel({ currentUserData }: { currentUserData: any }
   const [isNewMemberHonorary, setIsNewMemberHonorary] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
   const [chandaPayments, setChandaPayments] = useState<any[]>([]);
+  const [selectedUserUid, setSelectedUserUid] = useState("");
+  const [chandaAmount, setChandaAmount] = useState("");
+  const [chandaMessage, setChandaMessage] = useState("Online Paid (Admin Entry)");
+  const [chandaList, setChandaList] = useState<any[]>([]);
+  const [isChandaSubmitting, setIsChandaSubmitting] = useState(false);
 
   // VAULT SLIDER STATES
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
@@ -185,7 +284,7 @@ export default function AdminPanel({ currentUserData }: { currentUserData: any }
   });
 
   useEffect(() => {
-    if (currentUserData?.role !== 'Admin') return;
+    if (adminUser?.role !== 'Admin') return;
 
     const unsubUsers = onSnapshot(collection(db, 'users'), (snap) => {
       const fetchedUsers = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
@@ -201,6 +300,16 @@ export default function AdminPanel({ currentUserData }: { currentUserData: any }
 
     const qChandaPayments = query(collection(db, 'chanda_payments'), orderBy('timestamp', 'desc'));
     const unsubChandaPayments = onSnapshot(qChandaPayments, (snap) => setChandaPayments(snap.docs.map((chandaDoc) => ({ id: chandaDoc.id, ...(chandaDoc.data() as any) }))));
+
+    const qManualChanda = query(collection(db, 'mandal_chanda'), orderBy('lastUpdated', 'desc'));
+    const unsubManualChanda = onSnapshot(
+      qManualChanda,
+      (snap) => setChandaList(snap.docs.map((chandaDoc) => ({ id: chandaDoc.id, docIdKey: chandaDoc.id, ...(chandaDoc.data() as any) }))),
+      (error) => {
+        console.warn('Chanda list permission bypass in AdminPanel:', error.message);
+        setChandaList([]);
+      }
+    );
 
     const checkAndFetchSettings = async () => {
       const settingsRef = doc(db, 'mandal_settings', 'system');
@@ -229,8 +338,8 @@ export default function AdminPanel({ currentUserData }: { currentUserData: any }
       if (docSnap.exists() && docSnap.data().blockedMonths) setBlockedMonths(docSnap.data().blockedMonths);
     });
 
-    return () => { unsubUsers(); unsubMedia(); unsubChandaPayments(); unsubConfig(); unsubMandalMembers(); unsubConfigBlock(); };
-  }, [currentUserData?.role]);
+    return () => { unsubUsers(); unsubMedia(); unsubChandaPayments(); unsubManualChanda(); unsubConfig(); unsubMandalMembers(); unsubConfigBlock(); };
+  }, [adminUser?.role]);
 
   const toggleBlockMonth = async (month: Month) => {
     const newBlocked = blockedMonths.includes(month) ? blockedMonths.filter((m) => m !== month) : [...blockedMonths, month];
@@ -290,6 +399,88 @@ export default function AdminPanel({ currentUserData }: { currentUserData: any }
   const bannedUsersCount = users.filter(u => u.isBanned).length;
   const payingMembersCount = mandalMembers.filter((member) => !member.isHonorary).length;
   const pendingChandaPayments = chandaPayments.filter((payment) => payment.status === 'Pending');
+  const usersById = useMemo(() => {
+    const lookup = new Map<string, any>();
+    users.forEach((user) => {
+      if (user.id) lookup.set(String(user.id).trim().toLowerCase(), user);
+      if (user.uid) lookup.set(String(user.uid).trim().toLowerCase(), user);
+      if (user.email) lookup.set(String(user.email).trim().toLowerCase(), user);
+    });
+    return lookup;
+  }, [users]);
+
+  const mergedChandaList = useMemo(() => {
+    const ledgerMap: Record<string, any> = {};
+
+    const resolveUser = (value: any) => {
+      const lookupKey = String(value || '').trim().toLowerCase();
+      return lookupKey ? usersById.get(lookupKey) : undefined;
+    };
+
+    const upsertEntry = (emailRaw: string, entry: any) => {
+      const emailKey = String(emailRaw || '').trim().toLowerCase();
+      if (!emailKey) return;
+
+      const existing = ledgerMap[emailKey];
+      if (!existing) {
+        ledgerMap[emailKey] = {
+          email: emailKey,
+          name: entry.name,
+          totalAmount: Number(entry.totalAmount) || 0,
+          latestMessage: entry.latestMessage,
+          lastUpdated: entry.lastUpdated,
+        };
+        return;
+      }
+
+      existing.totalAmount += Number(entry.totalAmount) || 0;
+      if (!existing.name && entry.name) {
+        existing.name = entry.name;
+      }
+
+      if (new Date(entry.lastUpdated).getTime() >= new Date(existing.lastUpdated).getTime()) {
+        existing.latestMessage = entry.latestMessage;
+        existing.lastUpdated = entry.lastUpdated;
+      }
+    };
+
+    chandaPayments.forEach((payment) => {
+      const paymentStatus = String(payment.status || '').trim().toLowerCase();
+      if (paymentStatus && paymentStatus !== 'approved') return;
+
+      const matchedUser = resolveUser(payment.userId || payment.userEmail || payment.email);
+      const resolvedEmail = payment.userEmail || payment.email || matchedUser?.email || matchedUser?.id || matchedUser?.uid || payment.userId || payment.id;
+
+      upsertEntry(resolvedEmail, {
+        name: payment.userName || matchedUser?.name || 'Mandal Donor',
+        totalAmount: Number(payment.amount) || 0,
+        latestMessage: payment.message || 'Paid via Contribution Form',
+        lastUpdated: toIsoDateString(payment.timestamp || payment.createdAt) || new Date().toISOString(),
+      });
+    });
+
+    chandaList.forEach((item) => {
+      const matchedUser = resolveUser(item.docIdKey || item.email || item.id);
+      const resolvedEmail = item.email || matchedUser?.email || matchedUser?.id || item.docIdKey || item.id || '';
+
+      upsertEntry(resolvedEmail, {
+        name: item.name || matchedUser?.name || 'Mandal Member',
+        totalAmount: item.totalAmount || item.total || item.amount || 0,
+        latestMessage: item.latestMessage || item.message || 'Admin Dashboard Entry',
+        lastUpdated: toIsoDateString(item.lastUpdated || item.timestamp) || new Date().toISOString(),
+      });
+    });
+
+    return Object.values(ledgerMap).sort((a: any, b: any) => {
+      const amountDiff = (Number(b.totalAmount) || 0) - (Number(a.totalAmount) || 0);
+      if (amountDiff !== 0) return amountDiff;
+      return new Date(toIsoDateString(b.lastUpdated) || 0).getTime() - new Date(toIsoDateString(a.lastUpdated) || 0).getTime();
+    });
+  }, [chandaPayments, chandaList, usersById]);
+  const userSelectOptions = users.map((u) => ({
+    value: u.id,
+    label: `${u.name ? String(u.name).toUpperCase() : 'UNKNOWN'} (${u.email || 'No Email'})`,
+  }));
 
   const filteredUsers = users.filter(u => u.name?.toLowerCase().includes(userSearch.toLowerCase()) || u.email?.toLowerCase().includes(userSearch.toLowerCase()));
   const uniqueUploaders = Array.from(new Set(media.map((m: any) => m.uploaderEmail))).filter(Boolean) as string[];
@@ -352,6 +543,58 @@ export default function AdminPanel({ currentUserData }: { currentUserData: any }
     if (!window.confirm('Are you sure you want to reject this payment?')) return;
     try { await updateDoc(doc(db, 'chanda_payments', id), { status: 'Rejected' }); showToast('Payment marked as rejected.', 'success'); } 
     catch (error) { showToast('Unable to reject this payment.', 'error'); }
+  };
+
+  const handleAddChanda = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const targetUserData = users.find((u) => String(u.id) === String(selectedUserUid) || String(u.uid) === String(selectedUserUid));
+    const targetEmail = targetUserData?.email?.trim().toLowerCase() || `${selectedUserUid}@mandal.com`;
+    const amount = Number(chandaAmount);
+
+    if (!selectedUserUid || !Number.isFinite(amount) || amount <= 0) {
+      showToast('Sahi user aur amount bhariye!', 'error');
+      return;
+    }
+
+    setIsChandaSubmitting(true);
+
+    try {
+      const chandaRef = doc(db, 'mandal_chanda', targetEmail);
+      const chandaSnap = await getDoc(chandaRef);
+      const now = new Date().toISOString();
+      const existingData = chandaSnap.exists() ? (chandaSnap.data() as any) : null;
+      const nextTotal = (Number(existingData?.totalAmount) || Number(existingData?.total) || 0) + amount;
+      const targetName = targetUserData.name || existingData?.name || 'Anonymous Donor';
+
+      await setDoc(chandaRef, {
+        email: targetEmail,
+        name: targetName,
+        totalAmount: nextTotal,
+        total: nextTotal,
+        latestMessage: chandaMessage.trim() || 'Additional payment added',
+        lastUpdated: now,
+        updatedBy: currentUserData?.email || 'admin',
+      }, { merge: true });
+
+      await setDoc(doc(db, 'mandal_chanda_logs', `${targetEmail}_${Date.now()}`), {
+        adminEmail: currentUserData?.email || 'admin',
+        targetEmail,
+        amountAdded: amount,
+        message: chandaMessage.trim() || 'Additional payment added',
+        timestamp: now,
+      });
+
+      showToast(existingData ? `Amount updated to ₹${nextTotal}` : `Fresh chanda added for ${targetName}`, 'success');
+      setSelectedUserUid('');
+      setChandaAmount('');
+      setChandaMessage('Online Paid (Admin Entry)');
+    } catch (error) {
+      console.error('Error adding manual chanda entry:', error);
+      showToast('Database me entry fail ho gayi.', 'error');
+    } finally {
+      setIsChandaSubmitting(false);
+    }
   };
 
   const deleteMedia = async (id: string, e?: React.MouseEvent) => {
@@ -430,7 +673,7 @@ export default function AdminPanel({ currentUserData }: { currentUserData: any }
     } catch (err) {}
   };
 
-  if (currentUserData?.role !== 'Admin') {
+  if (adminUser?.role !== 'Admin') {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-red-500 animate-fade-in">
         <ShieldAlert className="w-16 h-16 mb-4 opacity-50" />
@@ -501,14 +744,14 @@ export default function AdminPanel({ currentUserData }: { currentUserData: any }
 
           <div className="grid grid-cols-1 gap-2">
             {filteredUsers.map((user) => (
-              <div key={user.uid} className={`bg-white rounded-xl border ${user.isBanned ? 'border-red-200 bg-red-50' : 'border-gray-100 shadow-sm'} p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3`}>
+              <div key={user.id || user.uid || user.email} className={`bg-white rounded-xl border ${user.isBanned ? 'border-red-200 bg-red-50' : 'border-gray-100 shadow-sm'} p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3`}>
                 <div className="flex items-center gap-3">
                   <div className={`w-8 h-8 sm:w-10 sm:h-10 shrink-0 rounded-full flex items-center justify-center font-black text-white text-xs sm:text-sm ${user.role === 'Admin' ? 'bg-yellow-500' : user.isBanned ? 'bg-red-500' : 'bg-[#5A0000]'}`}>
                     {user.name?.charAt(0).toUpperCase() || 'U'}
                   </div>
                   <div className="min-w-0">
                     <p className="font-bold text-gray-900 text-xs sm:text-sm truncate flex items-center gap-1.5">
-                      {user.name || 'Unknown User'} {user.uid === currentUserData.uid && <span className="text-[7px] sm:text-[8px] bg-gray-200 px-1 py-0.5 rounded text-gray-600">YOU</span>}
+                      {user.name || 'Unknown User'} {user.uid === adminUser?.uid && <span className="text-[7px] sm:text-[8px] bg-gray-200 px-1 py-0.5 rounded text-gray-600">YOU</span>}
                     </p>
                     <p className="text-[9px] sm:text-[10px] font-semibold text-gray-400 truncate flex items-center gap-1"><Mail className="w-2.5 h-2.5 shrink-0" /> {user.email || 'No email'}</p>
                     <div className="mt-1 flex items-center gap-2">
@@ -640,6 +883,112 @@ export default function AdminPanel({ currentUserData }: { currentUserData: any }
                 </label>
                 <button type="submit" className="mt-auto rounded-xl bg-green-700 px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-green-800 shadow-sm">Add to Mandal</button>
               </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================== */}
+      {/* TAB: CHANDA MANAGEMENT */}
+      {activeTab === 'chanda' && (
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 animate-in fade-in zoom-in duration-300 mt-4">
+          <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm lg:col-span-1">
+            <div className="mb-4 flex items-center gap-2 border-b border-gray-100 pb-3">
+              <PlusCircle className="h-5 w-5 text-[#5a0000]" />
+              <h3 className="text-sm font-black uppercase tracking-wide text-gray-800">Add / Update Chanda</h3>
+            </div>
+
+            <form onSubmit={handleAddChanda} className="space-y-4">
+              <div>
+                <label className="mb-1 ml-1 block text-[10px] font-black uppercase tracking-widest text-gray-400">Registered User</label>
+                <SearchableSelect
+                  value={selectedUserUid}
+                  onChange={setSelectedUserUid}
+                  options={userSelectOptions}
+                  placeholder="Select Registered User"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 ml-1 block text-[10px] font-black uppercase tracking-widest text-gray-400">Amount (₹)</label>
+                <input
+                  type="number"
+                  required
+                  min="1"
+                  value={chandaAmount}
+                  onChange={(e) => setChandaAmount(e.target.value)}
+                  placeholder="101"
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-xs font-bold text-black outline-none transition-all focus:border-[#5a0000] focus:bg-white"
+                />
+                <p className="mt-1 px-1 text-[9px] font-bold leading-tight text-gray-400">Same email again? The amount is added to the previous total.</p>
+              </div>
+
+              <div>
+                <label className="mb-1 ml-1 block text-[10px] font-black uppercase tracking-widest text-gray-400">Remark</label>
+                <input
+                  type="text"
+                  value={chandaMessage}
+                  onChange={(e) => setChandaMessage(e.target.value)}
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-xs font-bold text-black outline-none transition-all focus:border-[#5a0000] focus:bg-white"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={isChandaSubmitting}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#5a0000] px-4 py-3.5 text-xs font-black uppercase tracking-widest text-white shadow-sm transition-colors hover:bg-[#7b0000] disabled:opacity-50"
+              >
+                <ArrowUpRight className="h-4 w-4" />
+                {isChandaSubmitting ? 'Saving...' : 'Save Contribution'}
+              </button>
+            </form>
+          </div>
+
+          <div className="rounded-2xl border border-gray-200 bg-white shadow-sm lg:col-span-2 overflow-hidden">
+            <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50 px-4 py-3">
+              <div className="flex items-center gap-2">
+                <History className="h-4 w-4 text-gray-500" />
+                <h3 className="text-xs font-black uppercase tracking-widest text-gray-700">Live Chanda Ledger</h3>
+              </div>
+              <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-green-800">
+                ₹{mergedChandaList.reduce((sum, item) => sum + (Number(item.totalAmount) || 0), 0).toLocaleString('en-IN')} Total
+              </span>
+            </div>
+
+            <div className="max-h-[480px] overflow-x-auto custom-scrollbar">
+              {mergedChandaList.length === 0 ? (
+                <div className="py-14 text-center text-xs font-bold uppercase tracking-widest text-gray-400">No manual chanda entries yet.</div>
+              ) : (
+                <table className="w-full border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-gray-200 bg-gray-50 text-[9px] font-black uppercase tracking-wider text-gray-400">
+                      <th className="p-4 text-left">Member</th>
+                      <th className="p-4 text-left">Latest Remark</th>
+                      <th className="p-4 text-center">Total</th>
+                      <th className="p-4 text-right">Updated</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                      {mergedChandaList.map((entry) => (
+                      <tr key={entry.email || entry.id || entry.name} className="transition-colors hover:bg-gray-50/70">
+                        <td className="p-4">
+                          <p className="font-black uppercase tracking-wide text-gray-900">{entry.name || 'Anonymous Donor'}</p>
+                          <p className="mt-0.5 text-[10px] font-bold text-gray-400">{entry.email}</p>
+                        </td>
+                        <td className="max-w-[220px] p-4 italic text-gray-500">&ldquo;{entry.latestMessage || 'No note'}&rdquo;</td>
+                        <td className="p-4 text-center">
+                          <span className="rounded-xl border border-green-100 bg-green-50 px-2.5 py-1 text-xs font-black text-green-700">
+                            ₹{Number(entry.totalAmount || 0).toLocaleString('en-IN')}
+                          </span>
+                        </td>
+                        <td className="p-4 text-right text-[10px] font-bold text-gray-400">
+                          {formatLedgerDate(entry.lastUpdated)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
           </div>
         </div>
@@ -828,7 +1177,7 @@ export default function AdminPanel({ currentUserData }: { currentUserData: any }
           <div className="bg-[#1a0505] p-3 sm:p-4 rounded-xl shadow-xl border border-red-900/50 max-h-60 overflow-y-auto">
             <p className="text-red-400 font-bold mb-2 flex items-center gap-1.5 text-xs"><Activity className="w-3 h-3"/> Real Activity Stream</p>
             <div className="space-y-1.5 font-mono text-[9px] sm:text-[10px]">
-              {activeUsers.map((user, index) => <p key={`login-${index}`} className="text-gray-300"><span className="text-green-500">[{new Date(user.lastLogin).toLocaleTimeString()}]</span> {user.name} logged into the portal.</p>)}
+              {activeUsers.map((user) => <p key={user.id || user.uid || user.email || user.lastLogin} className="text-gray-300"><span className="text-green-500">[{new Date(user.lastLogin).toLocaleTimeString()}]</span> {user.name} logged into the portal.</p>)}
             </div>
           </div>
         </div>
@@ -858,7 +1207,7 @@ export default function AdminPanel({ currentUserData }: { currentUserData: any }
 
       {activeTab === "profile" && (
         <div className="animate-in fade-in zoom-in duration-300">
-          {currentUserData ? <UserProfile userData={currentUserData} /> : <div className="rounded-xl border border-gray-200 bg-white p-4 text-sm font-semibold text-gray-500 shadow-sm">Loading profile...</div>}
+          {adminUser ? <UserProfile userData={adminUser} /> : <div className="rounded-xl border border-gray-200 bg-white p-4 text-sm font-semibold text-gray-500 shadow-sm">Loading profile...</div>}
         </div>
       )}
     </div>

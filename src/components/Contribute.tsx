@@ -11,6 +11,7 @@ import { db } from '@/lib/firebase';
 type Donor = {
   id: string;
   name: string;
+  email?: string;
   photo?: string | null;
   total: number;
   latestMessage?: string;
@@ -19,6 +20,7 @@ type Donor = {
 type PaymentDoc = {
   status?: string;
   userId?: string;
+  userEmail?: string;
   timestamp?: { toMillis?: () => number };
   userName?: string;
   userPhoto?: string | null;
@@ -30,6 +32,7 @@ type ContributeProps = {
   userData: {
     uid?: string;
     name?: string;
+    email?: string;
     photoURL?: string | null;
   };
 };
@@ -582,44 +585,94 @@ export default function Contribute({ userData }: ContributeProps) {
   }, []);
 
   useEffect(() => {
-    const q = query(collection(db, 'chanda_payments'), orderBy('timestamp', 'desc'));
-    return onSnapshot(
-      q,
-      (snap) => {
-        const totals: Record<string, Donor & { latestAt?: number }> = {};
-        snap.docs.forEach((doc) => {
-          const payment = doc.data() as PaymentDoc;
-          if (payment.status !== 'Approved' || !payment.userId) return;
-          const at = typeof payment.timestamp?.toMillis === 'function' ? payment.timestamp.toMillis() : 0;
-          const current = totals[payment.userId];
-          if (!current) {
-            totals[payment.userId] = {
-              id: payment.userId,
-              name: payment.userName || 'Anonymous',
-              photo: payment.userPhoto || null,
-              total: Number(payment.amount) || 0,
-              latestMessage: payment.message || '',
-              latestAt: at,
-            };
-            return;
-          }
-          current.total += Number(payment.amount) || 0;
-          if (at >= (current.latestAt || 0)) {
-            current.latestAt = at;
-            current.latestMessage = payment.message || '';
-          }
+    let approvedPayments: PaymentDoc[] = [];
+    let manualChandaEntries: any[] = [];
+
+    const recomputeLeaderboard = () => {
+      const totals: Record<string, Donor & { latestAt?: number }> = {};
+
+      const pushContribution = (key: string, contribution: Donor & { latestAt?: number }) => {
+        const existing = totals[key];
+        if (!existing) {
+          totals[key] = contribution;
+          return;
+        }
+
+        existing.total += contribution.total;
+        if ((contribution.latestAt || 0) >= (existing.latestAt || 0)) {
+          existing.latestAt = contribution.latestAt;
+          existing.latestMessage = contribution.latestMessage;
+          existing.photo = contribution.photo;
+          existing.name = contribution.name;
+          existing.email = contribution.email;
+        }
+      };
+
+      approvedPayments.forEach((payment) => {
+        if (payment.status !== 'Approved' || !payment.userId) return;
+        const at = typeof payment.timestamp?.toMillis === 'function' ? payment.timestamp.toMillis() : 0;
+        const key = payment.userEmail?.trim().toLowerCase() || payment.userId;
+        pushContribution(key, {
+          id: key,
+          name: payment.userName || 'Anonymous',
+          email: payment.userEmail || undefined,
+          photo: payment.userPhoto || null,
+          total: Number(payment.amount) || 0,
+          latestMessage: payment.message || '',
+          latestAt: at,
         });
-        setLeaderboard(
-          Object.values(totals)
-            .sort((a, b) => b.total - a.total)
-            .map(({ id, name, photo, total, latestMessage }) => ({ id, name, photo, total, latestMessage }))
-        );
+      });
+
+      manualChandaEntries.forEach((entry) => {
+        const key = entry.email?.trim().toLowerCase();
+        if (!key) return;
+        const at = entry.lastUpdated ? new Date(entry.lastUpdated).getTime() : 0;
+        pushContribution(key, {
+          id: key,
+          name: entry.name || 'Anonymous Donor',
+          email: entry.email,
+          photo: entry.photoURL || null,
+          total: Number(entry.totalAmount) || 0,
+          latestMessage: entry.latestMessage || '',
+          latestAt: at,
+        });
+      });
+
+      setLeaderboard(
+        Object.values(totals)
+          .sort((a, b) => b.total - a.total)
+          .map(({ id, name, email, photo, total, latestMessage }) => ({ id, name, email, photo, total, latestMessage }))
+      );
+    };
+
+    const unsubPayments = onSnapshot(
+      query(collection(db, 'chanda_payments'), orderBy('timestamp', 'desc')),
+      (snap) => {
+        approvedPayments = snap.docs.map((doc) => ({ id: doc.id, ...(doc.data() as any) }));
+        recomputeLeaderboard();
       },
       (error) => {
         console.error('Leaderboard listener error:', error);
-        setLeaderboard([]);
       }
     );
+
+    const unsubManual = onSnapshot(
+      query(collection(db, 'mandal_chanda'), orderBy('lastUpdated', 'desc')),
+      (snap) => {
+        manualChandaEntries = snap.docs.map((doc) => ({ id: doc.id, ...(doc.data() as any) }));
+        recomputeLeaderboard();
+      },
+      (error) => {
+        console.warn('Manual chanda listener safely bypassed:', error.message);
+        manualChandaEntries = [];
+        recomputeLeaderboard();
+      }
+    );
+
+    return () => {
+      unsubPayments();
+      unsubManual();
+    };
   }, []);
 
   const finalAmount = amount ?? (customAmount ? parseInt(customAmount, 10) : 0);
@@ -642,6 +695,7 @@ export default function Contribute({ userData }: ContributeProps) {
       await addDoc(collection(db, 'chanda_payments'), {
         userId: userData.uid || 'anonymous',
         userName: userData.name,
+        userEmail: userData.email || '',
         userPhoto: userData.photoURL || null,
         amount,
         utr_number: utr,
@@ -695,7 +749,7 @@ export default function Contribute({ userData }: ContributeProps) {
         <div className="header-hero anim-in">
           <div className="om-badge">
             <Sparkles style={{ width: 13, height: 13 }} />
-            Ganpati Mitra Mandal
+            Siyaram Mitra Mandal
           </div>
           <h1 className="header-title">Mandal Vault</h1>
           <p className="header-sub">Your seva strengthens our celebration 🙏</p>
