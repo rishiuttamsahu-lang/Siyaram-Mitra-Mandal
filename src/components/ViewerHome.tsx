@@ -37,7 +37,7 @@ export default function ViewerHome({ userData, onExplore }: ViewerHomeProps) {
     const tapLockTimer: ReturnType<typeof setTimeout> = setTimeout(() => setCanTap(true), 500);
 
     if (phase === 1) {
-      timer = setTimeout(() => setPhase(2), 4000);
+      timer = setTimeout(() => setPhase(2), 7000);
     } else if (phase === 2) {
       timer = setTimeout(() => setPhase(3), 6000);
     }
