@@ -67,7 +67,7 @@ export default function ViewerDashboard({ userData }: { userData?: any }) {
       
       {/* 3D SPHERE */}
       {sphereImages.length > 0 ? (
-        <div className="absolute inset-0 flex items-center justify-center opacity-80 pointer-events-auto z-10 sm:mt-0 mt-4">
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-auto sm:mt-0 mt-4">
           <SphereImageGrid
             images={sphereImages}
             containerSize={sphereSize}
@@ -76,6 +76,7 @@ export default function ViewerDashboard({ userData }: { userData?: any }) {
             hoverScale={1.3}
             autoRotate={true}
             autoRotateSpeed={0.3}
+            className="opacity-80"
           />
         </div>
       ) : (
@@ -85,7 +86,7 @@ export default function ViewerDashboard({ userData }: { userData?: any }) {
       )}
       
       {/* Premium Home Title */}
-      <div className="absolute bottom-6 sm:bottom-10 z-20 text-center pointer-events-none drop-shadow-lg">
+      <div className="absolute bottom-6 sm:bottom-10 z-0 text-center pointer-events-none drop-shadow-lg">
         {/* 🔥 TUMHARA CUSTOM LAB() GRADIENT APPLY KAR DIYA HAI YAHAN */}
         <h2 
           className="text-3xl font-black text-transparent bg-gradient-to-r from-[lab(56_94.47_98.89)] via-[#555555] to-[lab(2_11.19_3.81)] bg-clip-text drop-shadow-[0_0_10px_rgba(202,138,4,0.3)]" 
