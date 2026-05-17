@@ -28,6 +28,7 @@ export default function Home() {
 
   const [user, setUser] = useState<User | null>(null);
   const [userData, setUserData] = useState<AppUserData | null>(null);
+  const [isAuthChecking, setIsAuthChecking] = useState(true);
   
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isPasscodeVerified, setIsPasscodeVerified] = useState(false);
@@ -83,11 +84,14 @@ export default function Home() {
           }
         } catch (error) {
           console.error("Firebase Connection Error:", error);
+        } finally {
+          setIsAuthChecking(false);
         }
       } else {
         setUser(null);
         setUserData(null);
         setIsPasscodeVerified(false);
+        setIsAuthChecking(false);
       }
     });
     return () => unsubscribe();
@@ -280,6 +284,18 @@ export default function Home() {
             <p className="text-[10px] font-bold uppercase tracking-widest text-yellow-200/70 md:text-xs">For Members of Siyaram Mitra Mandal</p>
           </div>
         </div>
+      </div>
+    );
+  }
+
+  if (isAuthChecking) {
+    return (
+      <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-gray-50">
+        <div className="relative">
+          <div className="w-12 h-12 rounded-full border-4 border-gray-200 border-t-[#5a0000] animate-spin"></div>
+          <div className="absolute inset-0 w-12 h-12 rounded-full border-4 border-transparent border-b-yellow-500 animate-[spin_2s_linear_infinite]"></div>
+        </div>
+        <p className="mt-4 text-[10px] font-black uppercase tracking-widest text-[#5a0000] animate-pulse">Verifying Access...</p>
       </div>
     );
   }

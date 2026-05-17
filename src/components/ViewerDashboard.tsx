@@ -27,7 +27,7 @@ export default function ViewerDashboard({ userData }: { userData?: any }) {
       collection(db, 'mandal_gallery'), 
       where('isPrivate', '==', false), 
       orderBy('createdAt', 'desc'),
-      limit(30) // Thodi limit badha di taaki zyada variety photos aayen
+      limit(26)
     );
 
     const unsub = onSnapshot(q, (snap) => {
@@ -40,8 +40,8 @@ export default function ViewerDashboard({ userData }: { userData?: any }) {
 
         fetchedImgs.push({
           id: doc.id,
-          // 🔥 Photo quality HD kar di (eco,w_400 ki jagah good,w_800)
-          src: data.url.replace('/upload/', '/upload/q_auto:good,w_800/'),
+          src: data.url.replace('/upload/', '/upload/q_auto:eco,w_300/'),
+          hdSrc: data.url.replace('/upload/', '/upload/q_auto:good,w_1080/'),
           alt: data.caption || 'Mandal Memory',
           title: data.uploadedBy?.split(' ')[0],
           description: data.category
@@ -51,7 +51,8 @@ export default function ViewerDashboard({ userData }: { userData?: any }) {
       // Sphere bhara hua dikhane ke liye duplicate logic
       const finalImages: ImageData[] = [];
       if (fetchedImgs.length > 0) {
-        for (let i = 0; i < 40; i++) {
+        const MAX_ITEMS = 26;
+        for (let i = 0; i < MAX_ITEMS; i++) {
           const baseImg = fetchedImgs[i % fetchedImgs.length];
           finalImages.push({ ...baseImg, id: `${baseImg.id}-${i}` });
         }
@@ -67,7 +68,7 @@ export default function ViewerDashboard({ userData }: { userData?: any }) {
       
       {/* 3D SPHERE */}
       {sphereImages.length > 0 ? (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-auto sm:mt-0 mt-4">
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-auto sm:mt-0 -mt-24">
           <SphereImageGrid
             images={sphereImages}
             containerSize={sphereSize}

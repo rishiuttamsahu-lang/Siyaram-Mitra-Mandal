@@ -32,6 +32,9 @@ export default function UserProfile({ userData }: { userData: any }) {
   const [touchStart, setTouchStart] = useState(0);
   const [swipeOffset, setSwipeOffset] = useState(0);
   const [isSwiping, setIsSwiping] = useState(false);
+  const lastSwipeTime = useRef<number>(0);
+  const [visibleCount, setVisibleCount] = useState(15);
+  const loadMoreRef = useRef<HTMLDivElement>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(true);
@@ -77,6 +80,26 @@ export default function UserProfile({ userData }: { userData: any }) {
     if (type?.startsWith('video')) return url.replace(/\.[^/.]+$/, '.jpg').replace('/upload/', '/upload/q_auto:good,w_800/');
     return url.replace('/upload/', '/upload/q_auto:good,w_600/');
   };
+
+  useEffect(() => {
+    if (activeTab !== 'vault') return;
+    const node = loadMoreRef.current;
+    if (!node) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) setVisibleCount((prev) => prev + 15);
+      },
+      { rootMargin: '200px' }
+    );
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [activeTab, visibleCount, myMedia.length]);
+
+  useEffect(() => {
+    if (activeTab === 'vault') setVisibleCount(15);
+  }, [activeTab]);
 
   useEffect(() => {
     if (!userData?.uid) return;
@@ -273,8 +296,14 @@ export default function UserProfile({ userData }: { userData: any }) {
   const handleTouchEnd = () => {
     if (!touchStart) return;
     setIsSwiping(false);
-    if (swipeOffset > 60) handlePrev();
-    else if (swipeOffset < -60) handleNext();
+    if (swipeOffset > 60) {
+      lastSwipeTime.current = Date.now();
+      handlePrev();
+    }
+    else if (swipeOffset < -60) {
+      lastSwipeTime.current = Date.now();
+      handleNext();
+    }
 
     setSwipeOffset(0);
     setTouchStart(0);
@@ -375,7 +404,7 @@ export default function UserProfile({ userData }: { userData: any }) {
                   <ImageIcon size={32} className="mx-auto mb-3 text-gray-300" />
                   <p className="text-sm font-bold text-gray-400">Vault is empty</p>
                 </div>
-              ) : myMedia.map((item, index) => {
+              ) : myMedia.slice(0, visibleCount).map((item, index) => {
                 const isSelected = selectedIds.includes(item.id);
                 return (
                 <div 
@@ -440,6 +469,12 @@ export default function UserProfile({ userData }: { userData: any }) {
                 </div>
               )})}
             </div>
+
+            {myMedia.length > visibleCount && (
+              <div ref={loadMoreRef} className="w-full flex justify-center py-6">
+                <Loader2 className="w-6 h-6 text-gray-400 animate-spin" />
+              </div>
+            )}
           </div>
         )}
 
@@ -565,6 +600,8 @@ export default function UserProfile({ userData }: { userData: any }) {
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
           >
+            <div className="absolute top-[15%] bottom-[15%] left-0 w-[30%] z-[45]" onClick={(e) => { e.stopPropagation(); if (Date.now() - lastSwipeTime.current < 300) return; handlePrev(); }} />
+            <div className="absolute top-[15%] bottom-[15%] right-0 w-[30%] z-[45]" onClick={(e) => { e.stopPropagation(); if (Date.now() - lastSwipeTime.current < 300) return; handleNext(); }} />
             <button onClick={handlePrev} className="absolute left-4 z-50 p-3 bg-white/5 text-white rounded-full hover:bg-white/20 transition-all hidden sm:block"><ChevronLeft className="w-6 h-6" /></button>
             
             <div 
@@ -583,18 +620,23 @@ export default function UserProfile({ userData }: { userData: any }) {
                       item.type === 'video' ? (
                         index === selectedIndex ? (
                           <div className="relative w-full h-full flex items-center justify-center bg-black">
+                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                              <div className="w-10 h-10 border-4 border-white/10 border-t-yellow-500 rounded-full animate-spin"></div>
+                            </div>
+
                             <video
                               ref={videoRef}
                               src={item.url}
+                              poster={getOptimizedMediaUrl(item.url, item.type)}
                               playsInline
                               loop
                               onClick={togglePlayPause}
                               onTimeUpdate={handleTimeUpdate}
-                              className="max-h-full max-w-full object-contain pointer-events-auto rounded-xl shadow-2xl border border-white/10"
+                              className="max-h-full max-w-full object-contain pointer-events-auto rounded-xl shadow-2xl border border-white/10 relative z-10 bg-black/50"
                               style={{ willChange: 'transform', transform: 'translate3d(0,0,0)' }}
                             />
                             {!isPlaying && (
-                              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                              <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
                                 <div className="bg-black/50 backdrop-blur-sm rounded-full p-4"><Play className="w-12 h-12 text-white fill-white" /></div>
                               </div>
                             )}
@@ -636,8 +678,8 @@ export default function UserProfile({ userData }: { userData: any }) {
               >
                 <Smartphone className="w-3.5 h-3.5" /> WhatsApp Size
               </a>
-              <a href={selectedMedia.url} target="_blank" download className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-yellow-500 text-black text-[10px] font-black uppercase tracking-widest shadow-lg active:scale-95">
-                <Download className="w-3.5 h-3.5" /> Original HD
+              <a href={selectedMedia.url} target="_blank" download style={{ color: '#000000' }} className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-yellow-500 !text-black text-[10px] font-black uppercase tracking-widest shadow-lg active:scale-95">
+                <Download className="w-3.5 h-3.5 !text-black" stroke="black" /> Original HD
               </a>
             </div>
           </div>

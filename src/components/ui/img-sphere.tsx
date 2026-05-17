@@ -6,7 +6,7 @@ import { X } from 'lucide-react';
 export interface Position3D { x: number; y: number; z: number; }
 export interface SphericalPosition { theta: number; phi: number; radius: number; }
 export interface WorldPosition extends Position3D { scale: number; zIndex: number; isVisible: boolean; fadeOpacity: number; originalIndex: number; }
-export interface ImageData { id: string; src: string; alt: string; title?: string; description?: string; }
+export interface ImageData { id: string; src: string; hdSrc?: string; alt: string; title?: string; description?: string; }
 
 export interface SphereImageGridProps {
   images?: ImageData[];
@@ -211,10 +211,10 @@ const SphereImageGrid: React.FC<SphereImageGridProps> = ({
     const finalScale = isHovered ? Math.min(1.2, 1.2 / position.scale) : 1;
 
     return (
-      <div key={image.id + index} className="absolute cursor-pointer select-none transition-transform duration-200 ease-out"
-        style={{ width: `${imageSize}px`, height: `${imageSize}px`, left: `${containerSize/2 + position.x}px`, top: `${containerSize/2 + position.y}px`, opacity: position.fadeOpacity, transform: `translate(-50%, -50%) scale(${finalScale})`, zIndex: position.zIndex }}
+      <div key={image.id + index} className="absolute cursor-pointer select-none"
+        style={{ width: `${imageSize}px`, height: `${imageSize}px`, left: `${containerSize/2 + position.x}px`, top: `${containerSize/2 + position.y}px`, opacity: position.fadeOpacity, transform: `translate(-50%, -50%) scale(${finalScale})`, zIndex: position.zIndex, willChange: 'transform, opacity' }}
         onMouseEnter={() => setHoveredIndex(index)} onMouseLeave={() => setHoveredIndex(null)} onClick={(e) => { e.stopPropagation(); setSelectedImage(image); }}>
-        <div className="relative w-full h-full rounded-full overflow-hidden shadow-lg border-2 border-yellow-500/20">
+        <div className="relative w-full h-full rounded-full overflow-hidden border border-yellow-500/30">
           <img src={image.src} alt={image.alt} className="w-full h-full object-cover" draggable={false} loading={index < 5 ? 'eager' : 'lazy'} />
         </div>
       </div>
@@ -235,7 +235,7 @@ const SphereImageGrid: React.FC<SphereImageGridProps> = ({
         <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md" onClick={() => setSelectedImage(null)} style={{ animation: 'fadeIn 0.3s ease-out' }}>
           <div className="bg-[#1a0505] border border-yellow-500/30 rounded-3xl max-w-md w-full overflow-hidden shadow-2xl" onClick={(e) => e.stopPropagation()} style={{ animation: 'scaleIn 0.3s ease-out' }}>
             <div className="relative aspect-square">
-              <img src={selectedImage.src} alt={selectedImage.alt} className="w-full h-full object-contain" />
+              <img src={selectedImage.hdSrc || selectedImage.src} alt={selectedImage.alt} className="w-full h-full object-contain" />
               <button onClick={() => setSelectedImage(null)} className="absolute top-3 right-3 w-8 h-8 bg-black/50 backdrop-blur-sm rounded-full text-white flex items-center justify-center hover:bg-black/80 transition-all border border-white/20"><X size={16} /></button>
             </div>
             {(selectedImage.title || selectedImage.description) && (

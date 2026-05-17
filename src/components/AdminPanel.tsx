@@ -132,6 +132,9 @@ export default function AdminPanel({ currentUserData }: { currentUserData: any }
   const [touchStart, setTouchStart] = useState(0);
   const [swipeOffset, setSwipeOffset] = useState(0);
   const [isSwiping, setIsSwiping] = useState(false);
+  const lastSwipeTime = useRef<number>(0);
+  const [visibleCount, setVisibleCount] = useState(20);
+  const loadMoreRef = useRef<HTMLDivElement>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(true);
@@ -309,6 +312,26 @@ export default function AdminPanel({ currentUserData }: { currentUserData: any }
     return vaultSort === 'newest' ? timeB - timeA : timeA - timeB;
   });
 
+  useEffect(() => {
+    if (activeTab !== 'media') return;
+    const node = loadMoreRef.current;
+    if (!node) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) setVisibleCount((prev) => prev + 20);
+      },
+      { rootMargin: '200px' }
+    );
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [activeTab, visibleCount, filteredVaultMedia.length]);
+
+  useEffect(() => {
+    setVisibleCount(20);
+  }, [vaultSearch, vaultType, vaultPrivacy, vaultSort, vaultUploader, vaultDate, vaultCaption]);
+
   const activeUsers = users.filter((user) => user.lastLogin);
   const failedAttemptUsers = users.filter((user) => (user.failedAttempts || 0) > 0);
 
@@ -386,7 +409,13 @@ export default function AdminPanel({ currentUserData }: { currentUserData: any }
   const handleTouchEnd = () => {
     if (!touchStart) return;
     setIsSwiping(false);
-    if (swipeOffset > 60) handlePrev(); else if (swipeOffset < -60) handleNext();
+    if (swipeOffset > 60) {
+      lastSwipeTime.current = Date.now();
+      handlePrev();
+    } else if (swipeOffset < -60) {
+      lastSwipeTime.current = Date.now();
+      handleNext();
+    }
     setSwipeOffset(0); setTouchStart(0);
   };
 
@@ -657,7 +686,7 @@ export default function AdminPanel({ currentUserData }: { currentUserData: any }
                 </button>
               </div>
             ) : (
-              filteredVaultMedia.map((item: any, index: number) => (
+              filteredVaultMedia.slice(0, visibleCount).map((item: any, index: number) => (
                 <div key={item.id} onClick={() => setSelectedIndex(index)} className="relative group rounded-xl overflow-hidden border border-yellow-500/20 aspect-square bg-black shadow-lg hover:shadow-[0_0_15px_rgba(202,138,4,0.3)] transition-all cursor-pointer">
                   {item.type?.startsWith('video') ? (
                     <>
@@ -682,6 +711,12 @@ export default function AdminPanel({ currentUserData }: { currentUserData: any }
               ))
             )}
           </div>
+
+          {filteredVaultMedia.length > visibleCount && (
+            <div ref={loadMoreRef} className="w-full flex justify-center py-6 relative z-10">
+              <div className="w-6 h-6 border-4 border-yellow-500/20 border-t-yellow-500 rounded-full animate-spin"></div>
+            </div>
+          )}
           
           {selectedMedia && (
             <div className="fixed inset-0 z-[200] flex flex-col bg-black/95 backdrop-blur-xl animate-fade-in touch-none">
@@ -694,6 +729,8 @@ export default function AdminPanel({ currentUserData }: { currentUserData: any }
               </div>
 
               <div className="flex-1 relative flex items-center overflow-hidden touch-none" onClick={() => setSelectedIndex(null)} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}>
+                <div className="absolute top-[15%] bottom-[15%] left-0 w-[30%] z-[45]" onClick={(e) => { e.stopPropagation(); if (Date.now() - lastSwipeTime.current < 300) return; handlePrev(); }} />
+                <div className="absolute top-[15%] bottom-[15%] right-0 w-[30%] z-[45]" onClick={(e) => { e.stopPropagation(); if (Date.now() - lastSwipeTime.current < 300) return; handleNext(); }} />
                 <button onClick={handlePrev} className="absolute left-4 z-50 p-3 bg-white/5 text-white rounded-full hover:bg-white/20 transition-all hidden sm:block"><ChevronLeft className="w-6 h-6" /></button>
                 <div className="flex w-full h-full items-center will-change-transform" style={{ transform: `translate3d(calc(-${(selectedIndex || 0) * 100}% + ${swipeOffset}px), 0, 0)`, transition: isSwiping ? 'none' : 'transform 0.3s cubic-bezier(0.25, 1, 0.5, 1)' }}>
                   {filteredVaultMedia.map((item: any, index: number) => {
@@ -704,18 +741,23 @@ export default function AdminPanel({ currentUserData }: { currentUserData: any }
                           item.type?.startsWith('video') ? (
                             index === selectedIndex ? (
                               <div className="relative w-full h-full flex items-center justify-center bg-black">
+                                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                  <div className="w-10 h-10 border-4 border-white/10 border-t-yellow-500 rounded-full animate-spin"></div>
+                                </div>
+
                                 <video
                                   ref={videoRef}
                                   src={item.url}
+                                  poster={getOptimizedMediaUrl(item.url, item.type)}
                                   playsInline
                                   loop
                                   onClick={togglePlayPause}
                                   onTimeUpdate={handleTimeUpdate}
-                                  className="max-h-full max-w-full object-contain pointer-events-auto rounded-xl shadow-2xl border border-white/10"
+                                  className="max-h-full max-w-full object-contain pointer-events-auto rounded-xl shadow-2xl border border-white/10 relative z-10 bg-black/50"
                                   style={{ willChange: 'transform', transform: 'translate3d(0,0,0)' }}
                                 />
                                 {!isPlaying && (
-                                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
                                     <div className="bg-black/50 backdrop-blur-sm rounded-full p-4"><Play className="w-12 h-12 text-white fill-white" /></div>
                                   </div>
                                 )}
@@ -748,8 +790,8 @@ export default function AdminPanel({ currentUserData }: { currentUserData: any }
                   <a href={selectedMedia.url.replace('/upload/', '/upload/q_auto:eco,w_1080/')} target="_blank" download className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-[#1a1a1a] hover:bg-[#2a2a2a] text-white text-[10px] font-bold uppercase tracking-widest transition-all border border-white/10 shadow-sm" style={{ color: 'beige' }}>
                     <Smartphone className="w-3.5 h-3.5" /> WhatsApp Size
                   </a>
-                  <a href={selectedMedia.url} target="_blank" download className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-yellow-500 text-black text-[10px] font-black uppercase tracking-widest shadow-lg active:scale-95">
-                    <Download className="w-3.5 h-3.5" /> Original HD
+                  <a href={selectedMedia.url} target="_blank" download style={{ color: '#000000' }} className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-yellow-500 !text-black text-[10px] font-black uppercase tracking-widest shadow-lg active:scale-95">
+                    <Download className="w-3.5 h-3.5 !text-black" stroke="black" /> Original HD
                   </a>
                 </div>
               </div>

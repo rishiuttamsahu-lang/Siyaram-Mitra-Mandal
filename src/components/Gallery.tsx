@@ -81,11 +81,15 @@ export default function Gallery({ userData }: { userData: any }) {
   const [touchStart, setTouchStart] = useState(0);
   const [swipeOffset, setSwipeOffset] = useState(0);
   const [isSwiping, setIsSwiping] = useState(false);
+  const lastSwipeTime = useRef<number>(0);
 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editCategory, setEditCategory] = useState('');
   const [editUploadedBy, setEditUploadedBy] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+
+  const [visibleCount, setVisibleCount] = useState(15);
+  const loadMoreRef = useRef<HTMLDivElement>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(true);
@@ -140,6 +144,26 @@ export default function Gallery({ userData }: { userData: any }) {
   useEffect(() => {
     if (typeof window !== 'undefined' && (window as any).cloudinary) setIsCloudinaryReady(true);
   }, []);
+
+  useEffect(() => {
+    if (isLoading) return;
+    const node = loadMoreRef.current;
+    if (!node) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) setVisibleCount((prev) => prev + 15);
+      },
+      { rootMargin: '200px' }
+    );
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [isLoading, visibleCount, activeCategory, searchQuery, mediaType, sortBy, media.length]);
+
+  useEffect(() => {
+    setVisibleCount(15);
+  }, [activeCategory, searchQuery, mediaType, sortBy]);
 
   useEffect(() => {
     const unsub = onSnapshot(doc(db, 'mandal_settings', 'system'), (snap) => {
@@ -231,8 +255,14 @@ export default function Gallery({ userData }: { userData: any }) {
   const handleTouchEnd = () => {
     if (!touchStart) return;
     setIsSwiping(false);
-    if (swipeOffset > 60) handlePrev();
-    else if (swipeOffset < -60) handleNext();
+    if (swipeOffset > 60) {
+      lastSwipeTime.current = Date.now();
+      handlePrev();
+    }
+    else if (swipeOffset < -60) {
+      lastSwipeTime.current = Date.now();
+      handleNext();
+    }
     setSwipeOffset(0);
     setTouchStart(0);
   };
@@ -401,7 +431,7 @@ export default function Gallery({ userData }: { userData: any }) {
         </div>
       ) : (
         <div className="grid grid-cols-3 gap-1.5 md:gap-4 md:grid-cols-4 lg:grid-cols-5 px-1 sm:px-0">
-          {displayedMedia().map((item, index) => (
+          {displayedMedia().slice(0, visibleCount).map((item, index) => (
             <div key={item.id} onClick={() => setSelectedIndex(index)} className="group relative break-inside-avoid cursor-pointer overflow-hidden rounded-lg sm:rounded-2xl bg-gray-100 transition-all hover:opacity-90 aspect-square sm:aspect-square shadow-sm">
               {item.type === 'video' ? (
                 <div className="relative h-full w-full">
@@ -429,6 +459,12 @@ export default function Gallery({ userData }: { userData: any }) {
         </div>
       )}
 
+      {displayedMedia().length > visibleCount && (
+        <div ref={loadMoreRef} className="w-full flex justify-center py-8">
+          <div className="w-6 h-6 border-4 border-gray-200 border-t-[#5a0000] rounded-full animate-spin"></div>
+        </div>
+      )}
+
       {selectedMedia && (
         <div className="fixed inset-0 z-[10000] flex flex-col bg-black animate-fade-in touch-none">
           <div className="absolute top-0 w-full p-4 flex justify-between items-start z-50 bg-gradient-to-b from-black/80 to-transparent pointer-events-none">
@@ -442,6 +478,8 @@ export default function Gallery({ userData }: { userData: any }) {
           </div>
 
           <div className="flex-1 relative flex items-center overflow-hidden touch-none" onClick={() => setSelectedIndex(null)} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}>
+            <div className="absolute top-[15%] bottom-[15%] left-0 w-[30%] z-[45]" onClick={(e) => { e.stopPropagation(); if (Date.now() - lastSwipeTime.current < 300) return; handlePrev(); }} />
+            <div className="absolute top-[15%] bottom-[15%] right-0 w-[30%] z-[45]" onClick={(e) => { e.stopPropagation(); if (Date.now() - lastSwipeTime.current < 300) return; handleNext(); }} />
             <button onClick={handlePrev} className="absolute left-4 z-50 p-3 bg-black/50 text-white rounded-full hover:bg-black/80 transition-all hidden sm:block pointer-events-auto"><ChevronLeft className="w-8 h-8" /></button>
 
             <div className="flex w-full h-full items-center will-change-transform" style={{ transform: `translate3d(calc(-${(selectedIndex || 0) * 100}% + ${swipeOffset}px), 0, 0)`, transition: isSwiping ? 'none' : 'transform 0.3s cubic-bezier(0.25, 1, 0.5, 1)' }}>
@@ -454,19 +492,24 @@ export default function Gallery({ userData }: { userData: any }) {
                       item.type === 'video' ? (
                         index === selectedIndex ? (
                           <div className="relative w-full h-full flex items-center justify-center bg-black">
+                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                              <div className="w-10 h-10 border-4 border-white/10 border-t-yellow-500 rounded-full animate-spin"></div>
+                            </div>
+
                             <video
                               ref={videoRef}
                               src={item.url}
+                              poster={getOptimizedMediaUrl(item.url, item.type)}
                               playsInline
                               loop
                               onClick={togglePlayPause}
                               onTimeUpdate={handleTimeUpdate}
-                              className="max-h-full max-w-full object-contain pointer-events-auto"
+                              className="max-h-full max-w-full object-contain pointer-events-auto relative z-10 bg-black/50"
                               style={{ willChange: 'transform', transform: 'translate3d(0,0,0)' }}
                             />
 
                             {!isPlaying && (
-                              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                              <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
                                 <div className="bg-black/50 backdrop-blur-sm rounded-full p-4">
                                   <Play className="w-12 h-12 text-white fill-white" />
                                 </div>
@@ -538,8 +581,8 @@ export default function Gallery({ userData }: { userData: any }) {
                 <Smartphone className="w-4 h-4" /> SD
               </a>
               {adminSettings?.hdDownloads && (
-                <a href={selectedMedia.url} target="_blank" download className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-full bg-white hover:bg-gray-200 text-black text-[10px] font-black uppercase tracking-widest shadow-lg active:scale-95">
-                  <Download className="w-4 h-4" /> Original HD
+                <a href={selectedMedia.url} target="_blank" download style={{ color: '#000000' }} className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-full bg-white hover:bg-gray-200 !text-black text-[10px] font-black uppercase tracking-widest shadow-lg active:scale-95">
+                  <Download className="w-4 h-4 !text-black" stroke="black" /> Original HD
                 </a>
               )}
             </div>
