@@ -27,7 +27,7 @@ const CustomSelect = ({ value, onChange, options, placeholder, theme = 'light' }
 
   const selectedOption = options.find((opt) => String(opt.value) === String(value));
   const isDark = theme === 'dark';
-  
+
   const triggerDark = `bg-[#2a0808]/90 backdrop-blur-md border border-yellow-500/20 px-3 sm:px-4 py-2 sm:py-2.5 text-[9px] sm:text-[10px] font-black text-yellow-100 uppercase tracking-widest hover:bg-[#3a0a0a] ${isOpen ? 'border-yellow-400 ring-1 ring-yellow-400/50' : ''}`;
   const triggerLight = `bg-gray-50 border border-gray-200 px-3 py-2 sm:py-2.5 text-[10px] sm:text-[11px] font-bold text-gray-800 hover:bg-gray-100 shadow-sm ${isOpen ? 'border-[#5A0000] ring-1 ring-[#5A0000]/30' : ''}`;
   const dropdownDark = "bg-[#1a0505] border border-yellow-500/20 shadow-2xl";
