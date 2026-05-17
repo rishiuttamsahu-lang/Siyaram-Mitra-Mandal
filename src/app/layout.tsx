@@ -1,6 +1,6 @@
 /* eslint-disable @next/next/no-page-custom-font */
 
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -17,6 +17,10 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Siyaram Mitra Mandal Portal",
   description: "Dashboard and admin entry panel for monthly contribution tracking.",
+};
+
+export const viewport: Viewport = {
+  themeColor: "#4A0001",
 };
 
 export default function RootLayout({

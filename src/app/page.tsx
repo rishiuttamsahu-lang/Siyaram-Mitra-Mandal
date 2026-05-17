@@ -186,6 +186,25 @@ export default function Home() {
     }
   }, [introPhase]);
 
+  // 🔥 DYNAMIC CHROME RIBBON COLOR LOGIC
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+
+    let metaThemeColor = document.querySelector('meta[name="theme-color"]');
+
+    const isWelcomePage = !user || !userData || !isPasscodeVerified;
+    const targetColor = (introPhase < 4 || isAuthChecking || isWelcomePage || revealSequence === 0) ? '#4A0001' : '#ffffff';
+
+    if (metaThemeColor) {
+      metaThemeColor.setAttribute('content', targetColor);
+    } else {
+      metaThemeColor = document.createElement('meta');
+      metaThemeColor.setAttribute('name', 'theme-color');
+      metaThemeColor.setAttribute('content', targetColor);
+      document.head.appendChild(metaThemeColor);
+    }
+  }, [introPhase, isAuthChecking, user, userData, isPasscodeVerified, revealSequence]);
+
   // 3. Universal tap skip
   const handleUniversalSkip = (targetPhase: number) => {
     if (targetPhase === 2) setIsSplashExiting(true);

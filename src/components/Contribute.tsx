@@ -578,6 +578,10 @@ export default function Contribute({ userData }: ContributeProps) {
   const [isQrLoaded, setIsQrLoaded] = useState(false);
 
   useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
+  }, []);
+
+  useEffect(() => {
     const q = query(collection(db, 'chanda_payments'), orderBy('timestamp', 'desc'));
     return onSnapshot(
       q,

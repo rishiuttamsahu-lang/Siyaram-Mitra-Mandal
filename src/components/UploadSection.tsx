@@ -13,6 +13,10 @@ export default function UploadSection({ userData }: { userData: any }) {
   const [lastUploads, setLastUploads] = useState<any[]>([]);
 
   useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
+  }, []);
+
+  useEffect(() => {
     if (typeof window !== 'undefined' && (window as any).cloudinary) {
       setIsCloudinaryReady(true);
     }
@@ -129,7 +133,7 @@ export default function UploadSection({ userData }: { userData: any }) {
   const formatSize = (bytes: number) => (bytes / (1024 * 1024)).toFixed(1) + ' MB';
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-12 md:py-20 flex flex-col items-center animate-fade-in bg-gray-50 min-h-screen">
+    <div className="mx-auto max-w-3xl w-full px-4 pt-12 sm:pt-20 pb-6 flex flex-col items-center animate-fade-in">
       <Script src="https://upload-widget.cloudinary.com/global/all.js" strategy="afterInteractive" onLoad={() => setIsCloudinaryReady(true)} />
 
       {/* Clean Minimalist Upload Card */}

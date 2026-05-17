@@ -26,6 +26,10 @@ export default function UserProfile({ userData }: { userData: any }) {
   const [isUpdating, setIsUpdating] = useState(false);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
 
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
+  }, []);
+
   // 🔥 VIRTUALIZED SLIDER STATES
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const selectedMedia = selectedIndex !== null ? myMedia[selectedIndex] : null;
