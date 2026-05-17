@@ -41,6 +41,7 @@ export default function Home() {
   const [isShieldExiting, setIsShieldExiting] = useState(false);
 
   const [revealSequence, setRevealSequence] = useState(3);
+  const [showSphereView, setShowSphereView] = useState(true);
 
   // Restore the saved passcode session for the signed-in user.
   useEffect(() => {
@@ -362,8 +363,35 @@ export default function Home() {
             )
           ) : (
             // Admin/Member ka default dashboard
-            <div className={`transition-opacity duration-1000 ${revealSequence >= 3 ? 'opacity-100' : 'opacity-0'}`}>
-              <Dashboard userData={userData} />
+            <div className={`transition-opacity duration-1000 ${revealSequence >= 3 ? 'opacity-100' : 'opacity-0'} w-full flex flex-col`}>
+              <div className="w-full flex justify-center mt-2 mb-4 animate-in slide-in-from-top-4 duration-500 relative z-40">
+                <div className="bg-white/80 backdrop-blur-md border border-gray-200 rounded-full p-1 shadow-sm flex items-center gap-1">
+                  <button 
+                    onClick={() => setShowSphereView(true)}
+                    className={`px-5 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all duration-300 ${showSphereView ? 'bg-gradient-to-r from-yellow-500 to-yellow-400 text-black shadow-md' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'}`}
+                  >
+                    3D Vault
+                  </button>
+                  <button 
+                    onClick={() => setShowSphereView(false)}
+                    className={`px-5 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all duration-300 ${!showSphereView ? 'bg-[#5a0000] text-white shadow-md' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'}`}
+                  >
+                    Members Feed
+                  </button>
+                </div>
+              </div>
+
+              <div className="w-full relative">
+                {showSphereView ? (
+                  <div className="animate-in fade-in zoom-in-95 duration-500">
+                    <ViewerDashboard userData={userData} />
+                  </div>
+                ) : (
+                  <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <Dashboard userData={userData} />
+                  </div>
+                )}
+              </div>
             </div>
           )
         )}

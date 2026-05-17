@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { auth, db, googleProvider } from '@/lib/firebase';
 import { signInWithPopup, signOut, type User } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { Eye, EyeOff } from 'lucide-react';
 
 type UserData = {
   uid: string;
@@ -36,6 +37,7 @@ export default function Welcome({ onAuthSuccess, firebaseUser }: WelcomeProps) {
   const [attempts, setAttempts] = useState(3);
   const [errorMsg, setErrorMsg] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [showPasscode, setShowPasscode] = useState(false);
 
   const handleGoogleLogin = async () => {
     setErrorMsg('');
@@ -212,16 +214,24 @@ export default function Welcome({ onAuthSuccess, firebaseUser }: WelcomeProps) {
                 <p className="mt-2 text-[10px] font-bold uppercase tracking-widest text-gray-400">{attempts} attempts left</p>
               </div>
 
-              <div>
+              <div className="relative">
                 <input
-                  type="password"
+                  type={showPasscode ? 'text' : 'password'}
                   placeholder="Enter Passcode"
-                  className="w-full rounded-xl border border-gray-200 px-4 py-4 text-center tracking-[0.3em] font-bold text-black outline-none transition focus:border-red-400 focus:ring-2 focus:ring-red-100"
+                  className="w-full rounded-xl border border-gray-200 px-4 py-4 pr-12 text-center tracking-[0.3em] font-bold text-black outline-none transition focus:border-red-400 focus:ring-2 focus:ring-red-100"
                   value={passcode}
                   onChange={(event) => setPasscode(event.target.value)}
                   autoFocus
                   required
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPasscode((prev) => !prev)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 transition-colors hover:text-[#5a0000]"
+                  aria-label={showPasscode ? 'Hide passcode' : 'Show passcode'}
+                >
+                  {showPasscode ? <EyeOff size={22} /> : <Eye size={22} />}
+                </button>
               </div>
 
               <button
