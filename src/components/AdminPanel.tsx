@@ -891,16 +891,18 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
       {/* ============================== */}
       {/* TAB: CHANDA MANAGEMENT */}
       {activeTab === 'chanda' && (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 animate-in fade-in zoom-in duration-300 mt-4">
-          <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm lg:col-span-1">
-            <div className="mb-4 flex items-center gap-2 border-b border-gray-100 pb-3">
-              <PlusCircle className="h-5 w-5 text-[#5a0000]" />
-              <h3 className="text-sm font-black uppercase tracking-wide text-gray-800">Add / Update Chanda</h3>
+        <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-3 animate-in fade-in zoom-in duration-300 mt-4">
+          
+          {/* Add / Update Form Section (Appears above table on Mobile, left on Desktop) */}
+          <div className="rounded-2xl sm:rounded-3xl border border-gray-200 bg-white p-4 sm:p-5 shadow-sm lg:col-span-1 h-fit">
+            <div className="mb-3 sm:mb-4 flex items-center gap-1.5 sm:gap-2 border-b border-gray-100 pb-2 sm:pb-3">
+              <PlusCircle className="h-4 w-4 sm:h-5 sm:w-5 text-[#5a0000]" />
+              <h3 className="text-xs sm:text-sm font-black uppercase tracking-wide text-gray-800">Add Entry</h3>
             </div>
 
-            <form onSubmit={handleAddChanda} className="space-y-4">
+            <form onSubmit={handleAddChanda} className="space-y-3 sm:space-y-4">
               <div>
-                <label className="mb-1 ml-1 block text-[10px] font-black uppercase tracking-widest text-gray-400">Registered User</label>
+                <label className="mb-1 ml-1 block text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-gray-400">Registered User</label>
                 <SearchableSelect
                   value={selectedUserUid}
                   onChange={setSelectedUserUid}
@@ -909,80 +911,88 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
                 />
               </div>
 
-              <div>
-                <label className="mb-1 ml-1 block text-[10px] font-black uppercase tracking-widest text-gray-400">Amount (₹)</label>
-                <input
-                  type="number"
-                  required
-                  min="1"
-                  value={chandaAmount}
-                  onChange={(e) => setChandaAmount(e.target.value)}
-                  placeholder="101"
-                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-xs font-bold text-black outline-none transition-all focus:border-[#5a0000] focus:bg-white"
-                />
-                <p className="mt-1 px-1 text-[9px] font-bold leading-tight text-gray-400">Same email again? The amount is added to the previous total.</p>
-              </div>
+              <div className="flex flex-row gap-3 sm:flex-col sm:gap-4">
+                <div className="flex-[1]">
+                  <label className="mb-1 ml-1 block text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-gray-400">Amount (₹)</label>
+                  <input
+                    type="number"
+                    required
+                    min="1"
+                    value={chandaAmount}
+                    onChange={(e) => setChandaAmount(e.target.value)}
+                    placeholder="101"
+                    className="w-full rounded-lg sm:rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 sm:px-4 sm:py-3 text-[11px] sm:text-xs font-bold text-black outline-none transition-all focus:border-[#5a0000] focus:bg-white"
+                  />
+                </div>
 
-              <div>
-                <label className="mb-1 ml-1 block text-[10px] font-black uppercase tracking-widest text-gray-400">Remark</label>
-                <input
-                  type="text"
-                  value={chandaMessage}
-                  onChange={(e) => setChandaMessage(e.target.value)}
-                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-xs font-bold text-black outline-none transition-all focus:border-[#5a0000] focus:bg-white"
-                />
+                <div className="flex-[1.5]">
+                  <label className="mb-1 ml-1 block text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-gray-400">Remark</label>
+                  <input
+                    type="text"
+                    value={chandaMessage}
+                    onChange={(e) => setChandaMessage(e.target.value)}
+                    placeholder="Note..."
+                    className="w-full rounded-lg sm:rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 sm:px-4 sm:py-3 text-[11px] sm:text-xs font-bold text-black outline-none transition-all focus:border-[#5a0000] focus:bg-white"
+                  />
+                </div>
               </div>
 
               <button
                 type="submit"
                 disabled={isChandaSubmitting}
-                className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#5a0000] px-4 py-3.5 text-xs font-black uppercase tracking-widest text-white shadow-sm transition-colors hover:bg-[#7b0000] disabled:opacity-50"
+                className="mt-1 sm:mt-2 flex w-full items-center justify-center gap-1.5 sm:gap-2 rounded-xl bg-[#5a0000] px-4 py-3 sm:py-3.5 text-[10px] sm:text-xs font-black uppercase tracking-widest text-white shadow-sm transition-colors hover:bg-[#7b0000] disabled:opacity-50 active:scale-95"
               >
-                <ArrowUpRight className="h-4 w-4" />
+                <ArrowUpRight className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                 {isChandaSubmitting ? 'Saving...' : 'Save Contribution'}
               </button>
             </form>
           </div>
 
-          <div className="rounded-2xl border border-gray-200 bg-white shadow-sm lg:col-span-2 overflow-hidden">
-            <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50 px-4 py-3">
-              <div className="flex items-center gap-2">
-                <History className="h-4 w-4 text-gray-500" />
-                <h3 className="text-xs font-black uppercase tracking-widest text-gray-700">Live Chanda Ledger</h3>
+          {/* Ledger Table Section */}
+          <div className="rounded-2xl sm:rounded-3xl border border-gray-200 bg-white shadow-sm lg:col-span-2 overflow-hidden flex flex-col">
+            <div className="flex flex-row items-center justify-between gap-2 border-b border-gray-100 bg-gray-50/50 px-3 py-3 sm:px-4">
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <History className="h-3.5 w-3.5 sm:h-4 w-4 text-gray-500" />
+                <h3 className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-gray-700">Live Ledger</h3>
               </div>
-              <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-green-800">
+              <span className="rounded-full bg-green-100 px-2 py-1 sm:py-0.5 text-[9px] sm:text-[10px] font-black uppercase tracking-wider text-green-800 shrink-0">
                 ₹{mergedChandaList.reduce((sum, item) => sum + (Number(item.totalAmount) || 0), 0).toLocaleString('en-IN')} Total
               </span>
             </div>
 
-            <div className="max-h-[480px] overflow-x-auto custom-scrollbar">
+            <div className="max-h-[350px] sm:max-h-[480px] flex-1 overflow-x-auto custom-scrollbar">
               {mergedChandaList.length === 0 ? (
-                <div className="py-14 text-center text-xs font-bold uppercase tracking-widest text-gray-400">No manual chanda entries yet.</div>
+                <div className="py-10 sm:py-14 text-center text-[10px] sm:text-xs font-bold uppercase tracking-widest text-gray-400">No entries yet.</div>
               ) : (
-                <table className="w-full border-collapse text-xs">
+                <table className="w-full border-collapse text-left text-xs">
                   <thead>
-                    <tr className="border-b border-gray-200 bg-gray-50 text-[9px] font-black uppercase tracking-wider text-gray-400">
-                      <th className="p-4 text-left">Member</th>
-                      <th className="p-4 text-left">Latest Remark</th>
-                      <th className="p-4 text-center">Total</th>
-                      <th className="p-4 text-right">Updated</th>
+                    <tr className="border-b border-gray-200 bg-gray-50 text-[8px] sm:text-[9px] font-black uppercase tracking-wider text-gray-400">
+                      <th className="p-2 sm:p-4 w-6 sm:w-10 text-center">#</th>
+                      <th className="p-2 sm:p-4">Member</th>
+                      <th className="hidden sm:table-cell p-4">Remark</th>
+                      <th className="p-2 sm:p-4 text-right">Total</th>
+                      <th className="hidden md:table-cell p-4 text-right">Updated</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                      {mergedChandaList.map((entry) => (
-                      <tr key={entry.email || entry.id || entry.name} className="transition-colors hover:bg-gray-50/70">
-                        <td className="p-4">
-                          <p className="font-black uppercase tracking-wide text-gray-900">{entry.name || 'Anonymous Donor'}</p>
-                          <p className="mt-0.5 text-[10px] font-bold text-gray-400">{entry.email}</p>
+                    {mergedChandaList.map((entry, idx) => (
+                      <tr key={entry.email || entry.id || `entry-${idx}`} className="transition-colors hover:bg-gray-50/70">
+                        <td className="p-2 sm:p-4 text-center text-[9px] sm:text-[11px] font-black text-gray-300">{idx + 1}</td>
+                        <td className="p-2 sm:p-4">
+                          <p className="font-black uppercase tracking-wide text-gray-900 text-[10px] sm:text-xs truncate max-w-[120px] sm:max-w-full">{entry.name || 'Anonymous'}</p>
+                          {entry.email && entry.email.includes('@') && (
+                            <p className="mt-0.5 text-[8px] sm:text-[10px] font-bold text-gray-400 truncate max-w-[120px] sm:max-w-full">{entry.email}</p>
+                          )}
                         </td>
-                        <td className="max-w-[220px] p-4 italic text-gray-500">&ldquo;{entry.latestMessage || 'No note'}&rdquo;</td>
-                        <td className="p-4 text-center">
-                          <span className="rounded-xl border border-green-100 bg-green-50 px-2.5 py-1 text-xs font-black text-green-700">
+                        <td className="hidden sm:table-cell max-w-[150px] p-4 italic text-gray-500 text-[10px] sm:text-xs truncate">&ldquo;{entry.latestMessage || 'No note'}&rdquo;</td>
+                        <td className="p-2 sm:p-4 text-right">
+                          <span className="inline-block rounded-md sm:rounded-xl border border-green-100 bg-green-50 px-1.5 py-1 sm:px-2.5 sm:py-1 text-[10px] sm:text-xs font-black text-green-700">
                             ₹{Number(entry.totalAmount || 0).toLocaleString('en-IN')}
                           </span>
                         </td>
-                        <td className="p-4 text-right text-[10px] font-bold text-gray-400">
-                          {formatLedgerDate(entry.lastUpdated)}
+                        <td className="hidden md:table-cell p-4 text-right text-[10px] font-bold text-gray-400">
+                          {/* @ts-ignore */}
+                          {typeof formatLedgerDate === 'function' ? formatLedgerDate(entry.lastUpdated) : 'N/A'}
                         </td>
                       </tr>
                     ))}

@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { auth, db } from '@/lib/firebase';
 import { onAuthStateChanged, signOut, type User } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, onSnapshot } from 'firebase/firestore';
 
 import Welcome from '@/components/Welcome';
 import Gallery from '@/components/Gallery';
@@ -13,7 +13,7 @@ import UserProfile from '@/components/UserProfile';
 import Contribute from '@/components/Contribute';
 import UploadSection from '@/components/UploadSection';
 import ViewerHome from '@/components/ViewerHome';
-import ViewerDashboard from '@/components/ViewerDashboard'; // 🔥 Naya Sphere component import karo
+import ViewerDashboard from '@/components/ViewerDashboard';
 import { SpotlightNav } from '@/components/ui/spotlight-nav';
 import { LogOut, Shield } from 'lucide-react';
 
@@ -43,7 +43,6 @@ export default function Home() {
   const [revealSequence, setRevealSequence] = useState(3);
   const [showSphereView, setShowSphereView] = useState(true);
 
-  // Restore the saved passcode session for the signed-in user.
   useEffect(() => {
     if (!user?.uid) return;
 
@@ -53,52 +52,61 @@ export default function Home() {
         setIsPasscodeVerified(true);
       }
     } catch {
-      // Ignore storage failures in restrictive browser modes.
+      // Ignore storage failures
     }
   }, [user?.uid]);
 
   const welcomeText = "Deviyon aur sajjanon, Siyaram Mitra Mandal mein aapka hardik swagat hai. Yeh portal Bappa ki aarti, visarjan aur mandal ki pavitra yaadon ko ek saath sanjone ke liye banaya gaya hai. Yahan aap mandal se judi photos aur videos dekh aur upload kar sakte hain. Yeh website keval Siyaram Mitra Mandal parivar ke sadasyon aur mataon-behnon ke liye hai, taaki sabhi ki privacy aur sammaan poori tarah surakshit rahe. Kisi baahari vyakti ko yahan pravesh ki anumati nahi hai.";
 
-  // 1. Auth Listener: Isko intro se alag rakho
+  // 1. Auth Listener
   useEffect(() => {
+    let unsubUserDoc = () => {};
+
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
         try {
           const userRef = doc(db, 'users', currentUser.uid);
-          const userSnap = await getDoc(userRef);
-          if (userSnap.exists()) {
-            const data = userSnap.data();
-            if (!data.isBanned) {
-              setUserData(data);
-              setUser(currentUser);
-              
-              if (data.role?.toLowerCase() === 'viewer') {
-                setRevealSequence(0);
+          
+          unsubUserDoc = onSnapshot(userRef, (userSnap) => {
+            if (userSnap.exists()) {
+              const data = userSnap.data() as AppUserData;
+              if (!data.isBanned) {
+                setUserData(data);
+                setUser(currentUser);
+                
+                // 🔥 CHANGE 1: Admin direct jayega, Member aur Viewer ko Intro phase se start karwayenge
+                if (data.role?.toLowerCase() === 'admin') {
+                  setRevealSequence(3);
+                } else {
+                  setRevealSequence(0);
+                }
               } else {
-                setRevealSequence(3);
+                void signOut(auth);
               }
             } else {
-              void signOut(auth);
+              setUser(currentUser);
             }
-          } else {
-            setUser(currentUser);
-          }
+            setIsAuthChecking(false);
+          });
         } catch (error) {
           console.error("Firebase Connection Error:", error);
-        } finally {
           setIsAuthChecking(false);
         }
       } else {
+        unsubUserDoc();
         setUser(null);
         setUserData(null);
         setIsPasscodeVerified(false);
         setIsAuthChecking(false);
       }
     });
-    return () => unsubscribe();
+
+    return () => {
+      unsubscribe();
+      unsubUserDoc();
+    };
   }, []);
 
-  // 🔥 NEW: Step-by-step transition logic
   useEffect(() => {
     if (revealSequence === 1) {
       const t1 = setTimeout(() => setRevealSequence(2), 700);
@@ -187,7 +195,6 @@ export default function Home() {
     }
   }, [introPhase]);
 
-  // 🔥 DYNAMIC CHROME RIBBON COLOR LOGIC
   useEffect(() => {
     if (typeof document === 'undefined') return;
 
@@ -206,7 +213,6 @@ export default function Home() {
     }
   }, [introPhase, isAuthChecking, user, userData, isPasscodeVerified, revealSequence]);
 
-  // 3. Universal tap skip
   const handleUniversalSkip = (targetPhase: number) => {
     if (targetPhase === 2) setIsSplashExiting(true);
     if (targetPhase === 4) setIsShieldExiting(true);
@@ -247,7 +253,6 @@ export default function Home() {
     );
   }
 
-  // Phase 1 Rendering
   if (introPhase === 1) {
     return (
       <div onClick={() => handleUniversalSkip(2)} className={`fixed inset-0 z-[9999] flex items-center justify-center overflow-hidden bg-gradient-to-br from-[#5a0000] via-[#3a0000] to-black px-6 transition-opacity duration-500 cursor-pointer ${isSplashExiting ? "opacity-0" : "opacity-100"}`}>
@@ -271,7 +276,6 @@ export default function Home() {
     );
   }
 
-  // Phase 2 Rendering (Typewriter)
   if (introPhase === 2) {
     return (
       <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center overflow-hidden bg-gradient-to-br from-[#5a0000] via-[#3a0000] to-black px-6 cursor-pointer" onClick={() => handleUniversalSkip(3)}>
@@ -288,7 +292,6 @@ export default function Home() {
     );
   }
 
-  // Phase 3 Rendering (Shield)
   if (introPhase === 3) {
     return (
       <div onClick={() => handleUniversalSkip(4)} className={`fixed inset-0 z-[9999] flex flex-col items-center justify-center overflow-hidden bg-gradient-to-br from-[#5a0000] via-[#3a0000] to-black px-6 transition-opacity duration-500 cursor-pointer ${isShieldExiting ? 'opacity-0' : 'opacity-100'}`}>
@@ -342,80 +345,81 @@ export default function Home() {
 
       <div className="flex-1 w-full max-w-7xl mx-auto p-4 md:p-6" style={{ paddingTop: 0 }}>
         
-        {/* TAB RENDERING */}
-        {/* TAB RENDERING */}
+        {/* 🔥 CHANGE 2: Dashboard Logic - Ab Member aur Viewer dono ke liye initial intro dikhayega */}
         {activeTab === 'dashboard' && (
-          userData.role?.toLowerCase() === 'viewer' ? (
-            // 🔥 Intro phase if revealSequence == 0
-            revealSequence === 0 ? (
-              <ViewerHome 
-                userData={userData} 
-                onExplore={() => {
-                  setRevealSequence(1);
-                  setActiveTab('dashboard'); // Ab direct home pe jayega!
-                }} 
-              />
-            ) : (
-              // 🔥 Intro ke baad Sphere wala Dashboard aayega
+          revealSequence === 0 && userData.role?.toLowerCase() !== 'admin' ? (
+            // Intro phase for Viewers AND Members
+            <ViewerHome 
+              userData={userData} 
+              onExplore={() => {
+                setRevealSequence(1);
+                setActiveTab('dashboard'); 
+              }} 
+            />
+          ) : (
+            // Dashboard Content (After Intro or directly for Admin)
+            userData.role?.toLowerCase() === 'viewer' ? (
+              // Viewer gets only Sphere Vault
               <div className={`transition-opacity duration-1000 ${revealSequence >= 1 ? 'opacity-100' : 'opacity-0'}`}>
                 <ViewerDashboard userData={userData} />
               </div>
-            )
-          ) : (
-            // Admin/Member ka default dashboard
-            <div className={`transition-opacity duration-1000 ${revealSequence >= 3 ? 'opacity-100' : 'opacity-0'} w-full flex flex-col`}>
-              <div className="w-full flex justify-center mt-2 mb-4 animate-in slide-in-from-top-4 duration-500 relative z-40">
-                <div className="bg-white/80 backdrop-blur-md border border-gray-200 rounded-full p-1 shadow-sm flex items-center gap-1">
-                  <button 
-                    onClick={() => setShowSphereView(true)}
-                    className={`px-5 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all duration-300 ${showSphereView ? 'bg-gradient-to-r from-yellow-500 to-yellow-400 text-black shadow-md' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'}`}
-                  >
-                    3D Vault
-                  </button>
-                  <button 
-                    onClick={() => setShowSphereView(false)}
-                    className={`px-5 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all duration-300 ${!showSphereView ? 'bg-[#5a0000] text-white shadow-md' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'}`}
-                  >
-                    Members Feed
-                  </button>
+            ) : (
+              // Admin/Member get toggle dashboard (3D Vault or Feed)
+              <div className={`transition-opacity duration-1000 ${revealSequence >= 1 ? 'opacity-100' : 'opacity-0'} w-full flex flex-col`}>
+                <div className="w-full flex justify-center mt-2 mb-4 animate-in slide-in-from-top-4 duration-500 relative z-40">
+                  <div className="bg-white/80 backdrop-blur-md border border-gray-200 rounded-full p-1 shadow-sm flex items-center gap-1">
+                    <button 
+                      onClick={() => setShowSphereView(true)}
+                      className={`px-5 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all duration-300 ${showSphereView ? 'bg-gradient-to-r from-yellow-500 to-yellow-400 text-black shadow-md' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'}`}
+                    >
+                      3D Vault
+                    </button>
+                    <button 
+                      onClick={() => setShowSphereView(false)}
+                      className={`px-5 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all duration-300 ${!showSphereView ? 'bg-[#5a0000] text-white shadow-md' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'}`}
+                    >
+                      Members Feed
+                    </button>
+                  </div>
+                </div>
+
+                <div className="w-full relative">
+                  {showSphereView ? (
+                    <div className="animate-in fade-in zoom-in-95 duration-500">
+                      <ViewerDashboard userData={userData} />
+                    </div>
+                  ) : (
+                    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                      <Dashboard userData={userData} />
+                    </div>
+                  )}
                 </div>
               </div>
-
-              <div className="w-full relative">
-                {showSphereView ? (
-                  <div className="animate-in fade-in zoom-in-95 duration-500">
-                    <ViewerDashboard userData={userData} />
-                  </div>
-                ) : (
-                  <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                    <Dashboard userData={userData} />
-                  </div>
-                )}
-              </div>
-            </div>
+            )
           )
         )}
         
+        {/* Yahan revealSequence >= 1 use hua hai taaki Explore dabane ke baad pages easily fade-in hoke dikhein */}
         {activeTab === 'gallery' && (
-          <div className={`transition-opacity duration-1000 ${revealSequence >= 3 ? 'opacity-100' : 'opacity-0'}`}>
+          <div className={`transition-opacity duration-1000 ${revealSequence >= 1 ? 'opacity-100' : 'opacity-0'}`}>
             <Gallery userData={userData} />
           </div>
         )}
         
         {activeTab === 'upload' && (
-          <div className={`transition-opacity duration-1000 ${revealSequence >= 3 ? 'opacity-100' : 'opacity-0'}`}>
+          <div className={`transition-opacity duration-1000 ${revealSequence >= 1 ? 'opacity-100' : 'opacity-0'}`}>
             <UploadSection userData={userData} />
           </div>
         )}
 
         {activeTab === 'contribute' && (
-          <div className={`transition-opacity duration-1000 ${revealSequence >= 3 ? 'opacity-100' : 'opacity-0'}`}>
+          <div className={`transition-opacity duration-1000 ${revealSequence >= 1 ? 'opacity-100' : 'opacity-0'}`}>
             <Contribute userData={userData} />
           </div>
         )}
 
         {activeTab === 'profile' && (
-          <div className={`transition-opacity duration-1000 ${revealSequence >= 3 ? 'opacity-100' : 'opacity-0'}`}>
+          <div className={`transition-opacity duration-1000 ${revealSequence >= 1 ? 'opacity-100' : 'opacity-0'}`}>
             {userData.role === 'Admin' ? (
               <AdminPanel currentUserData={userData} />
             ) : (

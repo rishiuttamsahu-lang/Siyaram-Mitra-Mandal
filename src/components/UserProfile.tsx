@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { db } from '@/lib/firebase';
-import { collection, query, where, onSnapshot, doc, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc, updateDoc, deleteDoc, writeBatch, getDocs, getDoc } from 'firebase/firestore';
 import {
   Mail, Lock, Unlock, Trash2, Edit3, Database, LayoutGrid, X, Settings, Save, Play, ChevronLeft, ChevronRight, Smartphone, Download, Image as ImageIcon, ShieldCheck, Camera, Loader2, CheckCircle2
 } from 'lucide-react';
@@ -174,29 +174,62 @@ export default function UserProfile({ userData }: { userData: any }) {
     }
   };
 
+  // 🔥 MASTER FIX: Email ke bajaye UID (userId) se cross-sync check lagaya hai
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsUpdating(true);
     try {
-      await updateDoc(doc(db, 'users', userData.uid), { 
+      const batch = writeBatch(db);
+
+      // 1. Core Profile Document Update
+      const userRef = doc(db, 'users', userData.uid);
+      batch.update(userRef, { 
         name: displayName || "", 
         bio: bio || "",
         photoURL: photoURL || "", 
         isAccountPrivate: isAccountPrivate ?? false 
       });
 
-      if (isAccountPrivate && myMedia.length > 0) {
-        const batch = writeBatch(db);
+      // 2. Gallery Vault Records Update
+      if (myMedia.length > 0) {
         myMedia.forEach((item) => {
           const mediaRef = doc(db, 'mandal_gallery', item.id);
-          batch.update(mediaRef, { isPrivate: true });
+          const mediaUpdates: any = {
+            uploadedBy: displayName || ""
+          };
+          if (isAccountPrivate) mediaUpdates.isPrivate = true;
+          batch.update(mediaRef, mediaUpdates);
         });
-        await batch.commit();
       }
 
+      // 3. 🔥 FIX: chanda_payments ko Email ke bajaye UID se search karo (Bina miss hue sab update hoga)
+      const paymentsQuery = query(collection(db, 'chanda_payments'), where('userId', '==', userData.uid));
+      const paymentsSnap = await getDocs(paymentsQuery);
+      paymentsSnap.forEach((paymentDoc) => {
+        batch.update(paymentDoc.ref, { 
+          userName: displayName || "", 
+          userPhoto: photoURL || "" 
+        });
+      });
+
+      // 4. Admin Ledger Documents Update (mandal_chanda)
+      if (userData.email) {
+        const targetEmail = userData.email.toLowerCase();
+        const chandaRef = doc(db, 'mandal_chanda', targetEmail);
+        const chandaSnap = await getDoc(chandaRef);
+        if (chandaSnap.exists()) {
+          batch.update(chandaRef, { 
+            name: displayName || "", 
+            photoURL: photoURL || "" 
+          });
+        }
+      }
+
+      // Commit all changes together
+      await batch.commit();
       setIsEditModalOpen(false);
     } catch (error: any) {
-      alert(`Failed to save profile: ${error.message}`);
+      alert(`Failed to save profile globally: ${error.message}`);
     } finally {
       setIsUpdating(false);
     }
