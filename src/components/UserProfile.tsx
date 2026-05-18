@@ -158,18 +158,31 @@ export default function UserProfile({ userData }: { userData: any }) {
 
   const toggleInstantPrivacy = async () => {
     const newStatus = !isAccountPrivate;
-    setIsAccountPrivate(newStatus); 
+
+    // Optimistic UI update
+    setIsAccountPrivate(newStatus);
+
     try {
+      // 1. Update the user's profile privacy flag
       await updateDoc(doc(db, 'users', userData.uid), { isAccountPrivate: newStatus });
-      if (newStatus && myMedia.length > 0) {
+
+      // 2. Fetch every gallery item for this user directly from Firestore before syncing
+      const galleryRef = collection(db, 'mandal_gallery');
+      const userMediaQuery = query(galleryRef, where('uploaderEmail', '==', userData.email));
+      const querySnapshot = await getDocs(userMediaQuery);
+
+      if (!querySnapshot.empty) {
         const batch = writeBatch(db);
-        myMedia.forEach((item) => {
-          batch.update(doc(db, 'mandal_gallery', item.id), { isPrivate: true });
+        querySnapshot.docs.forEach((docSnap) => {
+          batch.update(docSnap.ref, { isPrivate: newStatus });
         });
         await batch.commit();
+        console.log(`✅ All ${querySnapshot.size} gallery items securely updated to isPrivate: ${newStatus}`);
       }
     } catch (error: any) {
-      alert("Error updating privacy. Please check your internet connection.");
+      console.error('Privacy toggle error:', error);
+      alert('Error updating privacy. Please try again.');
+      // Rollback optimistic UI change
       setIsAccountPrivate(!newStatus);
     }
   };

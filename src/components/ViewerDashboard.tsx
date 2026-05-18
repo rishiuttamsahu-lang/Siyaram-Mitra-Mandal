@@ -8,6 +8,7 @@ import SphereImageGrid, { ImageData } from '@/components/ui/img-sphere';
 export default function ViewerDashboard({ userData }: { userData?: any }) {
   const [sphereImages, setSphereImages] = useState<ImageData[]>([]);
   const [sphereSize, setSphereSize] = useState(300);
+  const [uniqueCount, setUniqueCount] = useState(0);
 
   // Responsive Sphere Size for Mobile & Desktop
   useEffect(() => {
@@ -23,41 +24,89 @@ export default function ViewerDashboard({ userData }: { userData?: any }) {
 
   // Fetch Public Photos for the Sphere
   useEffect(() => {
+    // 🔥 FIX: Firebase requires `isPrivate == false` for Viewer access according to your Security Rules.
     const q = query(
       collection(db, 'mandal_gallery'), 
-      where('isPrivate', '==', false), 
+      where('isPrivate', '==', false),
       orderBy('createdAt', 'desc'),
-      limit(26)
+      limit(50000)
     );
 
     const unsub = onSnapshot(q, (snap) => {
       const fetchedImgs: ImageData[] = [];
+      const seenIds = new Set<string>();
+
+      console.log(`📦 Database me total ${snap.docs.length} items mile.`);
+
       snap.docs.forEach(doc => {
         const data = doc.data();
         
-        // 🔥 Video ko sphere se completely bahar nikal diya
-        if (data.type?.startsWith('video')) return; 
+        // Error protection & Videos ignore
+        if (!data) {
+          console.log(`❌ Rejecting [${doc.id}]: document data missing hai.`);
+          return;
+        }
+        if (!data.url) {
+          console.log(`❌ Rejecting [${doc.id}]: URL missing hai.`);
+          return;
+        }
+        if (data.isPrivate === true) {
+          console.log(`🔒 Rejecting [${doc.id}]: isPrivate true hai.`);
+          return;
+        }
+        if (data.type?.startsWith('video')) {
+          console.log(`🎥 Rejecting [${doc.id}]: item video hai.`);
+          return; 
+        }
+
+        // Duplicate ID filter
+        if (seenIds.has(doc.id)) {
+          console.log(`♻️ Rejecting [${doc.id}]: duplicate ID mila.`);
+          return;
+        }
+        seenIds.add(doc.id);
 
         fetchedImgs.push({
           id: doc.id,
           src: data.url.replace('/upload/', '/upload/q_auto:eco,w_300/'),
           hdSrc: data.url.replace('/upload/', '/upload/q_auto:good,w_1080/'),
           alt: data.caption || 'Mandal Memory',
-          title: data.uploadedBy?.split(' ')[0],
-          description: data.category
+          title: data.uploadedBy?.split(' ')[0] || 'Member',
+          description: data.category || 'Vault Memory'
         });
       });
 
-      // Sphere bhara hua dikhane ke liye duplicate logic
-      const finalImages: ImageData[] = [];
-      if (fetchedImgs.length > 0) {
-        const MAX_ITEMS = 26;
-        for (let i = 0; i < MAX_ITEMS; i++) {
-          const baseImg = fetchedImgs[i % fetchedImgs.length];
-          finalImages.push({ ...baseImg, id: `${baseImg.id}-${i}` });
-        }
-        setSphereImages(finalImages);
+      console.log(`✅ Valid Public Photos mili: ${fetchedImgs.length}`);
+
+      if (fetchedImgs.length === 0) {
+        setSphereImages([]);
+        return;
       }
+
+// Sphere ko poora bharne ke liye kam se kam 30 items chahiye
+      const MIN_SPHERE_NODES = 30;
+      let finalImages: ImageData[] = [];
+      const targetCount = Math.max(MIN_SPHERE_NODES, fetchedImgs.length);
+
+      let sourceArray = [...fetchedImgs];
+      
+      // Keep adding shuffled chunks of the original array until we reach the target count
+      while (finalImages.length < targetCount) {
+         // Shuffle the small array every time we add a chunk
+         const shuffledChunk = [...sourceArray].sort(() => 0.5 - Math.random());
+         
+         for (const img of shuffledChunk) {
+             if (finalImages.length >= targetCount) break;
+             finalImages.push({
+                 ...img,
+                 id: `${img.id}_copy_${finalImages.length}`
+             });
+         }
+      }
+
+      setSphereImages(finalImages);
+    }, (error) => {
+      console.error("🔥 SPHERE FETCH ERROR:", error.message);
     });
 
     return () => unsub();
@@ -99,6 +148,7 @@ export default function ViewerDashboard({ userData }: { userData?: any }) {
           Interactive Vault
         </p>
       </div>
+
     </div>
   );
 }

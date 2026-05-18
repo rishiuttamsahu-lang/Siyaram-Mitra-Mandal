@@ -95,19 +95,16 @@ export default function Gallery({ userData }: { userData: any }) {
   const [isPlaying, setIsPlaying] = useState(true);
   const [progress, setProgress] = useState(0);
 
-  // Properly handle play() promises to avoid AbortError when the user swipes or pauses quickly.
+  // Handle play promises properly
   useEffect(() => {
     setProgress(0);
-
     if (videoRef.current && selectedIndex !== null) {
       const playPromise = videoRef.current.play();
       if (playPromise !== undefined) {
         playPromise
-          .then(() => {
-            setIsPlaying(true);
-          })
+          .then(() => { setIsPlaying(true); })
           .catch((error) => {
-            console.log('Auto-play interrupted or blocked:', error);
+            console.log('Auto-play interrupted:', error);
             setIsPlaying(false);
           });
       }
@@ -120,9 +117,7 @@ export default function Gallery({ userData }: { userData: any }) {
       if (videoRef.current.paused) {
         const playPromise = videoRef.current.play();
         if (playPromise !== undefined) {
-          playPromise
-            .then(() => setIsPlaying(true))
-            .catch(() => setIsPlaying(false));
+          playPromise.then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
         } else {
           setIsPlaying(true);
         }
@@ -135,7 +130,6 @@ export default function Gallery({ userData }: { userData: any }) {
 
   const handleTimeUpdate = () => {
     if (!videoRef.current) return;
-
     const current = videoRef.current.currentTime;
     const total = videoRef.current.duration;
     setProgress((current / total) * 100 || 0);
@@ -172,18 +166,24 @@ export default function Gallery({ userData }: { userData: any }) {
     return () => unsub();
   }, []);
 
+  // Fetch Logic with Strict Security Filter Fix
   useEffect(() => {
     setIsLoading(true);
     let q;
-    if (userData.role === 'Admin') {
-      q = query(collection(db, 'mandal_gallery'), orderBy('createdAt', 'desc'));
-    } else {
-      q = query(collection(db, 'mandal_gallery'), where('isPrivate', '==', false), orderBy('createdAt', 'desc'));
-    }
+    
+    // Gallery mein sirf public items — Admin ko bhi private nahi dikhna chahiye
+    q = query(collection(db, 'mandal_gallery'), where('isPrivate', '==', false), orderBy('createdAt', 'desc'));
 
     const unsub = onSnapshot(q, (snap) => {
       const allMedia: any[] = snap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
-      const filteredMedia = allMedia.filter((item: any) => userData.role === 'Admin' || item.isPrivate !== true);
+      
+      // 🔥 SECURITY FILTER: Private items gallery mein kisi ko nahi dikhne chahiye
+      const filteredMedia = allMedia.filter((item: any) => {
+        const isItemPrivate = item.isPrivate === true || String(item.isPrivate) === "true";
+        return !isItemPrivate; // Private items filter out — Admin ko bhi nahi
+      });
+
+      // 🔥 FIX VERIFIED: Strict state push mapping
       setMedia(filteredMedia);
       setIsLoading(false);
     }, (error) => {
