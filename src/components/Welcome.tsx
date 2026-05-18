@@ -53,8 +53,8 @@ export default function Welcome({ onAuthSuccess, firebaseUser }: WelcomeProps) {
       if (userSnap.exists()) {
         const userData = userSnap.data() as Partial<UserData> & { isBanned?: boolean };
         if (userData.isBanned) {
-          setErrorMsg('Aapka account block kar diya gaya hai. Admin se sampark karein.');
-          await signOut(auth);
+          // Banned user detected -> Don't sign out. Let page.tsx catch isBanned via snapshot.
+          setUser(currentUser);
           return;
         }
       }
@@ -90,6 +90,14 @@ export default function Welcome({ onAuthSuccess, firebaseUser }: WelcomeProps) {
       if (passcode.trim().toLowerCase() === realPasscode.trim().toLowerCase()) {
         const userSnap = await getDoc(userRef);
         const existingData = userSnap.exists() ? (userSnap.data() as Partial<UserData>) : null;
+
+        if (existingData?.isBanned) {
+          setErrorMsg('Aapka account block kar diya gaya hai. Admin se sampark karein.');
+          await signOut(auth);
+          setIsLoading(false);
+          return;
+        }
+
         const loginHistoryEntry = {
           type: 'login',
           text: 'Account logged in',
@@ -184,7 +192,7 @@ export default function Welcome({ onAuthSuccess, firebaseUser }: WelcomeProps) {
               uid: user.uid,
               name: user.displayName || 'Member',
               email: user.email || '',
-              role: 'Banned',
+              role: 'Viewer',
               isBanned: true,
               failedAttempts: newAttempts,
               banReason: '3 incorrect passcode attempts',
@@ -192,10 +200,10 @@ export default function Welcome({ onAuthSuccess, firebaseUser }: WelcomeProps) {
             { merge: true }
           );
           setErrorMsg('3 attempts khatam. Aapka account block kar diya gaya hai.');
+          // 🔥 NO SIGNOUT: Just reload so ban screen persists
           setTimeout(() => {
-            void signOut(auth);
             window.location.reload();
-          }, 3000);
+          }, 1500);
         } else {
           await setDoc(userRef, { failedAttempts: newAttempts }, { merge: true });
           setAttempts(3 - newAttempts);

@@ -29,7 +29,7 @@ export default function ViewerDashboard({ userData }: { userData?: any }) {
       collection(db, 'mandal_gallery'), 
       where('isPrivate', '==', false),
       orderBy('createdAt', 'desc'),
-      limit(50000)
+      limit(10000)
     );
 
     const unsub = onSnapshot(q, (snap) => {

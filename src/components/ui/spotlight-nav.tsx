@@ -7,10 +7,13 @@ interface SpotlightNavProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
   userRole?: string;
+  isBanned?: boolean;
 }
 
-export const SpotlightNav = ({ activeTab, setActiveTab, userRole }: SpotlightNavProps) => {
+export const SpotlightNav = ({ activeTab, setActiveTab, userRole, isBanned }: SpotlightNavProps) => {
   const [loadingTab, setLoadingTab] = useState<string | null>(null);
+
+  if (isBanned) return null;
 
   const navItems = [
     { id: "dashboard", label: "Home", icon: <Home size={22} /> },

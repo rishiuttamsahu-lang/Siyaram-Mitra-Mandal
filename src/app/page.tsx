@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { auth, db } from '@/lib/firebase';
 import { onAuthStateChanged, signOut, type User } from 'firebase/auth';
 import { doc, getDoc, onSnapshot } from 'firebase/firestore';
 
 import Welcome from '@/components/Welcome';
+import BannedPage from '@/components/BannedPage';
 import Gallery from '@/components/Gallery';
 import Dashboard from '@/components/Dashboard';
 import AdminPanel from '@/components/AdminPanel';
@@ -28,6 +29,8 @@ export default function Home() {
 
   const [user, setUser] = useState<User | null>(null);
   const [userData, setUserData] = useState<AppUserData | null>(null);
+  const [bannedUserData, setBannedUserData] = useState<AppUserData | null>(null);
+  const bannedUserDataRef = useRef<AppUserData | null>(null);
   const [isAuthChecking, setIsAuthChecking] = useState(true);
   
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -70,18 +73,25 @@ export default function Home() {
           unsubUserDoc = onSnapshot(userRef, (userSnap) => {
             if (userSnap.exists()) {
               const data = userSnap.data() as AppUserData;
-              if (!data.isBanned) {
-                setUserData(data);
-                setUser(currentUser);
-                
-                // 🔥 CHANGE 1: Admin direct jayega, Member aur Viewer ko Intro phase se start karwayenge
-                if (data.role?.toLowerCase() === 'admin') {
-                  setRevealSequence(3);
-                } else {
-                  setRevealSequence(0);
-                }
+              setUserData(data);
+              setUser(currentUser);
+
+              if (data.isBanned) {
+                bannedUserDataRef.current = data;
+                setBannedUserData(data);
+                setIsPasscodeVerified(true);
+                setIsAuthChecking(false);
+                return;
+              }
+
+              bannedUserDataRef.current = null;
+              setBannedUserData(null);
+
+              // 🔥 CHANGE 1: Admin direct jayega, Member aur Viewer ko Intro phase se start karwayenge
+              if (data.role?.toLowerCase() === 'admin') {
+                setRevealSequence(3);
               } else {
-                void signOut(auth);
+                setRevealSequence(0);
               }
             } else {
               setUser(currentUser);
@@ -95,8 +105,15 @@ export default function Home() {
       } else {
         unsubUserDoc();
         setUser(null);
-        setUserData(null);
-        setIsPasscodeVerified(false);
+
+        if (!bannedUserDataRef.current) {
+          setUserData(null);
+          setIsPasscodeVerified(false);
+          setBannedUserData(null);
+        } else {
+          setIsPasscodeVerified(true);
+        }
+
         setIsAuthChecking(false);
       }
     });
@@ -323,6 +340,12 @@ export default function Home() {
     );
   }
 
+  const effectiveUserData = bannedUserData ?? userData;
+
+  if (effectiveUserData?.isBanned) {
+    return <BannedPage />;
+  }
+
   // Phase 4: Final Check (Login dikhana hai ya App)
   if (!user || !userData || !isPasscodeVerified) {
     return <Welcome key={user?.uid ?? 'guest'} firebaseUser={user} onAuthSuccess={(data) => { setUserData(data); setIsPasscodeVerified(true); }} />;
@@ -431,7 +454,7 @@ export default function Home() {
 
       {/* BOTTOM SPOTLIGHT NAVIGATION - Slides from Bottom */}
       <div className={`fixed bottom-0 w-full z-50 transition-all duration-700 transform ${revealSequence >= 1 ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0'}`}>
-        <SpotlightNav activeTab={activeTab} setActiveTab={setActiveTab} userRole={userData.role} />
+        <SpotlightNav activeTab={activeTab} setActiveTab={setActiveTab} userRole={userData.role} isBanned={!!effectiveUserData?.isBanned} />
       </div>
       
     </main>
