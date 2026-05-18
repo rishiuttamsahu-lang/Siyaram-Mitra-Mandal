@@ -14,7 +14,6 @@ import Contribute from '@/components/Contribute';
 import UploadSection from '@/components/UploadSection';
 import ViewerHome from '@/components/ViewerHome';
 import ViewerDashboard from '@/components/ViewerDashboard';
-import BannedPage from '@/components/BannedPage';
 import { SpotlightNav } from '@/components/ui/spotlight-nav';
 import { LogOut, Shield } from 'lucide-react';
 
@@ -71,19 +70,19 @@ export default function Home() {
           unsubUserDoc = onSnapshot(userRef, (userSnap) => {
             if (userSnap.exists()) {
               const data = userSnap.data() as AppUserData;
-              // 🔥 FIX: Pehle Data set karo, taaki UI ko pata chale user ban hai ya nahi
-              setUserData(data);
-              setUser(currentUser);
-
               if (!data.isBanned) {
+                setUserData(data);
+                setUser(currentUser);
+                
+                // 🔥 CHANGE 1: Admin direct jayega, Member aur Viewer ko Intro phase se start karwayenge
                 if (data.role?.toLowerCase() === 'admin') {
                   setRevealSequence(3);
                 } else {
                   setRevealSequence(0);
                 }
+              } else {
+                void signOut(auth);
               }
-              // Note: Agar isBanned true hai, tab hum yahan se force signout NAHI kar rahe.
-              // Uska handle rendering phase me BannedPage se hoga.
             } else {
               setUser(currentUser);
             }
@@ -322,11 +321,6 @@ export default function Home() {
         <p className="mt-4 text-[10px] font-black uppercase tracking-widest text-[#5a0000] animate-pulse">Verifying Access...</p>
       </div>
     );
-  }
-
-  // 🔥 NEW: Check banned status FIRST before checking passcode (fixes flickering issue)
-  if (user && userData && userData.isBanned) {
-    return <BannedPage />;
   }
 
   // Phase 4: Final Check (Login dikhana hai ya App)
