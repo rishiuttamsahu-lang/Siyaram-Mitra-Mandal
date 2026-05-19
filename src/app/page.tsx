@@ -46,18 +46,10 @@ export default function Home() {
   const [revealSequence, setRevealSequence] = useState(3);
   const [showSphereView, setShowSphereView] = useState(true);
 
-  useEffect(() => {
-    if (!user?.uid) return;
-
-    try {
-      const savedAuth = localStorage.getItem(`mandal_pass_auth_${user.uid}`);
-      if (savedAuth === 'true') {
-        setIsPasscodeVerified(true);
-      }
-    } catch {
-      // Ignore storage failures
-    }
-  }, [user?.uid]);
+  // NOTE: localStorage-based passcode fast-forward is now handled inside the
+  // onAuthStateChanged -> onSnapshot flow so we react immediately when we know
+  // the user's document and role. This avoids duplicate listeners and race
+  // conditions on initial load.
 
   const welcomeText = "Deviyon aur sajjanon, Siyaram Mitra Mandal mein aapka hardik swagat hai. Yeh portal Bappa ki aarti, visarjan aur mandal ki pavitra yaadon ko ek saath sanjone ke liye banaya gaya hai. Yahan aap mandal se judi photos aur videos dekh aur upload kar sakte hain. Yeh website keval Siyaram Mitra Mandal parivar ke sadasyon aur mataon-behnon ke liye hai, taaki sabhi ki privacy aur sammaan poori tarah surakshit rahe. Kisi baahari vyakti ko yahan pravesh ki anumati nahi hai.";
 
@@ -75,6 +67,20 @@ export default function Home() {
               const data = userSnap.data() as AppUserData;
               setUserData(data);
               setUser(currentUser);
+
+              // 🔥 FAST-FORWARD: if user previously passed the passcode, resume at
+              // introPhase 4 (skip intro) for non-admins so returning users land
+              // directly into the Welcome/Profile flow. Admins still see the full
+              // intro/reveal sequence.
+              try {
+                const savedAuth = localStorage.getItem(`mandal_pass_auth_${currentUser.uid}`);
+                if (savedAuth === 'true') {
+                  setIsPasscodeVerified(true);
+                  if (data.role?.toLowerCase() !== 'admin') {
+                    setIntroPhase(4);
+                  }
+                }
+              } catch {}
 
               if (data.isBanned) {
                 bannedUserDataRef.current = data;
@@ -358,9 +364,18 @@ export default function Home() {
       {/* Top Header Bar - Slides from Top */}
       <div className={`w-full bg-white/80 backdrop-blur-md border-b border-gray-200 px-4 py-3 flex justify-between items-center sticky top-0 z-30 shadow-sm transition-all duration-700 transform ${revealSequence >= 2 ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0'}`}>
         <h1 className="text-lg font-black text-[#5A0000]" style={{ fontFamily: "'Rozha One', serif" }}>सियाराम</h1>
-        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3">
           <span className="text-xs font-bold text-gray-600">Hi, {userData.name?.split(' ')[0] || 'User'}</span>
-          <button onClick={() => { void signOut(auth); setIsPasscodeVerified(false); }} className="bg-red-50 text-red-600 p-2 rounded-full hover:bg-red-100 transition-colors">
+          <button
+            onClick={() => {
+              try {
+                if (user?.uid) localStorage.removeItem(`mandal_pass_auth_${user.uid}`);
+              } catch {}
+              void signOut(auth);
+              setIsPasscodeVerified(false);
+            }}
+            className="bg-red-50 text-red-600 p-2 rounded-full hover:bg-red-100 transition-colors"
+          >
             <LogOut className="w-4 h-4" />
           </button>
         </div>

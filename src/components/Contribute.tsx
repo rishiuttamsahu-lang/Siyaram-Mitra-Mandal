@@ -809,6 +809,7 @@ export default function Contribute({ userData }: ContributeProps) {
       batch.set(manualRef, {
         email: donor.email || normalizedKey,
         name: donor.name || donor.email || 'Anonymous Donor',
+        photoURL: donor.photo || null,
         totalAmount: nextManualTotal,
         total: nextManualTotal,
         latestMessage: 'Inline admin edit from Contribute',
@@ -1180,10 +1181,21 @@ export default function Contribute({ userData }: ContributeProps) {
 
                     <div className={`donor-avatar ${index === 0 ? 'top1' : ''}`}>
                       {donor.photo ? (
-                        <img src={donor.photo} alt={donor.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                      ) : (
-                        <span>{donor.name?.[0]?.toUpperCase()}</span>
-                      )}
+                        <img
+                          src={donor.photo}
+                          alt={donor.name}
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                          onError={(e) => {
+                            const target = e.currentTarget;
+                            target.style.display = 'none';
+                            const fallback = target.nextElementSibling as HTMLElement | null;
+                            if (fallback) fallback.style.display = 'flex';
+                          }}
+                        />
+                      ) : null}
+                      <span style={{ display: donor.photo ? 'none' : 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' }}>
+                        {donor.name?.[0]?.toUpperCase()}
+                      </span>
                     </div>
 
                     <div style={{ flex: 1, minWidth: 0 }}>

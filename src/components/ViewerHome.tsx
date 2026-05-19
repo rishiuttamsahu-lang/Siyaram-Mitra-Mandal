@@ -15,7 +15,8 @@ type ViewerHomeProps = {
 };
 
 export default function ViewerHome({ userData, onExplore }: ViewerHomeProps) {
-  const [phase, setPhase] = useState(1);
+  // Start at phase 2 (English welcome) to skip Hindi splash for returning viewers/members
+  const [phase, setPhase] = useState(2);
   const [members, setMembers] = useState<string[]>([]);
   const [currentFlashMember, setCurrentFlashMember] = useState("");
   const [flashPos, setFlashPos] = useState({ top: '50%', left: '50%' });
