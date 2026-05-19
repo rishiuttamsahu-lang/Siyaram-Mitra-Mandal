@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, doc, updateDoc, deleteDoc, query, orderBy, setDoc, getDoc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, updateDoc, deleteDoc, query, orderBy, setDoc, getDoc, where, getDocs, writeBatch } from 'firebase/firestore';
 import UserProfile from '@/components/UserProfile';
 import {
   Shield, ShieldAlert, Ban, RefreshCcw, Key, Mail, User, Image as ImageIcon,
@@ -181,6 +181,20 @@ function getCurrentTrackingMonth(): Month {
   return jsMonths[new Date().getMonth()];
 }
 
+function getLocalDatetimeString() {
+  const now = new Date();
+  now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+  return now.toISOString().slice(0, 16);
+}
+
+function toIsoFromDatetimeLocal(value: string) {
+  if (!value) return new Date().toISOString();
+  const [datePart, timePart = '00:00'] = value.split('T');
+  const [year, month, day] = datePart.split('-').map(Number);
+  const [hour = 0, minute = 0] = timePart.split(':').map(Number);
+  return new Date(year, month - 1, day, hour, minute).toISOString();
+}
+
 const DEFAULT_MEMBERS = [
   { id: 1, name: "AYUSH", payments: { SEPT: 100, OCT: 50 } },
   { id: 2, name: "PIYUSH", payments: { SEPT: 90 } },
@@ -223,8 +237,15 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
   const [selectedUserUid, setSelectedUserUid] = useState("");
   const [chandaAmount, setChandaAmount] = useState("");
   const [chandaMessage, setChandaMessage] = useState("Online Paid (Admin Entry)");
+  const [chandaDate, setChandaDate] = useState(getLocalDatetimeString());
   const [chandaList, setChandaList] = useState<any[]>([]);
   const [isChandaSubmitting, setIsChandaSubmitting] = useState(false);
+  const [ledgerModalUser, setLedgerModalUser] = useState<any>(null);
+  const [ledgerModalLogs, setLedgerModalLogs] = useState<any[]>([]);
+  const [adjAmount, setAdjAmount] = useState('');
+  const [adjRemark, setAdjRemark] = useState('');
+  const [adjDate, setAdjDate] = useState(getLocalDatetimeString());
+  const [isAdjusting, setIsAdjusting] = useState(false);
 
   // VAULT SLIDER STATES
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
@@ -562,7 +583,7 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
     try {
       const chandaRef = doc(db, 'mandal_chanda', targetEmail);
       const chandaSnap = await getDoc(chandaRef);
-      const now = new Date().toISOString();
+      const now = toIsoFromDatetimeLocal(chandaDate);
       const existingData = chandaSnap.exists() ? (chandaSnap.data() as any) : null;
       const nextTotal = (Number(existingData?.totalAmount) || Number(existingData?.total) || 0) + amount;
       const targetName = targetUserData.name || existingData?.name || 'Anonymous Donor';
@@ -589,11 +610,87 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
       setSelectedUserUid('');
       setChandaAmount('');
       setChandaMessage('Online Paid (Admin Entry)');
+      setChandaDate(getLocalDatetimeString());
     } catch (error) {
       console.error('Error adding manual chanda entry:', error);
       showToast('Database me entry fail ho gayi.', 'error');
     } finally {
       setIsChandaSubmitting(false);
+    }
+  };
+
+  const handleModalAdjust = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!ledgerModalUser?.email) return;
+
+    const amount = Number(adjAmount);
+    if (!Number.isFinite(amount) || amount === 0) {
+      showToast('Please enter a valid adjustment amount.', 'error');
+      return;
+    }
+
+    setIsAdjusting(true);
+    const targetEmail = String(ledgerModalUser.email).trim().toLowerCase();
+    const now = toIsoFromDatetimeLocal(adjDate);
+
+    try {
+      const chandaRef = doc(db, 'mandal_chanda', targetEmail);
+      const chandaSnap = await getDoc(chandaRef);
+      const existingDbTotal = chandaSnap.exists() ? (Number(chandaSnap.data().totalAmount) || 0) : 0;
+      const nextDbTotal = existingDbTotal + amount;
+
+      await setDoc(chandaRef, {
+        email: targetEmail,
+        name: ledgerModalUser.name,
+        totalAmount: nextDbTotal,
+        total: nextDbTotal,
+        latestMessage: adjRemark.trim() || (amount > 0 ? 'Amount Added' : 'Amount Deducted'),
+        lastUpdated: now,
+        updatedBy: currentUserData?.email || 'admin',
+      }, { merge: true });
+
+      await setDoc(doc(db, 'mandal_chanda_logs', `${targetEmail}_${Date.now()}`), {
+        adminEmail: currentUserData?.email || 'admin',
+        targetEmail,
+        amountAdded: amount,
+        message: adjRemark.trim() || (amount > 0 ? 'Amount Added' : 'Amount Deducted'),
+        timestamp: now,
+      });
+
+      const newCombinedTotal = (Number(ledgerModalUser.totalAmount) || 0) + amount;
+
+      showToast(`Successfully ${amount > 0 ? 'added' : 'deducted'} ₹${Math.abs(amount)}`, 'success');
+      setAdjAmount('');
+      setAdjRemark('');
+      setLedgerModalUser((prev: any) => (prev ? { ...prev, totalAmount: newCombinedTotal, latestMessage: adjRemark.trim() || (amount > 0 ? 'Amount Added' : 'Amount Deducted'), lastUpdated: now } : prev));
+    } catch (error) {
+      showToast('Error saving adjustment', 'error');
+    } finally {
+      setIsAdjusting(false);
+    }
+  };
+
+  const handleDeleteLedgerEntry = async () => {
+    if (!ledgerModalUser?.email) return;
+    if (!window.confirm(`Are you sure you want to permanently delete ${ledgerModalUser.name}'s entry? (This will also reject their online portal payments)`)) return;
+
+    try {
+      const targetEmail = String(ledgerModalUser.email).trim().toLowerCase();
+
+      await deleteDoc(doc(db, 'mandal_chanda', targetEmail));
+
+      const qPayments = query(collection(db, 'chanda_payments'), where('userEmail', '==', targetEmail));
+      const snap = await getDocs(qPayments);
+      const batch = writeBatch(db);
+      snap.docs.forEach((paymentDoc) => {
+        batch.update(paymentDoc.ref, { status: 'Rejected' });
+      });
+      await batch.commit();
+
+      showToast('Entry deleted successfully! 🗑️', 'success');
+      setLedgerModalUser(null);
+    } catch (error) {
+      showToast('Failed to delete entry.', 'error');
     }
   };
 
@@ -646,6 +743,53 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleKeyDown]);
+
+  useEffect(() => {
+    if (!ledgerModalUser?.email) {
+      setLedgerModalLogs([]);
+      return;
+    }
+
+    const targetEmail = String(ledgerModalUser.email).trim().toLowerCase();
+    const qLogs = query(collection(db, 'mandal_chanda_logs'), where('targetEmail', '==', targetEmail));
+    const unsubLogs = onSnapshot(qLogs, (snap) => {
+      const manualLogs = snap.docs.map((d) => ({
+        id: d.id,
+        message: d.data().message,
+        amountAdded: d.data().amountAdded,
+        timestamp: toIsoDateString(d.data().timestamp) || new Date().toISOString(),
+        type: 'Admin Entry',
+      }));
+
+      const portalLogs = chandaPayments
+        .filter((payment) => {
+          const paymentStatus = String(payment.status || '').trim().toLowerCase();
+          if (paymentStatus && paymentStatus !== 'approved') return false;
+
+          const paymentEmail = String(payment.userEmail || payment.email || payment.userId || '').trim().toLowerCase();
+          return paymentEmail === targetEmail;
+        })
+        .map((payment) => ({
+          id: `portal-${payment.id}`,
+          message: payment.message || 'Contribute Portal',
+          amountAdded: payment.amount,
+          timestamp: toIsoDateString(payment.timestamp || payment.createdAt) || new Date().toISOString(),
+          type: 'Portal Payment',
+        }));
+
+      const combined = [...manualLogs, ...portalLogs].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      setLedgerModalLogs(combined);
+    });
+
+    return () => unsubLogs();
+  }, [ledgerModalUser?.email, chandaPayments]);
+
+  useEffect(() => {
+    if (!ledgerModalUser) return;
+    setAdjDate(getLocalDatetimeString());
+    setAdjAmount('');
+    setAdjRemark('');
+  }, [ledgerModalUser?.email]);
 
   const handleTouchStart = (e: React.TouchEvent) => { setTouchStart(e.targetTouches[0].clientX); setIsSwiping(true); };
   const handleTouchMove = (e: React.TouchEvent) => { if (!touchStart) return; setSwipeOffset(e.targetTouches[0].clientX - touchStart); };
@@ -946,6 +1090,17 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
                 </div>
               </div>
 
+              <div>
+                <label className="mb-1 ml-1 block text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-gray-400">Date & Time</label>
+                <input
+                  type="datetime-local"
+                  value={chandaDate}
+                  onChange={(e) => setChandaDate(e.target.value)}
+                  className="w-full rounded-lg sm:rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 sm:px-4 sm:py-3 text-[11px] sm:text-xs font-bold text-black outline-none transition-all focus:border-[#5a0000] focus:bg-white"
+                  required
+                />
+              </div>
+
               <button
                 type="submit"
                 disabled={isChandaSubmitting}
@@ -985,7 +1140,11 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {mergedChandaList.map((entry, idx) => (
-                      <tr key={entry.email || entry.id || `entry-${idx}`} className="transition-colors hover:bg-gray-50/70">
+                      <tr
+                        key={entry.email || entry.id || `entry-${idx}`}
+                        onClick={() => setLedgerModalUser(entry)}
+                        className="cursor-pointer transition-all hover:bg-red-50 hover:shadow-sm active:bg-gray-100"
+                      >
                         <td className="p-2 sm:p-4 text-center text-[9px] sm:text-[11px] font-black text-gray-300">{idx + 1}</td>
                         <td className="p-2 sm:p-4">
                           <p className="font-black uppercase tracking-wide text-gray-900 text-[10px] sm:text-xs truncate max-w-[120px] sm:max-w-full">{entry.name || 'Anonymous'}</p>
@@ -1166,6 +1325,111 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
             </div>
           )}
 
+        </div>
+      )}
+
+      {ledgerModalUser && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in zoom-in duration-200">
+          <div className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
+            <div className="relative border-b border-gray-100 px-5 py-4 sm:px-6">
+              <div className="absolute right-4 top-4 flex gap-2">
+                <button
+                  onClick={handleDeleteLedgerEntry}
+                  className="rounded-full bg-red-50 p-2 text-red-600 shadow-sm transition-colors hover:bg-red-100 hover:text-red-700"
+                  title="Delete Entry completely"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => setLedgerModalUser(null)}
+                  className="rounded-full bg-gray-100 p-2 text-gray-600 transition-colors hover:bg-red-100 hover:text-red-600"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <h2 className="pr-20 text-lg font-black uppercase tracking-wide text-gray-900 sm:text-xl">
+                {ledgerModalUser.name || 'Anonymous'}
+              </h2>
+              <p className="mt-1 text-xs font-bold text-gray-400">{ledgerModalUser.email}</p>
+            </div>
+
+            <div className="border-b border-gray-100 bg-gradient-to-r from-green-50 to-emerald-50 px-5 py-4 sm:px-6">
+              <div className="flex items-center justify-between gap-3 rounded-2xl border border-green-200 bg-white px-4 py-3 shadow-sm">
+                <span className="text-[10px] font-black uppercase tracking-widest text-green-800">Total Value</span>
+                <span className="text-2xl font-black text-green-700">
+                  ₹{Number(ledgerModalUser.totalAmount || 0).toLocaleString('en-IN')}
+                </span>
+              </div>
+            </div>
+
+            <form onSubmit={handleModalAdjust} className="border-b border-gray-100 px-5 py-4 sm:px-6">
+              <div className="mb-3">
+                <h3 className="text-[10px] font-black uppercase tracking-widest text-[#5a0000]">Modify Amount (+ or -)</h3>
+              </div>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <input
+                  type="number"
+                  value={adjAmount}
+                  onChange={(e) => setAdjAmount(e.target.value)}
+                  placeholder="e.g. 500 or -100"
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-xs font-bold text-black outline-none focus:border-[#5a0000] focus:bg-white"
+                  required
+                />
+                <input
+                  type="text"
+                  value={adjRemark}
+                  onChange={(e) => setAdjRemark(e.target.value)}
+                  placeholder="Reason / Remark"
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-xs font-bold text-black outline-none focus:border-[#5a0000] focus:bg-white"
+                  required
+                />
+              </div>
+              <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+                <input
+                  type="datetime-local"
+                  value={adjDate}
+                  onChange={(e) => setAdjDate(e.target.value)}
+                  className="flex-1 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-[11px] font-bold text-gray-700 outline-none focus:border-[#5a0000] focus:bg-white"
+                  required
+                />
+                <button
+                  type="submit"
+                  disabled={isAdjusting}
+                  className="rounded-xl bg-[#5a0000] px-5 py-2.5 text-[10px] font-black uppercase tracking-widest text-white shadow-md transition-colors hover:bg-[#7b0000] disabled:opacity-50 active:scale-95"
+                >
+                  {isAdjusting ? 'Saving...' : 'Update'}
+                </button>
+              </div>
+            </form>
+
+            <div className="flex-1 overflow-y-auto px-5 py-4 sm:px-6">
+              <div className="mb-3 flex items-center gap-1.5 border-b border-gray-100 pb-2">
+                <History className="h-3.5 w-3.5 text-gray-500" />
+                <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-700">Transaction History</h3>
+              </div>
+              <div className="space-y-2">
+                {ledgerModalLogs.length === 0 ? (
+                  <p className="py-6 text-center text-xs font-bold italic text-gray-400">No history found.</p>
+                ) : (
+                  ledgerModalLogs.map((log: any) => (
+                    <div key={log.id} className="flex items-center justify-between gap-3 rounded-2xl border border-gray-100 bg-gray-50/70 p-3 transition-all hover:bg-white hover:shadow-sm">
+                      <div className="min-w-0">
+                        <p className="truncate text-[11px] font-bold text-gray-800">{log.message}</p>
+                        <div className="mt-0.5 flex items-center gap-2 text-[9px] font-bold uppercase tracking-widest text-gray-400">
+                          <span>{new Date(log.timestamp).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                          <span className="h-1 w-1 rounded-full bg-gray-300" />
+                          <span>{log.type}</span>
+                        </div>
+                      </div>
+                      <span className={`shrink-0 rounded-lg px-2 py-1 text-xs font-black ${Number(log.amountAdded) > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
+                        {Number(log.amountAdded) > 0 ? '+' : ''}{log.amountAdded}
+                      </span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       )}
 

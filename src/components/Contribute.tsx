@@ -640,6 +640,7 @@ export default function Contribute({ userData }: ContributeProps) {
 
       setLeaderboard(
         Object.values(totals)
+          .filter((donor) => donor.total > 0)
           .sort((a, b) => b.total - a.total)
           .map(({ id, name, email, photo, total, latestMessage }) => ({ id, name, email, photo, total, latestMessage }))
       );
