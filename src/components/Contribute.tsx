@@ -649,6 +649,14 @@ export default function Contribute({ userData }: ContributeProps) {
     const unsubPayments = onSnapshot(
       query(collection(db, 'chanda_payments'), orderBy('timestamp', 'desc')),
       (snap) => {
+        // 🔥 DEBUG: snapshot arrived for chanda_payments
+        try {
+          console.log(`📡 [Contribute] Received snapshot with ${snap.docs.length} records.`);
+          if (snap.docs.length > 0) console.log('📡 [Contribute] Sample payment doc:', snap.docs[0].id, snap.docs[0].data());
+        } catch (e) {
+          console.warn('📡 [Contribute] Debug log failed', e);
+        }
+
         approvedPayments = snap.docs.map((doc) => ({ id: doc.id, ...(doc.data() as any) }));
         recomputeLeaderboard();
       },

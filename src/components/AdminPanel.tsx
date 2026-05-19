@@ -556,14 +556,28 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
   };
 
   const handleApproveChanda = async (id: string) => {
-    try { await updateDoc(doc(db, 'chanda_payments', id), { status: 'Approved' }); showToast('Chanda approved successfully! ✅', 'success'); } 
-    catch (error) { showToast('Unable to approve this payment.', 'error'); }
+    try {
+      await updateDoc(doc(db, 'chanda_payments', id), { status: 'Approved' });
+      showToast('Chanda approved successfully! ✅', 'success');
+      // 🔥 DEBUG LOG: confirm approve update reached Firestore
+      console.log(`✅ [AdminPanel] Successfully approved chanda_payment: ${id}`);
+    } catch (error) {
+      console.error('❌ [AdminPanel] Approve failed:', error);
+      showToast('Unable to approve this payment.', 'error');
+    }
   };
 
   const handleRejectChanda = async (id: string) => {
     if (!window.confirm('Are you sure you want to reject this payment?')) return;
-    try { await updateDoc(doc(db, 'chanda_payments', id), { status: 'Rejected' }); showToast('Payment marked as rejected.', 'success'); } 
-    catch (error) { showToast('Unable to reject this payment.', 'error'); }
+    try {
+      await updateDoc(doc(db, 'chanda_payments', id), { status: 'Rejected' });
+      showToast('Payment marked as rejected.', 'success');
+      // 🔥 DEBUG LOG: confirm reject update reached Firestore
+      console.log(`✅ [AdminPanel] Successfully rejected chanda_payment: ${id}`);
+    } catch (error) {
+      console.error('❌ [AdminPanel] Reject failed:', error);
+      showToast('Unable to reject this payment.', 'error');
+    }
   };
 
   const handleAddChanda = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -686,6 +700,9 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
         batch.update(paymentDoc.ref, { status: 'Rejected' });
       });
       await batch.commit();
+
+      // 🔥 DEBUG LOG: payments rejected via batch for targetEmail
+      console.log(`✅ [AdminPanel] Rejected ${snap.docs.length} portal payments for ${targetEmail}`);
 
       showToast('Entry deleted successfully! 🗑️', 'success');
       setLedgerModalUser(null);
