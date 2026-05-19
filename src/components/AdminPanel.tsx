@@ -2,12 +2,12 @@
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, doc, updateDoc, deleteDoc, query, orderBy, setDoc, getDoc, where, getDocs, writeBatch } from 'firebase/firestore';
+import { collection, onSnapshot, doc, updateDoc, deleteDoc, query, orderBy, setDoc, getDoc, where, getDocs, writeBatch, addDoc } from 'firebase/firestore';
 import UserProfile from '@/components/UserProfile';
 import {
   Shield, ShieldAlert, Ban, RefreshCcw, Key, Mail, User, Image as ImageIcon,
   BarChart2, Settings, Lock, Activity, Database, AlertTriangle, Trash2, Search, Bell, UserCircle, CheckCircle2,
-  Play, ChevronLeft, ChevronRight, X, Download, Smartphone, Unlock, ChevronDown, Coins, PlusCircle, ArrowUpRight, History
+  Play, ChevronLeft, ChevronRight, X, Download, Smartphone, Unlock, ChevronDown, Coins, PlusCircle, ArrowUpRight, History, Edit3
 } from 'lucide-react';
 
 // 🔥 THE NEW PREMIUM CUSTOM SELECT COMPONENT
@@ -246,6 +246,9 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
   const [adjRemark, setAdjRemark] = useState('');
   const [adjDate, setAdjDate] = useState(getLocalDatetimeString());
   const [isAdjusting, setIsAdjusting] = useState(false);
+  const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null);
+  const [tempPaymentAmount, setTempPaymentAmount] = useState<number>(0);
+  const [isEditingPayment, setIsEditingPayment] = useState(false);
 
   // VAULT SLIDER STATES
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
@@ -620,10 +623,23 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
         timestamp: now,
       });
 
+      await addDoc(collection(db, 'chanda_payments'), {
+        userId: targetEmail,
+        userEmail: targetEmail,
+        userName: targetName,
+        userPhoto: targetUserData?.photoURL || null,
+        amount: amount,
+        message: chandaMessage.trim() || '',
+        status: 'Approved',
+        adminAdded: true,
+        utr_number: `ADMIN-${Math.floor(100000 + Math.random() * 900000)}`,
+        timestamp: new Date(now),
+      });
+
       showToast(existingData ? `Amount updated to ₹${nextTotal}` : `Fresh chanda added for ${targetName}`, 'success');
       setSelectedUserUid('');
       setChandaAmount('');
-      setChandaMessage('Online Paid (Admin Entry)');
+      setChandaMessage('');
       setChandaDate(getLocalDatetimeString());
     } catch (error) {
       console.error('Error adding manual chanda entry:', error);
@@ -673,6 +689,24 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
 
       const newCombinedTotal = (Number(ledgerModalUser.totalAmount) || 0) + amount;
 
+      // Also create a chanda_payments entry reflecting this admin adjustment
+      try {
+        await addDoc(collection(db, 'chanda_payments'), {
+          userId: targetEmail,
+          userEmail: targetEmail,
+          userName: ledgerModalUser.name || targetEmail,
+          userPhoto: ledgerModalUser.photo || null,
+          amount: amount,
+          message: adjRemark.trim() || (amount > 0 ? 'Admin Adjustment +': 'Admin Adjustment -'),
+          status: 'Approved',
+          adminAdded: true,
+          timestamp: new Date(now),
+        });
+        console.log(`✅ [AdminPanel] Created chanda_payments admin adjustment for ${targetEmail} amount ${amount}`);
+      } catch (e) {
+        console.warn('⚠️ [AdminPanel] Failed to create chanda_payments admin adjustment', e);
+      }
+
       showToast(`Successfully ${amount > 0 ? 'added' : 'deducted'} ₹${Math.abs(amount)}`, 'success');
       setAdjAmount('');
       setAdjRemark('');
@@ -704,10 +738,54 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
       // 🔥 DEBUG LOG: payments rejected via batch for targetEmail
       console.log(`✅ [AdminPanel] Rejected ${snap.docs.length} portal payments for ${targetEmail}`);
 
+      // Also remove admin-added chanda_payments entries for this user (cleanup)
+      try {
+        const qAdmin = query(collection(db, 'chanda_payments'), where('userEmail', '==', targetEmail), where('adminAdded', '==', true));
+        const adminSnap = await getDocs(qAdmin);
+        const batch2 = writeBatch(db);
+        adminSnap.docs.forEach((d) => batch2.delete(d.ref));
+        await batch2.commit();
+        console.log(`✅ [AdminPanel] Deleted ${adminSnap.docs.length} admin-added chanda_payments for ${targetEmail}`);
+      } catch (e) {
+        console.warn('⚠️ [AdminPanel] Failed to cleanup admin-added chanda_payments', e);
+      }
+
       showToast('Entry deleted successfully! 🗑️', 'success');
       setLedgerModalUser(null);
     } catch (error) {
       showToast('Failed to delete entry.', 'error');
+    }
+  };
+
+  const handleEditPayment = async (paymentId: string, newAmount: number) => {
+    if (!paymentId || !Number.isFinite(newAmount) || newAmount < 0) return;
+
+    setIsEditingPayment(true);
+    try {
+      await updateDoc(doc(db, 'chanda_payments', paymentId), { amount: Number(newAmount) });
+      console.log(`✅ [AdminPanel] Updated chanda_payment ${paymentId} to ₹${newAmount}`);
+      showToast(`Updated to ₹${newAmount}`, 'success');
+      setEditingPaymentId(null);
+      setTempPaymentAmount(0);
+    } catch (error) {
+      console.error('❌ [AdminPanel] Payment edit failed:', error);
+      showToast('Failed to update payment.', 'error');
+    } finally {
+      setIsEditingPayment(false);
+    }
+  };
+
+  const handleDeletePayment = async (paymentId: string) => {
+    if (!paymentId) return;
+    if (!window.confirm('Delete this payment entry?')) return;
+
+    try {
+      await deleteDoc(doc(db, 'chanda_payments', paymentId));
+      console.log(`✅ [AdminPanel] Deleted chanda_payment ${paymentId}`);
+      showToast('Payment deleted.', 'success');
+    } catch (error) {
+      console.error('❌ [AdminPanel] Payment delete failed:', error);
+      showToast('Failed to delete payment.', 'error');
     }
   };
 
@@ -1129,58 +1207,107 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
             </form>
           </div>
 
-          {/* Ledger Table Section */}
-          <div className="rounded-2xl sm:rounded-3xl border border-gray-200 bg-white shadow-sm lg:col-span-2 overflow-hidden flex flex-col">
+          
+
+          {/* Chanda Payments Live Feed (Raw Transactions) */}
+          <div className="rounded-2xl sm:rounded-3xl border border-gray-200 bg-white shadow-sm col-span-full overflow-hidden flex flex-col mt-4">
             <div className="flex flex-row items-center justify-between gap-2 border-b border-gray-100 bg-gray-50/50 px-3 py-3 sm:px-4">
               <div className="flex items-center gap-1.5 sm:gap-2">
-                <History className="h-3.5 w-3.5 sm:h-4 w-4 text-gray-500" />
-                <h3 className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-gray-700">Live Ledger</h3>
+                <ArrowUpRight className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-gray-500" />
+                <h3 className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-gray-700">Payments Feed (Real-Time)</h3>
               </div>
-              <span className="rounded-full bg-green-100 px-2 py-1 sm:py-0.5 text-[9px] sm:text-[10px] font-black uppercase tracking-wider text-green-800 shrink-0">
-                ₹{mergedChandaList.reduce((sum, item) => sum + (Number(item.totalAmount) || 0), 0).toLocaleString('en-IN')} Total
-              </span>
+              <span className="text-[9px] sm:text-[10px] font-bold text-gray-400">Total: {chandaPayments.filter(p => p.status === 'Approved').length} approved</span>
             </div>
 
-            <div className="max-h-[350px] sm:max-h-[480px] flex-1 overflow-x-auto custom-scrollbar">
-              {mergedChandaList.length === 0 ? (
-                <div className="py-10 sm:py-14 text-center text-[10px] sm:text-xs font-bold uppercase tracking-widest text-gray-400">No entries yet.</div>
+            <div className="max-h-[350px] sm:max-h-[400px] flex-1 overflow-x-auto custom-scrollbar">
+              {chandaPayments.filter(p => p.status === 'Approved').length === 0 ? (
+                <div className="py-10 sm:py-14 text-center text-[10px] sm:text-xs font-bold uppercase tracking-widest text-gray-400">No payments yet.</div>
               ) : (
                 <table className="w-full border-collapse text-left text-xs">
                   <thead>
                     <tr className="border-b border-gray-200 bg-gray-50 text-[8px] sm:text-[9px] font-black uppercase tracking-wider text-gray-400">
-                      <th className="p-2 sm:p-4 w-6 sm:w-10 text-center">#</th>
-                      <th className="p-2 sm:p-4">Member</th>
-                      <th className="hidden sm:table-cell p-4">Remark</th>
-                      <th className="p-2 sm:p-4 text-right">Total</th>
-                      <th className="hidden md:table-cell p-4 text-right">Updated</th>
+                      <th className="p-2 sm:p-3 w-6 sm:w-8">#</th>
+                      <th className="p-2 sm:p-3">User</th>
+                      <th className="p-2 sm:p-3">Email</th>
+                      <th className="p-2 sm:p-3 text-right">Amount</th>
+                      <th className="p-2 sm:p-3 text-right">Date & Time</th>
+                      <th className="p-2 sm:p-3 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {mergedChandaList.map((entry, idx) => (
-                      <tr
-                        key={entry.email || entry.id || `entry-${idx}`}
-                        onClick={() => setLedgerModalUser(entry)}
-                        className="cursor-pointer transition-all hover:bg-red-50 hover:shadow-sm active:bg-gray-100"
-                      >
-                        <td className="p-2 sm:p-4 text-center text-[9px] sm:text-[11px] font-black text-gray-300">{idx + 1}</td>
-                        <td className="p-2 sm:p-4">
-                          <p className="font-black uppercase tracking-wide text-gray-900 text-[10px] sm:text-xs truncate max-w-[120px] sm:max-w-full">{entry.name || 'Anonymous'}</p>
-                          {entry.email && entry.email.includes('@') && (
-                            <p className="mt-0.5 text-[8px] sm:text-[10px] font-bold text-gray-400 truncate max-w-[120px] sm:max-w-full">{entry.email}</p>
+                    {chandaPayments.filter(p => p.status === 'Approved').map((payment, idx) => {
+                      // 🔥 DEBUG LOG: show what fields are in the payment document
+                      if (idx === 0) {
+                        console.log('[AdminPanel Payments Feed] Sample payment doc:', payment);
+                      }
+                      return (
+                      <tr key={payment.id} className="hover:bg-gray-50 transition-colors">
+                        <td className="p-2 sm:p-3 text-[8px] sm:text-[10px] font-mono text-gray-400 truncate max-w-[60px]">{idx + 1}</td>
+                        <td className="p-2 sm:p-3 text-[10px] sm:text-xs font-bold text-gray-900 truncate">{payment.userName || payment.userId || 'N/A'}</td>
+                        <td className="p-2 sm:p-3 text-[10px] text-gray-500 truncate">{payment.userEmail || payment.email || 'Email missing'}</td>
+                        <td className="p-2 sm:p-3 text-right">
+                          {editingPaymentId === payment.id ? (
+                            <div className="flex items-center justify-end gap-1.5">
+                              <input
+                                type="number"
+                                value={tempPaymentAmount}
+                                onChange={(e) => setTempPaymentAmount(Number(e.target.value))}
+                                className="w-16 sm:w-20 px-2 py-1 bg-white border border-gray-300 rounded text-[10px] font-bold text-gray-900 outline-none focus:border-[#5a0000]"
+                              />
+                              <button
+                                onClick={() => handleEditPayment(payment.id, tempPaymentAmount)}
+                                disabled={isEditingPayment}
+                                className="p-1 bg-green-100 text-green-700 rounded hover:bg-green-200 disabled:opacity-50"
+                                aria-label="Confirm"
+                              >
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => setEditingPaymentId(null)}
+                                className="p-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+                                aria-label="Cancel"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="font-black text-gray-900">₹{Number(payment.amount || 0).toLocaleString('en-IN')}</span>
                           )}
                         </td>
-                        <td className="hidden sm:table-cell max-w-[150px] p-4 italic text-gray-500 text-[10px] sm:text-xs truncate">&ldquo;{entry.latestMessage || 'No note'}&rdquo;</td>
-                        <td className="p-2 sm:p-4 text-right">
-                          <span className="inline-block rounded-md sm:rounded-xl border border-green-100 bg-green-50 px-1.5 py-1 sm:px-2.5 sm:py-1 text-[10px] sm:text-xs font-black text-green-700">
-                            ₹{Number(entry.totalAmount || 0).toLocaleString('en-IN')}
-                          </span>
+                        <td className="p-2 sm:p-3 text-right">
+                          <div className="text-[10px] font-bold text-gray-700">
+                            {payment.timestamp?.toDate ? (
+                              <>
+                                {payment.timestamp.toDate().toLocaleDateString('en-IN')}<br />
+                                <span className="text-[9px] text-gray-400 font-medium">
+                                  {payment.timestamp.toDate().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                              </>
+                            ) : (
+                              'N/A'
+                            )}
+                          </div>
                         </td>
-                        <td className="hidden md:table-cell p-4 text-right text-[10px] font-bold text-gray-400">
-                          {/* @ts-ignore */}
-                          {typeof formatLedgerDate === 'function' ? formatLedgerDate(entry.lastUpdated) : 'N/A'}
+                        <td className="p-2 sm:p-3 text-right space-x-1.5">
+                          {editingPaymentId !== payment.id && (
+                            <>
+                              <button
+                                onClick={() => { setEditingPaymentId(payment.id); setTempPaymentAmount(Number(payment.amount || 0)); }}
+                                className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 rounded text-[9px] font-bold hover:bg-blue-200 transition-colors"
+                              >
+                                <Edit3 className="w-3 h-3" /> Edit
+                              </button>
+                              <button
+                                onClick={() => handleDeletePayment(payment.id)}
+                                className="inline-flex items-center gap-1 px-2 py-1 bg-red-100 text-red-700 rounded text-[9px] font-bold hover:bg-red-200 transition-colors"
+                              >
+                                <Trash2 className="w-3 h-3" /> Delete
+                              </button>
+                            </>
+                          )}
                         </td>
                       </tr>
-                    ))}
+                    )})}
                   </tbody>
                 </table>
               )}

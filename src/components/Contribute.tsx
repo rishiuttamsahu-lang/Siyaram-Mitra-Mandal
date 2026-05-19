@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useEffect, useState } from 'react';
-import { addDoc, collection, onSnapshot, orderBy, query } from 'firebase/firestore';
+import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, onSnapshot, orderBy, query, setDoc, where, writeBatch } from 'firebase/firestore';
 import {
-  ArrowRight, Check, CheckCircle2, ChevronLeft, Crown,
+  ArrowRight, Check, CheckCircle2, ChevronLeft, Crown, Edit3, Trash2, X,
   IndianRupee, Loader2, Medal, QrCode, ShieldCheck, Sparkles, Star, Zap
 } from 'lucide-react';
 import { db } from '@/lib/firebase';
@@ -18,6 +18,7 @@ type Donor = {
 };
 
 type PaymentDoc = {
+  id?: string;
   status?: string;
   userId?: string;
   userEmail?: string;
@@ -34,6 +35,7 @@ type ContributeProps = {
     name?: string;
     email?: string;
     photoURL?: string | null;
+    role?: string;
   };
 };
 
@@ -579,6 +581,9 @@ export default function Contribute({ userData }: ContributeProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [leaderboard, setLeaderboard] = useState<Donor[]>([]);
   const [isQrLoaded, setIsQrLoaded] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [tempAmount, setTempAmount] = useState<number>(0);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
@@ -609,27 +614,47 @@ export default function Contribute({ userData }: ContributeProps) {
       };
 
       approvedPayments.forEach((payment) => {
-        if (payment.status !== 'Approved' || !payment.userId) return;
+        if (payment.status !== 'Approved') return;
+        if ((payment as any).adminAdded === true) return; // skip admin entries — already counted via mandal_chanda
         const at = typeof payment.timestamp?.toMillis === 'function' ? payment.timestamp.toMillis() : 0;
-        const key = payment.userEmail?.trim().toLowerCase() || payment.userId;
+        const key = (payment.userEmail && String(payment.userEmail).trim().toLowerCase())
+          || (payment.userName && String(payment.userName).trim().toLowerCase())
+          || (payment.userId && String(payment.userId).trim().toLowerCase())
+          || String(payment.id || '');
+
+        let cleanMsg = payment.message ? String(payment.message).trim() : '';
+        if (
+          cleanMsg === '' ||
+          cleanMsg.includes('Admin Manual Entry') ||
+          cleanMsg.toLowerCase().includes('inline admin edit') ||
+          cleanMsg.toLowerCase().includes('online paid (admin entry)') ||
+          cleanMsg.toLowerCase().includes('admin entry') ||
+          cleanMsg.toLowerCase().includes('additional payment added') ||
+          cleanMsg.toLowerCase().includes('admin adjustment')
+        ) {
+          cleanMsg = '';
+        }
+
         pushContribution(key, {
           id: key,
-          name: payment.userName || 'Anonymous',
+          name: payment.userName || payment.userEmail || 'Anonymous',
           email: payment.userEmail || undefined,
           photo: payment.userPhoto || null,
           total: Number(payment.amount) || 0,
-          latestMessage: payment.message || '',
+          latestMessage: cleanMsg || undefined,
           latestAt: at,
         });
       });
 
       manualChandaEntries.forEach((entry) => {
-        const key = entry.email?.trim().toLowerCase();
+        const key = (entry.email && String(entry.email).trim().toLowerCase())
+          || (entry.name && String(entry.name).trim().toLowerCase())
+          || String(entry.id || '');
         if (!key) return;
         const at = entry.lastUpdated ? new Date(entry.lastUpdated).getTime() : 0;
         pushContribution(key, {
           id: key,
-          name: entry.name || 'Anonymous Donor',
+          name: entry.name || entry.email || 'Anonymous Donor',
           email: entry.email,
           photo: entry.photoURL || null,
           total: Number(entry.totalAmount) || 0,
@@ -717,6 +742,109 @@ export default function Contribute({ userData }: ContributeProps) {
       console.error('Error submitting contribution:', error);
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleBeginEdit = (donor: Donor) => {
+    setEditingId(donor.id);
+    setTempAmount(donor.total);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingId(null);
+    setTempAmount(0);
+  };
+
+  const handleDeleteDonorGroup = async (donor: Donor) => {
+    if (!confirm(`Kya aap sach me "${donor.name}" ka poora contribution record clear/delete karna chahte hain?`)) {
+      return;
+    }
+
+    setIsSavingEdit(true);
+    try {
+      // 1. Delete all chanda_payments entries by userName
+      const q = query(collection(db, 'chanda_payments'), where('userName', '==', donor.name));
+      const querySnap = await getDocs(q);
+      if (!querySnap.empty) {
+        const batch = writeBatch(db);
+        querySnap.docs.forEach((docSnap) => batch.delete(docSnap.ref));
+        await batch.commit();
+        console.log(`✅ [Contribute] Deleted chanda_payments for: ${donor.name}`);
+      }
+
+      // 2. Also delete mandal_chanda doc (keyed by email or donor id)
+      const mandalChandaKey = String(donor.email || donor.id).trim().toLowerCase();
+      if (mandalChandaKey) {
+        try {
+          await deleteDoc(doc(db, 'mandal_chanda', mandalChandaKey));
+          console.log(`✅ [Contribute] Deleted mandal_chanda doc: ${mandalChandaKey}`);
+        } catch (e) {
+          console.warn(`⚠️ [Contribute] mandal_chanda delete skipped:`, e);
+        }
+      }
+    } catch (error) {
+      console.error('❌ [Contribute] Failed to delete donor group:', error);
+      alert('Delete request fail ho gayi. Kripya dobara try karein.');
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
+
+  const handleUpdate = async (donor: Donor, newAmount: number) => {
+    if (!donor?.id || !Number.isFinite(newAmount) || newAmount < 0) return;
+
+    setIsSavingEdit(true);
+    try {
+      const normalizedKey = String(donor.email || donor.id).trim().toLowerCase();
+      const manualRef = doc(db, 'mandal_chanda', normalizedKey);
+      const manualSnap = await getDoc(manualRef);
+
+      const existingManualTotal = manualSnap.exists()
+        ? Number((manualSnap.data() as any).totalAmount || (manualSnap.data() as any).total || 0)
+        : 0;
+      const delta = Number(newAmount) - Number(donor.total || 0);
+      const nextManualTotal = existingManualTotal + delta;
+
+      const batch = writeBatch(db);
+      batch.set(manualRef, {
+        email: donor.email || normalizedKey,
+        name: donor.name || donor.email || 'Anonymous Donor',
+        totalAmount: nextManualTotal,
+        total: nextManualTotal,
+        latestMessage: 'Inline admin edit from Contribute',
+        lastUpdated: new Date().toISOString(),
+        updatedBy: userData.email || 'admin',
+      }, { merge: true });
+
+      batch.set(doc(db, 'mandal_chanda_logs', `${normalizedKey}_${Date.now()}`), {
+        adminEmail: userData.email || 'admin',
+        targetEmail: normalizedKey,
+        amountAdded: delta,
+        message: `Inline admin edit from Contribute: ${Number(newAmount)}`,
+        timestamp: new Date().toISOString(),
+      });
+
+      const q = query(collection(db, 'chanda_payments'), where('userName', '==', donor.name));
+      const querySnap = await getDocs(q);
+      if (!querySnap.empty) {
+        const paymentBatch = writeBatch(db);
+        querySnap.docs.forEach((docSnap, idx) => {
+          if (idx === querySnap.docs.length - 1) {
+            paymentBatch.update(docSnap.ref, { amount: newAmount, message: '' });
+          } else {
+            paymentBatch.delete(docSnap.ref);
+          }
+        });
+        await paymentBatch.commit();
+      }
+
+      await batch.commit();
+      console.log(`✅ [Contribute] Updated grouped donor ${normalizedKey} to ₹${newAmount} via manual delta ${delta}`);
+      handleCancelEdit();
+    } catch (error) {
+      console.error('❌ [Contribute] Inline edit failed:', error);
+    } finally {
+      setIsSavingEdit(false);
     }
   };
 
@@ -1060,13 +1188,67 @@ export default function Contribute({ userData }: ContributeProps) {
 
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <p className={`donor-name ${index === 0 ? 'top1' : ''}`}>{donor.name}</p>
-                      {donor.latestMessage && (
+                      {donor.latestMessage &&
+                       donor.latestMessage !== '' &&
+                       !donor.latestMessage.includes('Admin Manual Entry') &&
+                       !donor.latestMessage.toLowerCase().includes('inline admin edit') &&
+                       !donor.latestMessage.toLowerCase().includes('online paid (admin entry)') &&
+                       !donor.latestMessage.toLowerCase().includes('admin entry') &&
+                       !donor.latestMessage.toLowerCase().includes('additional payment added') &&
+                       !donor.latestMessage.toLowerCase().includes('admin adjustment') && (
                         <p className="donor-msg">&ldquo;{donor.latestMessage}&rdquo;</p>
                       )}
                     </div>
 
                     <div className={`donor-amount ${index === 0 ? 'top1' : ''}`}>
-                      ₹{donor.total.toLocaleString('en-IN')}
+                      {userData.role === 'Admin' && editingId === donor.id ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <input
+                            type="number"
+                            value={Number.isFinite(tempAmount) ? tempAmount : 0}
+                            onChange={(e) => setTempAmount(Number(e.target.value))}
+                            style={{ width: 92, padding: '7px 10px', borderRadius: 12, border: '1px solid rgba(90,0,0,0.14)', fontSize: 14, fontWeight: 700, color: '#111', background: '#fff', outline: 'none' }}
+                          />
+                          <button
+                            onClick={() => handleUpdate(donor, tempAmount)}
+                            disabled={isSavingEdit}
+                            className="p-1.5 rounded-lg bg-green-50 text-green-700 hover:bg-green-100 transition-colors disabled:opacity-50"
+                            aria-label="Save amount"
+                          >
+                            <CheckCircle2 className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={handleCancelEdit}
+                            disabled={isSavingEdit}
+                            className="p-1.5 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors disabled:opacity-50"
+                            aria-label="Cancel edit"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span>₹{donor.total.toLocaleString('en-IN')}</span>
+                          {userData.role === 'Admin' && (
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => handleBeginEdit(donor)}
+                                className="p-1 text-gray-400 hover:text-[#5A0000] transition-colors"
+                                aria-label="Edit amount"
+                              >
+                                <Edit3 className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteDonorGroup(donor)}
+                                className="p-1 text-gray-400 hover:text-red-600 transition-colors"
+                                aria-label="Delete donor group"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
