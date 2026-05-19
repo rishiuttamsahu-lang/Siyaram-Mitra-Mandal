@@ -608,6 +608,7 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
       await setDoc(chandaRef, {
         email: targetEmail,
         name: targetName,
+        photoURL: targetUserData?.photoURL || targetUserData?.photo || null,
         totalAmount: nextTotal,
         total: nextTotal,
         latestMessage: chandaMessage.trim() || 'Additional payment added',
@@ -672,6 +673,7 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
       await setDoc(chandaRef, {
         email: targetEmail,
         name: ledgerModalUser.name,
+        photoURL: ledgerModalUser.photo || null,
         totalAmount: nextDbTotal,
         total: nextDbTotal,
         latestMessage: adjRemark.trim() || (amount > 0 ? 'Amount Added' : 'Amount Deducted'),
