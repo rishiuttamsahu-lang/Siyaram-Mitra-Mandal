@@ -469,8 +469,14 @@ export default function UserProfile({ userData }: { userData: any }) {
                   <div className={`relative aspect-[4/5] sm:aspect-square ${isSelected ? 'opacity-70' : 'opacity-100'}`}>
                     {item.type === 'video' ? (
                       <>
-                        <img src={getOptimizedMediaUrl(item.thumbnail || item.url, item.type)} className="h-full w-full object-cover" alt="video" />
-                        <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                        <video 
+                          src={`${item.url}#t=0.1`} 
+                          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" 
+                          preload="metadata"
+                          muted
+                          playsInline
+                        />
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/20 pointer-events-none">
                           <div className="rounded-full bg-black/50 p-2"><Play className="w-4 h-4 fill-white text-white" /></div>
                         </div>
                       </>
@@ -676,10 +682,12 @@ export default function UserProfile({ userData }: { userData: any }) {
 
                             <video
                               ref={videoRef}
-                              src={item.url}
+                              src={`${item.url}#t=0.1`}
                               poster={getOptimizedMediaUrl(item.url, item.type)}
+                              preload="metadata"
                               playsInline
                               loop
+                              muted
                               onClick={togglePlayPause}
                               onTimeUpdate={handleTimeUpdate}
                               className="max-h-full max-w-full object-contain pointer-events-auto rounded-xl shadow-2xl border border-white/10 relative z-10 bg-black/50"
@@ -696,7 +704,7 @@ export default function UserProfile({ userData }: { userData: any }) {
                           </div>
                         ) : (
                           <div className="relative flex items-center justify-center max-h-full max-w-full rounded-xl overflow-hidden">
-                            <img src={getOptimizedMediaUrl(item.thumbnail || item.url, item.type)} className="max-h-full max-w-full object-contain blur-[2px]" alt="video-poster" />
+                            <img src={getOptimizedMediaUrl(item.thumbnail || item.url, item.type)} className="max-h-full max-w-full object-contain" alt="video-poster" />
                             <Play className="absolute w-16 h-16 text-white/70" />
                           </div>
                         )

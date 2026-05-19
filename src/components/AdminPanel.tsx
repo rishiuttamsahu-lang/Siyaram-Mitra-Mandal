@@ -746,9 +746,18 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
             {filteredUsers.map((user) => (
               <div key={user.id || user.uid || user.email} className={`bg-white rounded-xl border ${user.isBanned ? 'border-red-200 bg-red-50' : 'border-gray-100 shadow-sm'} p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3`}>
                 <div className="flex items-center gap-3">
-                  <div className={`w-8 h-8 sm:w-10 sm:h-10 shrink-0 rounded-full flex items-center justify-center font-black text-white text-xs sm:text-sm ${user.role === 'Admin' ? 'bg-yellow-500' : user.isBanned ? 'bg-red-500' : 'bg-[#5A0000]'}`}>
-                    {user.name?.charAt(0).toUpperCase() || 'U'}
-                  </div>
+                  {(user.photoURL || user.photo) ? (
+                    <img
+                      src={user.photoURL || user.photo}
+                      alt={user.name || 'User'}
+                      onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                      className="w-8 h-8 sm:w-10 sm:h-10 rounded-full object-cover border-2 border-gray-100 shadow-sm"
+                    />
+                  ) : (
+                    <div className={`w-8 h-8 sm:w-10 sm:h-10 shrink-0 rounded-full flex items-center justify-center font-black text-white text-xs sm:text-sm ${user.role === 'Admin' ? 'bg-yellow-500' : user.isBanned ? 'bg-red-500' : 'bg-[#5A0000]'}`}>
+                      {user.name?.charAt(0).toUpperCase() || 'U'}
+                    </div>
+                  )}
                   <div className="min-w-0">
                     <p className="font-bold text-gray-900 text-xs sm:text-sm truncate flex items-center gap-1.5">
                       {user.name || 'Unknown User'} {user.uid === adminUser?.uid && <span className="text-[7px] sm:text-[8px] bg-gray-200 px-1 py-0.5 rounded text-gray-600">YOU</span>}
