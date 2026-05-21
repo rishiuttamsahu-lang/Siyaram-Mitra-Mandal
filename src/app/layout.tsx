@@ -48,11 +48,11 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Siyaram Mitra Mandal",
     description: "Official Member Portal & Gallery Vault",
-    url: "/",
+    url: metadataBaseUrl.href,
     siteName: "Siyaram Mitra Mandal",
     images: [
       {
-        url: "/logo.png",
+        url: metadataBaseUrl.origin + "/logo.png",
         width: 800,
         height: 600,
         alt: "Siyaram Mitra Mandal Logo",
@@ -110,8 +110,41 @@ export default function RootLayout({
         <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
         <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
         <link rel="manifest" href="/site.webmanifest" />
+        <link rel="canonical" href={metadataBaseUrl.href} />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: `{
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  "name": "Siyaram Mitra Mandal",
+  "url": "${metadataBaseUrl.href}",
+  "logo": "${metadataBaseUrl.origin}/logo.png",
+  "sameAs": []
+}` }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: `{
+  "@context": "https://schema.org",
+  "@type": "LocalBusiness",
+  "name": "Siyaram Mitra Mandal",
+  "address": {
+    "@type": "PostalAddress",
+    "addressLocality": "Bhiwandi",
+    "addressRegion": "Maharashtra",
+    "addressCountry": "IN"
+  },
+  "geo": { "@type": "GeoCoordinates", "latitude": "", "longitude": "" },
+  "url": "${metadataBaseUrl.href}"
+}` }}
+        />
       </head>
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        <header aria-hidden={false} className="w-full">
+          <h1 className="m-0 px-4 py-2 text-sm text-gray-900/90">Siyaram Mitra Mandal — Official Member Portal & Gallery</h1>
+        </header>
+        {children}
+      </body>
     </html>
   );
 }
