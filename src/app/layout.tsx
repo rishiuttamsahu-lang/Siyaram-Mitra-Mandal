@@ -14,13 +14,77 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const metadataBaseUrl = (() => {
+  try {
+    return new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://example.com");
+  } catch {
+    return new URL("https://example.com");
+  }
+})();
+
 export const metadata: Metadata = {
-  title: "Siyaram Mitra Mandal Portal",
-  description: "Dashboard and admin entry panel for monthly contribution tracking.",
+  metadataBase: metadataBaseUrl,
+  title: "Siyaram Mitra Mandal | Shanti Sagar Cha Maharaja",
+  description:
+    "Official dashboard and gallery vault of Siyaram Mitra Mandal. Track monthly contributions, view exclusive Bappa photos, and connect with the Mandal parivar safely.",
+  keywords: [
+    "Siyaram Mitra Mandal",
+    "Siyaram Mitra Mandal Bhiwandi",
+    "Ganpati Mandal Bhiwandi",
+    "Bappa Photos and Gallery",
+    "Ganeshotsav Celebration",
+    "Mandal Chanda Tracker",
+    "Siyaram Mandal Parivar",
+    "Online Mandal Contribution",
+    "Ganesh Chaturthi Mandal",
+    "Mandal Seva Portal",
+    "Bhiwandi Ganeshotsav",
+    "Mitra Mandal App",
+    "Siyaram",
+    "Siyaram Mitra",
+    "Siyaram Mandal"
+  ],
+  authors: [{ name: "Siyaram Mitra Mandal" }],
+  openGraph: {
+    title: "Siyaram Mitra Mandal",
+    description: "Official Member Portal & Gallery Vault",
+    url: "/",
+    siteName: "Siyaram Mitra Mandal",
+    images: [
+      {
+        url: "/logo.png",
+        width: 800,
+        height: 600,
+        alt: "Siyaram Mitra Mandal Logo",
+      },
+    ],
+    locale: "en_IN",
+    type: "website",
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+    },
+  },
+  icons: {
+    icon: [
+      { url: "/logo.png", type: "image/png", sizes: "512x512" },
+      { url: "/icon.svg", type: "image/svg+xml" },
+    ],
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180" }],
+    shortcut: ["/logo.png"],
+  },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#4A0001",
+  themeColor: "#5A0000",
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default function RootLayout({
@@ -40,6 +104,10 @@ export default function RootLayout({
           href="https://fonts.googleapis.com/css2?family=Gotu&family=Rozha+One&display=swap"
           rel="stylesheet"
         />
+        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+        <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+        <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+        <link rel="manifest" href="/site.webmanifest" />
       </head>
       <body className="min-h-full flex flex-col">{children}</body>
     </html>
