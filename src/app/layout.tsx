@@ -139,12 +139,7 @@ export default function RootLayout({
 }` }}
         />
       </head>
-      <body className="min-h-full flex flex-col">
-        <header aria-hidden={false} className="w-full">
-          <h1 className="m-0 px-4 py-2 text-sm text-gray-900/90">Siyaram Mitra Mandal — Official Member Portal & Gallery</h1>
-        </header>
-        {children}
-      </body>
+      <body className="min-h-full flex flex-col">{children}</body>
     </html>
   );
 }
