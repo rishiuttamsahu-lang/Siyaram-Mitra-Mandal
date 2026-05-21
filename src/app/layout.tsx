@@ -16,9 +16,9 @@ const geistMono = Geist_Mono({
 
 const metadataBaseUrl = (() => {
   try {
-    return new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://example.com");
+    return new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://siyaram-mitra-mandal.vercel.app");
   } catch {
-    return new URL("https://example.com");
+    return new URL("https://siyaram-mitra-mandal.vercel.app");
   }
 })();
 

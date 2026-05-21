@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
-Sitemap: https://example.com/sitemap.xml
-# Replace the domain above with your production site URL
+Sitemap: https://siyaram-mitra-mandal.vercel.app/sitemap.xml
+# Production site: https://siyaram-mitra-mandal.vercel.app
