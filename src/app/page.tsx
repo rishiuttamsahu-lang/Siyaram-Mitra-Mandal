@@ -65,6 +65,12 @@ export default function Home() {
 
   const welcomeText = "Deviyon aur sajjanon, Siyaram Mitra Mandal mein aapka hardik swagat hai. Yeh portal Bappa ki aarti, visarjan aur mandal ki pavitra yaadon ko ek saath sanjone ke liye banaya gaya hai. Yahan aap mandal se judi photos aur videos dekh aur upload kar sakte hain. Yeh website keval Siyaram Mitra Mandal parivar ke sadasyon aur mataon-behnon ke liye hai, taaki sabhi ki privacy aur sammaan poori tarah surakshit rahe. Kisi baahari vyakti ko yahan pravesh ki anumati nahi hai.";
 
+  const SeoH1 = (
+    <h1 className="sr-only opacity-0 absolute pointer-events-none w-1 h-1 overflow-hidden" aria-hidden="false">
+      Siyaram Mitra Mandal | Official Member Portal & Shanti Sagar Cha Maharaja
+    </h1>
+  );
+
   // 1. Auth Listener
   useEffect(() => {
     let unsubUserDoc = () => {};
@@ -285,6 +291,7 @@ export default function Home() {
   if (introPhase === 0) {
     return (
       <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-[#0a0202] select-none">
+        {SeoH1}
         <div className="w-64 relative mt-10">
           <div className="absolute -top-6 left-0 w-full flex justify-center">
             <span className="text-yellow-400 text-xs font-black tracking-widest" style={{ fontFamily: "'Cinzel', serif" }}>
@@ -319,6 +326,7 @@ export default function Home() {
   if (introPhase === 1) {
     return (
       <div onClick={() => handleUniversalSkip(2)} className={`fixed inset-0 z-[9999] flex items-center justify-center overflow-hidden bg-gradient-to-br from-[#5a0000] via-[#3a0000] to-black px-6 transition-opacity duration-500 cursor-pointer ${isSplashExiting ? "opacity-0" : "opacity-100"}`}>
+        {SeoH1}
         <style>{`
           @keyframes premiumFadeIn { 0% { opacity: 0; transform: translateY(15px); filter: blur(4px); } 100% { opacity: 1; transform: translateY(0); filter: blur(0); } }
           @keyframes lineExpand { 0% { width: 0; opacity: 0; } 100% { width: 12rem; opacity: 1; } }
@@ -342,6 +350,7 @@ export default function Home() {
   if (introPhase === 2) {
     return (
       <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center overflow-hidden bg-gradient-to-br from-[#5a0000] via-[#3a0000] to-black px-6 cursor-pointer" onClick={() => handleUniversalSkip(3)}>
+        {SeoH1}
         <div className="max-w-3xl w-full relative z-10">
           <p className="text-yellow-50/90 text-lg md:text-2xl leading-relaxed text-center min-h-[200px]" style={{ fontFamily: "'Gotu', sans-serif" }}>
             {typedText}
@@ -358,6 +367,7 @@ export default function Home() {
   if (introPhase === 3) {
     return (
       <div onClick={() => handleUniversalSkip(4)} className={`fixed inset-0 z-[9999] flex flex-col items-center justify-center overflow-hidden bg-gradient-to-br from-[#5a0000] via-[#3a0000] to-black px-6 transition-opacity duration-500 cursor-pointer ${isShieldExiting ? 'opacity-0' : 'opacity-100'}`}>
+        {SeoH1}
         <div className="flex flex-col items-center justify-center space-y-6">
           <div className="relative flex h-28 w-28 items-center justify-center">
             <div className="absolute inset-0 rounded-full bg-yellow-400/20 animate-ping" style={{ animationDuration: '2.5s' }} />
@@ -377,6 +387,7 @@ export default function Home() {
   if (isAuthChecking) {
     return (
       <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-gray-50">
+        {SeoH1}
         <div className="relative">
           <div className="w-12 h-12 rounded-full border-4 border-gray-200 border-t-[#5a0000] animate-spin"></div>
           <div className="absolute inset-0 w-12 h-12 rounded-full border-4 border-transparent border-b-yellow-500 animate-[spin_2s_linear_infinite]"></div>
@@ -389,17 +400,18 @@ export default function Home() {
   const effectiveUserData = bannedUserData ?? userData;
 
   if (user && (isDeviceBanned || effectiveUserData?.isBanned)) {
-    return <BannedPage />;
+    return <>{SeoH1}<BannedPage /></>;
   }
 
   // Phase 4: Final Check (Login dikhana hai ya App)
   if (!user || !userData || !isPasscodeVerified) {
-    return <Welcome key={user?.uid ?? 'guest'} firebaseUser={user} onAuthSuccess={(data) => { setUserData(data); setIsPasscodeVerified(true); }} />;
+    return <>{SeoH1}<Welcome key={user?.uid ?? 'guest'} firebaseUser={user} onAuthSuccess={(data) => { setUserData(data); setIsPasscodeVerified(true); }} /></>;
   }
 
   // MAIN APP AFTER LOGIN
   return (
     <main className="min-h-screen flex flex-col relative pb-28 bg-gray-50">
+      {SeoH1}
       
       {/* Top Header Bar - Slides from Top */}
       <div className={`w-full bg-white/80 backdrop-blur-md border-b border-gray-200 px-4 py-3 flex justify-between items-center sticky top-0 z-30 shadow-sm transition-all duration-700 transform ${revealSequence >= 2 ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0'}`}>
