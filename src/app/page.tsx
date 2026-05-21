@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { auth, db } from '@/lib/firebase';
 import { onAuthStateChanged, signOut, type User } from 'firebase/auth';
-import { doc, getDoc, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc, onSnapshot, updateDoc } from 'firebase/firestore';
 
 import Welcome from '@/components/Welcome';
 import BannedPage from '@/components/BannedPage';
@@ -32,6 +32,7 @@ export default function Home() {
   const [bannedUserData, setBannedUserData] = useState<AppUserData | null>(null);
   const bannedUserDataRef = useRef<AppUserData | null>(null);
   const [isAuthChecking, setIsAuthChecking] = useState(true);
+  const [isDeviceBanned, setIsDeviceBanned] = useState(false);
   
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isPasscodeVerified, setIsPasscodeVerified] = useState(false);
@@ -51,6 +52,17 @@ export default function Home() {
   // the user's document and role. This avoids duplicate listeners and race
   // conditions on initial load.
 
+  useEffect(() => {
+    try {
+      if (localStorage.getItem('mandal_device_banned') === 'true') {
+        setIsDeviceBanned(true);
+        setIsAuthChecking(false);
+      }
+    } catch (error) {
+      console.error('Storage access error:', error);
+    }
+  }, []);
+
   const welcomeText = "Deviyon aur sajjanon, Siyaram Mitra Mandal mein aapka hardik swagat hai. Yeh portal Bappa ki aarti, visarjan aur mandal ki pavitra yaadon ko ek saath sanjone ke liye banaya gaya hai. Yahan aap mandal se judi photos aur videos dekh aur upload kar sakte hain. Yeh website keval Siyaram Mitra Mandal parivar ke sadasyon aur mataon-behnon ke liye hai, taaki sabhi ki privacy aur sammaan poori tarah surakshit rahe. Kisi baahari vyakti ko yahan pravesh ki anumati nahi hai.";
 
   // 1. Auth Listener
@@ -62,11 +74,19 @@ export default function Home() {
         try {
           const userRef = doc(db, 'users', currentUser.uid);
           
-          unsubUserDoc = onSnapshot(userRef, (userSnap) => {
+          unsubUserDoc = onSnapshot(userRef, async (userSnap) => {
             if (userSnap.exists()) {
               const data = userSnap.data() as AppUserData;
               setUserData(data);
               setUser(currentUser);
+
+              const isAdmin = data.role?.toLowerCase() === 'admin';
+
+              if (isAdmin) {
+                try {
+                  localStorage.removeItem('mandal_device_banned');
+                } catch {}
+              }
 
               // 🔥 FAST-FORWARD: if user previously passed the passcode, resume at
               // introPhase 4 (skip intro) for non-admins so returning users land
@@ -76,13 +96,29 @@ export default function Home() {
                 const savedAuth = localStorage.getItem(`mandal_pass_auth_${currentUser.uid}`);
                 if (savedAuth === 'true') {
                   setIsPasscodeVerified(true);
-                  if (data.role?.toLowerCase() !== 'admin') {
+                  if (!isAdmin) {
                     setIntroPhase(4);
                   }
                 }
               } catch {}
 
-              if (data.isBanned) {
+              const deviceIsBanned = localStorage.getItem('mandal_device_banned') === 'true';
+
+              if (!isAdmin && (data.isBanned || deviceIsBanned)) {
+                if (!data.isBanned) {
+                  try {
+                    await updateDoc(userRef, { isBanned: true });
+                  } catch (error) {
+                    console.error('Auto-ban update failed:', error);
+                    setIsAuthChecking(false);
+                  }
+                  return;
+                }
+
+                try {
+                  localStorage.setItem('mandal_device_banned', 'true');
+                } catch {}
+                setIsDeviceBanned(true);
                 bannedUserDataRef.current = data;
                 setBannedUserData(data);
                 setIsPasscodeVerified(true);
@@ -90,11 +126,15 @@ export default function Home() {
                 return;
               }
 
+              try {
+                localStorage.removeItem('mandal_device_banned');
+              } catch {}
+              setIsDeviceBanned(false);
               bannedUserDataRef.current = null;
               setBannedUserData(null);
 
               // 🔥 CHANGE 1: Admin direct jayega, Member aur Viewer ko Intro phase se start karwayenge
-              if (data.role?.toLowerCase() === 'admin') {
+              if (isAdmin) {
                 setRevealSequence(3);
               } else {
                 setRevealSequence(0);
@@ -348,7 +388,7 @@ export default function Home() {
 
   const effectiveUserData = bannedUserData ?? userData;
 
-  if (effectiveUserData?.isBanned) {
+  if (user && (isDeviceBanned || effectiveUserData?.isBanned)) {
     return <BannedPage />;
   }
 

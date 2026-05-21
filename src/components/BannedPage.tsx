@@ -1,17 +1,23 @@
 "use client";
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { auth } from '@/lib/firebase';
 import { signOut } from 'firebase/auth';
-import { LogOut, Info } from 'lucide-react';
+import { LogOut, Info, Loader2 } from 'lucide-react';
 import Image from 'next/image';
 
 export default function BannedPage() {
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
-  const handleLogout = () => {
-    signOut(auth);
-    if (auth.currentUser) {
-      localStorage.removeItem(`mandal_pass_auth_${auth.currentUser.uid}`);
+  const handleLogout = async () => {
+    setIsLoggingOut(true);
+
+    try {
+      await signOut(auth);
+    } catch (error) {
+      console.error('Logout Error:', error);
+    } finally {
+      setIsLoggingOut(false);
     }
   };
 
@@ -73,9 +79,18 @@ export default function BannedPage() {
             {/* Clean CTA Button matched with Brand Color */}
             <button 
                 onClick={handleLogout}
-                className="w-full flex items-center justify-center gap-2 bg-[#5A0000] hover:bg-[#7a0000] text-white font-semibold text-sm py-3.5 sm:py-4 rounded-xl transition-all shadow-md hover:shadow-lg active:scale-[0.98]"
+                disabled={isLoggingOut}
+                className="w-full flex items-center justify-center gap-2 bg-[#5A0000] hover:bg-[#7a0000] disabled:bg-gray-400 text-white font-semibold text-sm py-3.5 sm:py-4 rounded-xl transition-all shadow-md hover:shadow-lg active:scale-[0.98]"
             >
-                <LogOut className="w-4 h-4" /> Sign out safely
+                {isLoggingOut ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" /> Leaving App...
+                  </>
+                ) : (
+                  <>
+                    <LogOut className="w-4 h-4" /> Sign out safely
+                  </>
+                )}
             </button>
         </div>
       </div>
