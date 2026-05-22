@@ -94,6 +94,7 @@ export default function Gallery({ userData }: { userData: any }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(true);
   const [progress, setProgress] = useState(0);
+  const [isMuted, setIsMuted] = useState(false); // 🔥 NAYA VOLUME MUTED STATE
 
   // Handle play promises properly
   useEffect(() => {
@@ -496,12 +497,14 @@ export default function Gallery({ userData }: { userData: any }) {
                               <div className="w-10 h-10 border-4 border-white/10 border-t-yellow-500 rounded-full animate-spin"></div>
                             </div>
 
+                            {/* 🔥 UPDATED VIDEO ELEMENT WITH MUTED STATE */}
                             <video
                               ref={videoRef}
                               src={item.url}
                               poster={getOptimizedMediaUrl(item.url, item.type)}
                               playsInline
                               loop
+                              muted={isMuted} // 👈 Muted status linked to our variable
                               onClick={togglePlayPause}
                               onTimeUpdate={handleTimeUpdate}
                               className="max-h-full max-w-full object-contain pointer-events-auto relative z-10 bg-black/50"
@@ -515,6 +518,28 @@ export default function Gallery({ userData }: { userData: any }) {
                                 </div>
                               </div>
                             )}
+
+                            {/* 🔥 SLICK SOUND UNMUTE/MUTE BUTTON TOGGLE (Ab sound perfectly ayega) */}
+                            <div className="absolute top-4 right-4 z-50 pointer-events-auto">
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (videoRef.current) {
+                                    const nextMuted = !videoRef.current.muted;
+                                    videoRef.current.muted = nextMuted;
+                                    setIsMuted(nextMuted);
+                                  }
+                                }} 
+                                className="p-3 bg-black/60 backdrop-blur-md rounded-full text-white border border-white/10 hover:bg-white/10 transition-all active:scale-95"
+                                title={isMuted ? "Unmute Sound" : "Mute Sound"}
+                              >
+                                {isMuted ? (
+                                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-red-500"><line x1="1" y1="1" x2="23" y2="23"></line><path d="M9 9v6a3 3 0 0 0 3 3h1.586l4.707 4.707A1 1 0 0 0 20 22V4a1 1 0 0 0-1.707-.707L13.586 8H12a3 3 0 0 0-3 3z"></path></svg>
+                                ) : (
+                                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-green-400"><path d="M11 5L6 9H2v6h4l5 4V5z"></path><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path></svg>
+                                )}
+                              </button>
+                            </div>
 
                             <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/20 z-40">
                               <div className="h-full bg-white transition-all duration-75" style={{ width: `${progress}%` }} />
