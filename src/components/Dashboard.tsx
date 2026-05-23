@@ -635,14 +635,12 @@ export default function Dashboard({ userData }: { userData: any }) {
           {/* Title */}
           <div className="flex-1 text-center">
             <h1 
-              className="text-xl sm:text-2xl font-black uppercase tracking-widest text-yellow-400 leading-tight"
-              style={{ fontFamily: "'Cinzel', serif" }}
+              className="text-xl sm:text-2xl font-black uppercase tracking-widest text-yellow-400 leading-tight font-cinzel"
             >
-              सियाराम मित्र मंडल
+              Siyaram Mitra Mandal
             </h1>
             <p 
-              className="text-[10px] text-red-200 mt-0.5 uppercase tracking-widest font-black"
-              style={{ fontFamily: "'Cinzel', serif" }}
+              className="text-[10px] text-red-200 mt-0.5 uppercase tracking-widest font-black font-cinzel"
             >
               Ledger Dashboard
             </p>
