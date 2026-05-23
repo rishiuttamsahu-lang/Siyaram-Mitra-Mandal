@@ -3,11 +3,29 @@
 import { useEffect, useMemo, useState, useRef } from "react";
 import type { FormEvent } from "react";
 import { db } from "@/lib/firebase";
-import { collection, onSnapshot, doc, setDoc, updateDoc } from "firebase/firestore";
-import { Bell, ChevronDown, CheckCircle2 } from "lucide-react";
+import { collection, onSnapshot, doc, setDoc, updateDoc, deleteDoc, query, addDoc, orderBy, serverTimestamp } from "firebase/firestore";
+import { Bell, ChevronDown, CheckCircle2, Building2, Users, IndianRupee, Layers, Search, Save, Store, UserPlus, Home, X, Trash2, AlertCircle } from "lucide-react";
+
+type BuildingPayment = {
+  id: string;
+  wing: string;
+  floor: string;
+  room: string;
+  name?: string;
+  amount: number;
+  status: 'Pending' | 'Collected';
+};
+
+type OtherPayment = {
+  id: string;
+  name: string;
+  amount: number;
+  status: 'Pending' | 'Collected';
+  timestamp?: any;
+};
 
 // 🔥 PREMIUM CUSTOM DROPDOWN COMPONENT
-const CustomSelect = ({ value, onChange, options, placeholder, theme = 'light' }: { value: any, onChange: any, options: any[], placeholder?: string, theme?: 'light' | 'dark' }) => {
+const CustomSelect = ({ value, onChange, options, placeholder, theme = 'light', className = 'w-full' }: { value: any, onChange: any, options: any[], placeholder?: string, theme?: 'light' | 'dark', className?: string }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -33,7 +51,7 @@ const CustomSelect = ({ value, onChange, options, placeholder, theme = 'light' }
   };
 
   return (
-    <div className={`relative w-48 sm:w-56 ${isOpen ? 'z-[100]' : 'z-10'}`} ref={dropdownRef}>
+    <div className={`relative ${className} ${isOpen ? 'z-[100]' : 'z-10'}`} ref={dropdownRef}>
       <div onClick={() => setIsOpen(!isOpen)} className={`flex items-center justify-between w-full cursor-pointer select-none transition-all rounded-xl outline-none ${isDark ? triggerDark : triggerLight}`}>
         <span className="truncate pr-4">{selectedOption ? selectedOption.label : (placeholder || 'Select...')}</span>
         <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-300 shrink-0 ${isOpen ? 'rotate-180' : ''} ${isDark ? 'text-gray-400' : 'text-gray-400'}`} />
@@ -107,6 +125,33 @@ export default function Dashboard({ userData }: { userData: any }) {
   const [members, setMembers] = useState<Member[]>([]);
   const [sysSettings, setSysSettings] = useState<any>(null);
   const [sortBy, setSortBy] = useState<string>("default"); // 🔥 SORTING STATE
+
+  const [activeSubTab, setActiveSubTab] = useState<'members' | 'buildings' | 'others'>('buildings'); // Default to buildings
+  const [activeWing, setActiveWing] = useState<'A' | 'B'>('A');
+
+  // Building management states
+  const [buildingPayments, setBuildingPayments] = useState<BuildingPayment[]>([]);
+  const [selectedFlat, setSelectedFlat] = useState<string | null>(null);
+  const [inputName, setInputName] = useState<string>('');
+  const [inputAmount, setInputAmount] = useState<string>('');
+  const [inputStatus, setInputStatus] = useState<'Pending' | 'Collected'>('Pending');
+  const [isUpdatingFlat, setIsUpdatingFlat] = useState(false);
+
+  // Others (Dost & Dukan) states
+  const [otherPayments, setOtherPayments] = useState<OtherPayment[]>([]);
+  const [otherName, setOtherName] = useState('');
+  const [otherAmount, setOtherAmount] = useState('');
+  const [otherStatus, setOtherStatus] = useState<'Pending' | 'Collected'>('Collected');
+  const [isAddingOther, setIsAddingOther] = useState(false);
+
+  // Configuration matrices matching your plan layout
+  const FLOORS = ['3', '2', '1', '0']; // 3rd down to Ground floor
+  const ROOM_SUFFIXES = ['1', '2', '3', '4'];
+
+  const getRoomNumber = (floor: string, suffix: string) => {
+    if (floor === '0') return `00${suffix}`;
+    return `${floor}0${suffix}`;
+  };
   
   // 🔥 NAYA ARRAY: Sort Options ke liye
   const SORT_OPTIONS = [
@@ -125,6 +170,84 @@ export default function Dashboard({ userData }: { userData: any }) {
   const [editCell, setEditCell] = useState<{ id: number | null; month: Month | null }>({ id: null, month: null });
   const [editValue, setEditValue] = useState("");
   const [isRestoring, setIsRestoring] = useState(false);
+
+  // 🔥 UPGRADED TOAST NOTIFICATION STATES
+  const [toast, setToast] = useState<{ show: boolean; title: string; message: string; type: 'success' | 'error' | 'info' }>({
+    show: false, title: '', message: '', type: 'success'
+  });
+  const [toastProgress, setToastProgress] = useState(100);
+  
+  // 🔥 SWIPE GESTURE TRACKING REFS
+  const touchStartX = useRef<number>(0);
+  const [swipeOffset, setSwipeOffset] = useState<number>(0);
+  const [isSwiping, setIsSwiping] = useState<boolean>(false);
+  const toastDuration = 4000; // 4 seconds total
+  const progressInterval = useRef<any>(null);
+  const autoCloseTimeout = useRef<any>(null);
+
+  // 🔥 TRIGGER APP-LIKE TOAST WITH TIMELINE BAR
+  const triggerToast = (title: string, message: string, type: 'success' | 'error' | 'info' = 'success') => {
+    // Clear any previous interval logs safely
+    clearInterval(progressInterval.current);
+    clearTimeout(autoCloseTimeout.current);
+    
+    setSwipeOffset(0);
+    setIsSwiping(false);
+    setToastProgress(100);
+    setToast({ show: true, title, message, type });
+
+    // Progress Bar Decrement Loop (Smooth Timeline frame)
+    const startTime = Date.now();
+    progressInterval.current = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      const remaining = Math.max(0, 100 - (elapsed / toastDuration) * 100);
+      setToastProgress(remaining);
+      if (remaining <= 0) clearInterval(progressInterval.current);
+    }, 30);
+
+    // Auto close triggers
+    autoCloseTimeout.current = setTimeout(() => {
+      setToast(prev => ({ ...prev, show: false }));
+    }, toastDuration);
+  };
+
+  // 🔥 SWIPE HANDLERS FOR MOBILE TOUCH GESTURES
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+    setIsSwiping(true);
+    // Pause timers while user is holding/dragging the toast
+    clearInterval(progressInterval.current);
+    clearTimeout(autoCloseTimeout.current);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isSwiping) return;
+    const currentX = e.touches[0].clientX;
+    const diff = currentX - touchStartX.current;
+    // Only allow swiping to the right side (like native notifications)
+    if (diff > 0) {
+      setSwipeOffset(diff);
+    }
+  };
+
+  const handleTouchEnd = () => {
+    setIsSwiping(false);
+    // If swiped more than 120px, dismiss it immediately with swipe animation speed
+    if (swipeOffset > 120) {
+      setSwipeOffset(500); // Push completely out of view area
+      setTimeout(() => {
+        setToast(prev => ({ ...prev, show: false }));
+        setSwipeOffset(0);
+      }, 150);
+    } else {
+      // Snapback to center position if swipe gesture distance was short
+      setSwipeOffset(0);
+      // Resume fast countdown closure
+      autoCloseTimeout.current = setTimeout(() => {
+        setToast(prev => ({ ...prev, show: false }));
+      }, 1500);
+    }
+  };
 
   // 1. Fetch Real-time Data from Firebase
   useEffect(() => {
@@ -163,6 +286,127 @@ export default function Dashboard({ userData }: { userData: any }) {
     setPaymentMonth(currentTrackingMonth);
   }, [currentTrackingMonth]);
 
+  // Fetch Building Data Streams from Firestore
+  useEffect(() => {
+    const q = query(collection(db, "building_chanda"));
+    const unsub = onSnapshot(q, (snap) => {
+      const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as BuildingPayment[];
+      setBuildingPayments(data);
+    });
+    return () => unsub();
+  }, []);
+
+  // Fetch Others Data
+  useEffect(() => {
+    const q = query(collection(db, "other_chanda"), orderBy("timestamp", "desc"));
+    const unsub = onSnapshot(q, (snap) => {
+      const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as OtherPayment[];
+      setOtherPayments(data);
+    });
+    return () => unsub();
+  }, []);
+
+  // Compute building live metrics
+  const buildingMetrics = useMemo(() => {
+    const totals = { totalCollected: 0, collectedCount: 0, pendingCount: 0 };
+    buildingPayments.forEach(p => {
+      if (p.status === 'Collected') {
+        totals.totalCollected += (Number(p.amount) || 0);
+        totals.collectedCount++;
+      } else {
+        totals.pendingCount++;
+      }
+    });
+    return totals;
+  }, [buildingPayments]);
+
+  // Compute others metrics
+  const otherMetrics = useMemo(() => {
+    const totals = { totalCollected: 0, entryCount: 0 };
+    otherPayments.forEach(p => {
+      if (p.status === 'Collected') {
+        totals.totalCollected += (Number(p.amount) || 0);
+      }
+      totals.entryCount++;
+    });
+    return totals;
+  }, [otherPayments]);
+
+  const handleSelectFlatTile = (wing: string, roomNum: string) => {
+    const flatId = `${wing}_${roomNum}`;
+    const match = buildingPayments.find(p => p.id === flatId);
+    setSelectedFlat(flatId);
+    setInputName(match?.name || '');
+    setInputAmount(match ? String(match.amount) : '');
+    setInputStatus(match ? match.status : 'Pending');
+  };
+
+  const handleSaveFlatChanda = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!selectedFlat) return;
+
+    setIsUpdatingFlat(true);
+    try {
+      const [wing, room] = selectedFlat.split('_');
+      const floor = room.startsWith('0') ? '0' : room[0];
+      
+      await setDoc(doc(db, "building_chanda", selectedFlat), {
+        wing,
+        floor,
+        room,
+        name: inputName.trim(),
+        amount: Number(inputAmount) || 0,
+        status: inputStatus,
+        lastUpdated: serverTimestamp()
+      }, { merge: true });
+
+      setSelectedFlat(null);
+      triggerToast("Success ✅", `Flat ${room} data updated successfully!`, "success");
+    } catch (err) {
+      console.error(err);
+      triggerToast("Error ❌", "Permission Denied or Database Error", "error");
+    } finally {
+      setIsUpdatingFlat(false);
+    }
+  };
+
+  const handleAddOtherChanda = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!otherName.trim() || !otherAmount) return;
+    setIsAddingOther(true);
+    try {
+      await addDoc(collection(db, "other_chanda"), {
+        name: otherName.trim(),
+        amount: Number(otherAmount),
+        status: otherStatus,
+        timestamp: serverTimestamp()
+      });
+      setOtherName('');
+      setOtherAmount('');
+      setOtherStatus('Collected');
+      triggerToast("Saved ✅", "New ledger log entry added!", "success");
+    } catch (err) {
+      console.error(err);
+      triggerToast("Error ❌", "Could not save entry.", "error");
+    } finally {
+      setIsAddingOther(false);
+    }
+  };
+
+  // 🔥 NEW LOG DELETE HANDLER
+  const handleDeleteOtherLog = async (id: string, name: string) => {
+    const confirmDelete = window.confirm(`Kya aap "${name}" ka record sach me delete karna chahte hain?`);
+    if (!confirmDelete) return;
+
+    try {
+      await deleteDoc(doc(db, "other_chanda", id));
+      triggerToast("Deleted 🗑️", "Record permanently removed from logs.", "info");
+    } catch (err) {
+      console.error(err);
+      triggerToast("Error ❌", "Sufficient permission missing.", "error");
+    }
+  };
+
   const handleRestoreOldData = async () => {
     if (!confirm("Kya aap sach mein purana list wapas Firebase mein daalna chahte hain?")) return;
     setIsRestoring(true);
@@ -176,10 +420,10 @@ export default function Dashboard({ userData }: { userData: any }) {
           createdAt: new Date().toISOString()
         });
       }
-      alert("Purana data Firebase mein successfully upload ho gaya!");
+      triggerToast("Success ✅", "Purana data successfully upload ho gaya!", "success");
     } catch (error) {
       console.error(error);
-      alert("Error: Data upload fail ho gaya.");
+      triggerToast("Error ❌", "Data upload fail ho gaya.", "error");
     }
     setIsRestoring(false);
   };
@@ -334,7 +578,45 @@ export default function Dashboard({ userData }: { userData: any }) {
   // 🔥 NAYA LOGIC YAHAN KHATAM HOTA HAI
 
   return (
-    <div className="min-h-screen bg-gray-50 px-4 py-6 text-gray-900 md:px-12 md:py-12 animate-fade-in" style={{ padding: 0 }}>
+    <div className="min-h-screen bg-gray-50 px-4 py-6 text-gray-900 md:px-12 md:py-12 animate-fade-in relative overflow-x-hidden" style={{ padding: 0 }}>
+      {/* 🔥 SWIPE-TO-DISMISS TOAST NOTIFICATION PRESET WITH DYNAMIC METRIC LINE */}
+      {toast.show && (
+        <div 
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+          style={{
+            transform: `translate3d(calc(-50% + ${swipeOffset}px), 0, 0)`,
+            transition: isSwiping ? 'none' : 'transform 0.2s cubic-bezier(0.25, 1, 0.5, 1)'
+          }}
+          className="fixed top-4 left-1/2 z-[10000] w-[92%] max-w-xs bg-white/95 backdrop-blur-md p-3 rounded-xl border border-gray-100 shadow-xl flex flex-col overflow-hidden touch-none select-none active:cursor-grabbing"
+        >
+          <div className="flex items-start gap-2.5">
+            <div className={`p-1.5 rounded-lg text-white mt-0.5 ${toast.type === 'success' ? 'bg-green-600' : toast.type === 'error' ? 'bg-red-600' : 'bg-blue-600'}`}>
+              <AlertCircle className="w-3.5 h-3.5" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h5 className="text-[11px] font-black uppercase tracking-wider text-gray-900 leading-none">{toast.title}</h5>
+              <p className="text-[10px] font-bold text-gray-500 mt-0.5 leading-tight">{toast.message}</p>
+            </div>
+            <button onClick={() => setToast(prev => ({ ...prev, show: false }))} className="text-gray-300 hover:text-gray-600 p-0.5 shrink-0 cursor-pointer">
+              <X className="w-3 h-3" />
+            </button>
+          </div>
+          
+          {/* 🔥 REAL-TIME DOWN-COUNT TIMELINE LOADING PROGRESS BAR */}
+          <div className="absolute bottom-0 left-0 right-0 h-[3px] bg-gray-100">
+            <div 
+              style={{ width: `${toastProgress}%` }}
+              className={`h-full transition-all duration-75 ${toast.type === 'success' ? 'bg-green-500' : toast.type === 'error' ? 'bg-red-500' : 'bg-blue-500'}`}
+            />
+          </div>
+          
+          {/* Mobile Swipe Subtle Indicator Handle */}
+          <div className="w-8 h-1 bg-gray-200/60 rounded-full mx-auto mt-2 block sm:hidden"></div>
+        </div>
+      )}
+
       <div className="mx-auto max-w-7xl space-y-6 md:space-y-8">
         
         {/* HEADER SECTION (Adapted for Cloud Dashboard) */}
@@ -402,144 +684,364 @@ export default function Dashboard({ userData }: { userData: any }) {
           </div>
         )}
 
-        {/* SUMMARY CARDS */}
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3 md:gap-6">
-          <SummaryCard label="Total Collected (YTD)" value={`₹${totalCollected.toLocaleString()}`} />
-          <SummaryCard label={`Total Dues (Up to ${currentTrackingMonth})`} value={`₹${totalDeficit.toLocaleString()}`} accentClassName="text-orange-600" badge={`₹${expectedTotalPerMember} Target`} />
-          <SummaryCard label="Previous Year Balance" value={`₹${PREVIOUS_YEAR.toLocaleString()}`} muted />
+        {/* 3-WAY SUB-TAB NAVIGATION */}
+        <div className="bg-white p-1.5 rounded-2xl shadow-md border border-gray-100 flex flex-wrap gap-1 sm:gap-2 mb-6">
+          <button 
+            onClick={() => setActiveSubTab('members')} 
+            className={`flex-1 py-2 sm:py-3 px-2 rounded-xl font-black text-[9px] sm:text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-1.5 cursor-pointer ${activeSubTab === 'members' ? 'bg-[#5A0000] text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}
+          >
+            <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Members
+          </button>
+          <button 
+            onClick={() => setActiveSubTab('buildings')} 
+            className={`flex-1 py-2 sm:py-3 px-2 rounded-xl font-black text-[9px] sm:text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-1.5 cursor-pointer ${activeSubTab === 'buildings' ? 'bg-[#5A0000] text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}
+          >
+            <Building2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Buildings
+          </button>
+          <button 
+            onClick={() => setActiveSubTab('others')} 
+            className={`flex-1 py-2 sm:py-3 px-2 rounded-xl font-black text-[9px] sm:text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-1.5 cursor-pointer ${activeSubTab === 'others' ? 'bg-[#5A0000] text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}
+          >
+            <Store className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Dost & Dukan
+          </button>
         </div>
 
-        {/* 🔥 UNIFIED SORT TOOLBAR (Mobile + Desktop dono ke liye) */}
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 rounded-2xl border border-gray-100 bg-white shadow-sm mt-2">
-          <h2 className="text-sm font-black text-gray-800 uppercase tracking-widest flex items-center gap-2">
-            👥 Member Records
-          </h2>
-          <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto">
-            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Sort By:</span>
-            
-            {/* 🔥 NAYA PREMIUM DROPDOWN */}
-            <CustomSelect 
-              value={sortBy} 
-              onChange={setSortBy} 
-              options={SORT_OPTIONS} 
-              theme="light" 
-            />
-            
+        {activeSubTab === 'members' ? (
+          <>
+            {/* SUMMARY CARDS */}
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3 md:gap-6">
+              <SummaryCard label="Total Collected (YTD)" value={`₹${totalCollected.toLocaleString()}`} />
+              <SummaryCard label={`Total Dues (Up to ${currentTrackingMonth})`} value={`₹${totalDeficit.toLocaleString()}`} accentClassName="text-orange-600" badge={`₹${expectedTotalPerMember} Target`} />
+              <SummaryCard label="Previous Year Balance" value={`₹${PREVIOUS_YEAR.toLocaleString()}`} muted />
+            </div>
+
+            {/* 🔥 UNIFIED SORT TOOLBAR (Mobile + Desktop dono ke liye) */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 rounded-2xl border border-gray-100 bg-white shadow-sm mt-2">
+              <h2 className="text-sm font-black text-gray-800 uppercase tracking-widest flex items-center gap-2">
+                👥 Member Records
+              </h2>
+              <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto">
+                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Sort By:</span>
+                
+                {/* 🔥 NAYA PREMIUM DROPDOWN */}
+                <CustomSelect 
+                  value={sortBy} 
+                  onChange={setSortBy} 
+                  options={SORT_OPTIONS} 
+                  theme="light" 
+                  className="w-48 sm:w-56"
+                />
+              </div>
+            </div>
+
+            {/* MOBILE VIEW LIST */}
+            <div className="block space-y-3 md:hidden">
+              {sortedMembers.length === 0 && <p className="text-center text-gray-400 py-4 font-bold">No members yet. Admins can add or restore them above!</p>}
+              {sortedMembers.map((member) => {
+                const totalPaid = getMemberTotal(member.payments);
+                const remaining = expectedTotalPerMember - totalPaid;
+                const isExpanded = expandedMemberId === member.id;
+
+                return (
+                  <div key={member.id} className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
+                    <button type="button" onClick={() => toggleExpandedMember(member.id)} className="flex w-full items-center justify-between gap-3 p-4 text-left">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 truncate text-sm font-bold text-gray-900">
+                          <span>{member.name}</span>
+                          {member.isHonorary ? <span className="rounded-full border border-purple-200 bg-purple-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-purple-700">Honorary</span> : null}
+                        </div>
+                        <div className="mt-1 text-xs text-gray-500">Total Paid: <span className="font-semibold text-gray-800">₹{totalPaid}</span></div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {member.isHonorary ? <span className="rounded-md border border-purple-200 bg-purple-50 px-2 py-1 text-[10px] font-bold text-purple-700">Honorary</span> : remaining > 0 ? <span className="rounded-md bg-red-50 px-2 py-1 text-xs font-bold text-red-600">₹{remaining} Due</span> : remaining < 0 ? <span className="rounded-md bg-green-50 px-2 py-1 text-[10px] font-bold text-green-700">Adv ₹{Math.abs(remaining)}</span> : <span className="rounded-md bg-gray-100 px-2 py-1 text-xs font-bold text-gray-600">Clear</span>}
+                        <span className="text-xs text-gray-400">{isExpanded ? "▲" : "▼"}</span>
+                      </div>
+                    </button>
+
+                    {isExpanded && (
+                      <div className="border-t border-gray-50 bg-gray-50/60 px-4 pb-4 pt-3">
+                        <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                          {MONTHS.map((month) => {
+                            const isBlocked = blockedMonths.includes(month);
+                            const isEditing = editCell.id === member.id && editCell.month === month;
+
+                            return (
+                              <div key={month} onClick={() => handleCellClick(member.id, month, member.payments[month])} className={`relative rounded-lg border p-2 text-center shadow-sm ${isBlocked ? "border-red-200 bg-gray-100" : isAdmin ? "border-yellow-300 cursor-pointer bg-white hover:bg-yellow-50" : "border-gray-100 bg-white"}`}>
+                                <div className="text-[10px] font-bold uppercase text-gray-400">{month} {isBlocked ? "🚫" : ""}</div>
+                                {isEditing ? (
+                                  <input type="number" autoFocus className="w-full border-b-2 border-[#5a0000] bg-transparent text-center text-sm font-bold outline-none" value={editValue} onChange={(e) => setEditValue(e.target.value)} onBlur={saveInlineEdit} onKeyDown={handleInlineKeyDown} />
+                                ) : (
+                                  <div className={`text-sm font-semibold ${isBlocked ? "line-through text-gray-400" : "text-gray-800"}`}>{member.payments[month] ? `₹${member.payments[month]}` : "-"}</div>
+                                )}
+                                {isAdmin && !isBlocked && !isEditing && <span className="absolute right-1 top-1 text-[8px] text-yellow-500 opacity-50">✎</span>}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* DESKTOP TABLE */}
+            <div className="hidden overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm md:block">
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse text-left">
+                  <thead>
+                    <tr className="border-b border-gray-100 bg-gray-50">
+                      <th className="sticky left-0 z-10 bg-gray-50 px-6 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500">Name</th>
+                      {MONTHS.map((month) => <th key={month} className={`px-4 py-4 text-center text-xs font-semibold uppercase tracking-wider ${blockedMonths.includes(month) ? "text-red-400" : "text-gray-500"}`}>{month} {blockedMonths.includes(month) ? "🚫" : ""}</th>)}
+                      <th className="bg-blue-50 px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider text-gray-900">Total</th>
+                      <th className="bg-orange-50 px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider text-gray-900">Remaining</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {sortedMembers.length === 0 && <tr><td colSpan={15} className="text-center text-gray-400 py-8 font-bold">No members yet. Admins can restore them using the yellow button above!</td></tr>}
+                    {sortedMembers.map((member) => {
+                      const totalPaid = getMemberTotal(member.payments);
+                      const remaining = expectedTotalPerMember - totalPaid;
+
+                      return (
+                        <tr key={member.id} className="transition-colors hover:bg-gray-50">
+                          <td className="sticky left-0 bg-white px-6 py-4 text-sm font-medium text-gray-900 shadow-[1px_0_0_0_#f3f4f6]">
+                            <div className="flex items-center gap-2">
+                              <span>{member.name}</span>
+                              {member.isHonorary && <span className="rounded-full border border-purple-200 bg-purple-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-purple-700">Honorary</span>}
+                            </div>
+                          </td>
+                          {MONTHS.map((month) => {
+                            const isBlocked = blockedMonths.includes(month);
+                            const isEditing = editCell.id === member.id && editCell.month === month;
+
+                            return (
+                              <td key={month} onClick={() => handleCellClick(member.id, month, member.payments[month])} className={`relative px-4 py-4 text-center text-sm transition-colors ${isBlocked ? "bg-gray-50 text-gray-400" : isAdmin ? "cursor-pointer hover:bg-yellow-50 hover:shadow-inner" : "text-gray-600"}`} title={isAdmin && !isBlocked ? "Click to edit" : ""}>
+                                {isEditing ? (
+                                  <input type="number" autoFocus className="w-16 border-b-2 border-red-500 bg-transparent text-center font-bold text-[#5a0000] outline-none" value={editValue} onChange={(e) => setEditValue(e.target.value)} onBlur={saveInlineEdit} onKeyDown={handleInlineKeyDown} />
+                                ) : (
+                                  <>{member.payments[month] ? `₹${member.payments[month]}` : "-"}{isAdmin && !isBlocked && !isEditing && <span className="absolute right-2 top-2 text-[10px] text-gray-300 group-hover:text-yellow-600">✎</span>}</>
+                                )}
+                              </td>
+                            );
+                          })}
+                          {member.isHonorary ? (
+                            <><td className="bg-purple-50/30 px-6 py-4 text-center text-sm font-bold text-gray-400">-</td><td className="bg-purple-50/30 px-6 py-4 text-center"><span className="inline-flex items-center rounded-full border border-purple-200 bg-purple-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-purple-800">Honorary</span></td></>
+                          ) : (
+                            <><td className="bg-blue-50/30 px-6 py-4 text-center text-sm font-bold text-gray-900">₹{totalPaid}</td><td className="bg-orange-50/30 px-6 py-4 text-center">{remaining > 0 ? <span className="text-sm font-semibold text-red-600">₹{remaining} Due</span> : remaining < 0 ? <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">+₹{Math.abs(remaining)} Advance</span> : <span className="text-sm font-semibold text-orange-600">Clear</span>}</td></>
+                          )}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot className="border-t-2 border-gray-200 bg-gray-50">
+                    <tr>
+                      <td className="sticky left-0 bg-gray-50 px-6 py-4 text-sm font-bold text-gray-900">TOTAL</td>
+                      {MONTHS.map((month) => <td key={month} className={`px-4 py-4 text-center text-sm font-bold ${blockedMonths.includes(month) ? "text-gray-400" : "text-gray-900"}`}>{monthlyTotals[month] > 0 ? `₹${monthlyTotals[month]}` : "-"}</td>)}
+                      <td className="bg-blue-100/50 px-6 py-4 text-center text-sm font-bold text-blue-700">₹{totalCollected}</td>
+                      <td className="bg-orange-100/50 px-6 py-4 text-center text-sm font-bold text-orange-700">₹{totalDeficit.toLocaleString()} Due</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          </>
+        ) : activeSubTab === 'buildings' ? (
+          /* 🏢 SLEEK & COMPACT BUILDING MATRIX */
+          <div className="space-y-4 animate-in fade-in duration-300">
+            {/* Tiny Metrics Grid */}
+            <div className="grid grid-cols-3 gap-2">
+              <div className="bg-white border border-gray-100 p-2 sm:p-3 rounded-xl text-center shadow-sm">
+                <span className="text-[8px] font-black uppercase tracking-wider text-gray-400 block mb-0.5">Total</span>
+                <span className="text-xs sm:text-sm font-black text-green-700">₹{buildingMetrics.totalCollected.toLocaleString('en-IN')}</span>
+              </div>
+              <div className="bg-white border border-gray-100 p-2 sm:p-3 rounded-xl text-center shadow-sm">
+                <span className="text-[8px] font-black uppercase tracking-wider text-gray-400 block mb-0.5">Collected</span>
+                <span className="text-xs sm:text-sm font-black text-blue-700">{buildingMetrics.collectedCount}</span>
+              </div>
+              <div className="bg-white border border-gray-100 p-2 sm:p-3 rounded-xl text-center shadow-sm">
+                <span className="text-[8px] font-black uppercase tracking-wider text-gray-400 block mb-0.5">Pending</span>
+                <span className="text-xs sm:text-sm font-black text-red-600">{buildingMetrics.pendingCount}</span>
+              </div>
+            </div>
+
+            <div className="bg-white border border-gray-100 rounded-2xl p-3 sm:p-4 shadow-sm space-y-4">
+              
+              {/* Wing Switcher - Compact */}
+              <div className="flex justify-center border-b border-gray-100 pb-3">
+                <div className="flex gap-1 p-1 bg-gray-100 rounded-lg">
+                  <button onClick={() => setActiveWing('A')} className={`px-4 py-1.5 rounded-md text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${activeWing === 'A' ? 'bg-[#5A0000] text-white shadow-sm' : 'text-gray-500'}`}>A WING</button>
+                  <button onClick={() => setActiveWing('B')} className={`px-4 py-1.5 rounded-md text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${activeWing === 'B' ? 'bg-[#5A0000] text-white shadow-sm' : 'text-gray-500'}`}>B WING</button>
+                </div>
+              </div>
+
+              {/* Compact Editor Modal */}
+              {selectedFlat && (
+                <form onSubmit={handleSaveFlatChanda} className="bg-red-50/80 border border-red-200 p-3 rounded-xl space-y-3 animate-in fade-in duration-200 shadow-sm">
+                  <div className="flex items-center justify-between border-b border-red-100 pb-2">
+                    <h4 className="text-[11px] font-black text-red-950 uppercase tracking-wide flex items-center gap-1"><Home className="w-3 h-3 text-[#5A0000]" /> {activeWing}-{selectedFlat.split('_')[1]}</h4>
+                    <button type="button" onClick={() => setSelectedFlat(null)} className="text-[9px] font-bold text-gray-500 hover:text-red-700 bg-white px-2 py-1 rounded border border-gray-200 cursor-pointer">Close</button>
+                  </div>
+                  <div className="space-y-2">
+                    <div>
+                      <label className="text-[8px] font-black uppercase text-gray-500 block mb-0.5">Resident / Family Name</label>
+                      <input type="text" placeholder="Name (Optional)" className="w-full px-2 py-1.5 border border-gray-200 rounded-lg font-bold text-[10px] outline-none" value={inputName} onChange={(e) => setInputName(e.target.value)} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[8px] font-black uppercase text-gray-500 block mb-0.5">Amount (₹)</label>
+                        <input type="number" required placeholder="501" className="w-full px-2 py-1.5 border border-gray-200 rounded-lg font-bold text-[10px] outline-none" value={inputAmount} onChange={(e) => setInputAmount(e.target.value)} />
+                      </div>
+                      <div>
+                        <label className="text-[8px] font-black uppercase text-gray-500 block mb-0.5">Status</label>
+                        <CustomSelect value={inputStatus} onChange={(val: 'Pending' | 'Collected') => setInputStatus(val)} options={[{ value: 'Pending', label: '❌ Pend' }, { value: 'Collected', label: '✅ Done' }]} />
+                      </div>
+                    </div>
+                  </div>
+                  <button type="submit" disabled={isUpdatingFlat} className="w-full bg-[#5A0000] text-white font-black uppercase text-[10px] py-2 rounded-lg shadow-sm cursor-pointer">{isUpdatingFlat ? "Saving..." : "Save Record"}</button>
+                </form>
+              )}
+
+              {/* 🏢 REALISTIC LITTLE DARK SKIN COLOR BUILDING ARCHITECTURE */}
+              <div className="relative mx-auto w-full max-w-sm mt-2">
+                {/* Roof */}
+                <div className="w-full h-4 sm:h-5 bg-[#4A2711] rounded-t-xl shadow-inner border-b-2 border-[#2D170A] flex items-center justify-center">
+                   <span className="text-white/40 text-[7px] sm:text-[8px] font-black uppercase tracking-[0.2em]">{activeWing} WING</span>
+                </div>
+
+                {/* Building Body (Little Dark Skin Texture Palette: #6E3C1A) */}
+                <div className="bg-[#6E3C1A] p-2 sm:p-2.5 shadow-xl relative border-x-[3px] border-[#4A2711] rounded-b-sm">
+                  <div className="space-y-2">
+                    {FLOORS.map((floor) => (
+                      <div key={floor} className="flex flex-row items-stretch gap-1.5 bg-[#593014]/95 p-1.5 rounded-lg border-b-2 border-[#4A2711] shadow-inner">
+                        
+                        {/* Floor Indicator Elevator Box */}
+                        <div className="flex items-center justify-center bg-[#2D170A] rounded-md w-6 sm:w-8 text-yellow-400 font-black text-[8px] uppercase tracking-tighter border border-[#1F0F06] shadow-inner shrink-0">
+                          {floor === '0' ? 'GR' : `${floor}F`}
+                        </div>
+
+                        {/* Flat Windows Matrix */}
+                        <div className="grid grid-cols-4 gap-1.5 flex-1">
+                          {ROOM_SUFFIXES.map((suffix) => {
+                            const roomNum = getRoomNumber(floor, suffix);
+                            const flatId = `${activeWing}_${roomNum}`;
+                            const paymentMatch = buildingPayments.find(p => p.id === flatId);
+                            const isCollected = paymentMatch?.status === 'Collected';
+                            const isSelected = selectedFlat === flatId;
+
+                            return (
+                              <div
+                                key={roomNum}
+                                onClick={() => handleSelectFlatTile(activeWing, roomNum)}
+                                className={`cursor-pointer p-1.5 rounded-md flex flex-col items-center justify-center relative overflow-hidden transition-all border-b-[2px] active:scale-95 select-none
+                                  ${isCollected 
+                                    ? 'bg-green-50/95 border-green-500 shadow-[0_0_10px_rgba(34,197,94,0.4)]' 
+                                    : 'bg-[#FFFBF5]/95 border-[#C4A484] hover:bg-white'} 
+                                  ${isSelected ? 'ring-[1.5px] ring-red-500 border-transparent' : ''}`}
+                              >
+                                {/* Window Glass Reflection Effect */}
+                                <div className="absolute top-0 right-0 w-6 h-10 bg-white/20 rotate-45 transform translate-x-3 -translate-y-3 pointer-events-none"></div>
+
+                                {/* Window Number */}
+                                <span className={`font-black text-[10px] leading-none z-10 ${isCollected ? 'text-green-900' : 'text-[#4A2711]'}`}>
+                                  {roomNum}
+                                </span>
+                                
+                                {/* Name (Tiny) */}
+                                <span className={`text-[6px] font-bold truncate w-full text-center leading-tight mt-0.5 z-10 ${isCollected ? 'text-green-700' : 'text-[#6E3C1A]'}`}>
+                                  {paymentMatch?.name ? paymentMatch.name : '-'}
+                                </span>
+
+                                {/* Amount/Status Badge */}
+                                <div className={`mt-0.5 px-1 py-[1px] rounded-[3px] text-[6px] sm:text-[7px] font-black w-full text-center z-10 ${isCollected ? 'bg-green-200/50 text-green-800' : 'bg-[#DFD3C3] text-[#4A2711]'}`}>
+                                  {isCollected ? `₹${paymentMatch.amount}` : 'PENDING'}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                {/* Foundation */}
+                <div className="w-full h-2 bg-[#2D170A] rounded-b-lg shadow-xl mt-[-2px]"></div>
+              </div>
+            </div>
           </div>
-        </div>
+        ) : (
+          /* OTHERS (Dost & Dukan) TAB - COMPACT */
+          <div className="space-y-4 animate-in fade-in duration-300">
+            <div className="grid grid-cols-2 gap-2">
+              <div className="bg-white border border-gray-100 p-3 rounded-xl text-center shadow-sm">
+                <span className="text-[8px] font-black uppercase tracking-wider text-gray-400 block mb-0.5">Total Extra</span>
+                <span className="text-sm font-black text-green-700">₹{otherMetrics.totalCollected.toLocaleString('en-IN')}</span>
+              </div>
+              <div className="bg-white border border-gray-100 p-3 rounded-xl text-center shadow-sm">
+                <span className="text-[8px] font-black uppercase tracking-wider text-gray-400 block mb-0.5">Total Entries</span>
+                <span className="text-sm font-black text-gray-800">{otherMetrics.entryCount} Logs</span>
+              </div>
+            </div>
 
-        {/* MOBILE VIEW LIST */}
-        <div className="block space-y-3 md:hidden">
-          {sortedMembers.length === 0 && <p className="text-center text-gray-400 py-4 font-bold">No members yet. Admins can add or restore them above!</p>}
-          {sortedMembers.map((member) => {
-            const totalPaid = getMemberTotal(member.payments);
-            const remaining = expectedTotalPerMember - totalPaid;
-            const isExpanded = expandedMemberId === member.id;
+            <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
+              <h3 className="text-[10px] font-black text-gray-800 uppercase tracking-widest mb-3 flex items-center gap-1.5 border-b border-gray-100 pb-2"><UserPlus className="w-3 h-3 text-[#5A0000]"/> New Entry</h3>
+              <form onSubmit={handleAddOtherChanda} className="space-y-3">
+                <div>
+                  <label className="text-[8px] font-black uppercase tracking-wider text-gray-400 block mb-0.5">Name / Shop</label>
+                  <input type="text" required placeholder="E.g., Raju Store" className="w-full px-3 py-2 border border-gray-200 rounded-lg font-bold text-[10px] bg-gray-50 outline-none focus:bg-white focus:border-[#5A0000]" value={otherName} onChange={(e) => setOtherName(e.target.value)} />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[8px] font-black uppercase tracking-wider text-gray-400 block mb-0.5">Amount (₹)</label>
+                    <input type="number" required placeholder="101" className="w-full px-3 py-2 border border-gray-200 rounded-lg font-bold text-[10px] bg-gray-50 outline-none focus:bg-white focus:border-[#5A0000]" value={otherAmount} onChange={(e) => setOtherAmount(e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="text-[8px] font-black uppercase tracking-wider text-gray-400 block mb-0.5">Status</label>
+                    <CustomSelect value={otherStatus} onChange={(val: 'Pending' | 'Collected') => setOtherStatus(val)} options={[{ value: 'Pending', label: '❌ Pend' }, { value: 'Collected', label: '✅ Done' }]} />
+                  </div>
+                </div>
+                <button type="submit" disabled={isAddingOther} className="w-full bg-[#5A0000] text-white font-black uppercase text-[10px] py-2.5 rounded-lg shadow-sm mt-1 cursor-pointer">{isAddingOther ? "Adding..." : "Add to Ledger"}</button>
+              </form>
+            </div>
 
-            return (
-              <div key={member.id} className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
-                <button type="button" onClick={() => toggleExpandedMember(member.id)} className="flex w-full items-center justify-between gap-3 p-4 text-left">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 truncate text-sm font-bold text-gray-900">
-                      <span>{member.name}</span>
-                      {member.isHonorary ? <span className="rounded-full border border-purple-200 bg-purple-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-purple-700">Honorary</span> : null}
+            <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
+              <h3 className="text-[10px] font-black text-gray-800 uppercase tracking-widest mb-3 border-b border-gray-100 pb-2">Recent Logs</h3>
+              <div className="space-y-2 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
+                {otherPayments.length === 0 ? (
+                  <p className="text-center text-[9px] font-bold uppercase tracking-widest text-gray-400 py-4">No entries yet.</p>
+                ) : (
+                  otherPayments.map((entry) => (
+                    <div key={entry.id} className="flex items-center justify-between p-2 border border-gray-100 rounded-lg bg-gray-50/50 group transition-all">
+                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                        <div className={`w-6 h-6 rounded flex items-center justify-center font-black text-[9px] shrink-0 ${entry.status === 'Collected' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                          {entry.name.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="truncate">
+                          <p className="text-[10px] font-black text-gray-800 uppercase leading-none truncate">{entry.name}</p>
+                          <p className="text-[8px] font-bold text-gray-400 mt-0.5">{entry.status}</p>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center gap-2.5 shrink-0 pl-2">
+                        <span className={`font-black text-xs ${entry.status === 'Collected' ? 'text-green-700' : 'text-gray-400'}`}>₹{entry.amount}</span>
+                        
+                        {/* 🔥 DELETE ACTION BUTTON */}
+                        <button 
+                          onClick={() => handleDeleteOtherLog(entry.id, entry.name)}
+                          className="text-gray-300 hover:text-red-600 p-1 rounded-md hover:bg-red-50 sm:opacity-0 group-hover:opacity-100 transition-all cursor-pointer"
+                          title="Delete Log Entry"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
-                    <div className="mt-1 text-xs text-gray-500">Total Paid: <span className="font-semibold text-gray-800">₹{totalPaid}</span></div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    {member.isHonorary ? <span className="rounded-md border border-purple-200 bg-purple-50 px-2 py-1 text-[10px] font-bold text-purple-700">Honorary</span> : remaining > 0 ? <span className="rounded-md bg-red-50 px-2 py-1 text-xs font-bold text-red-600">₹{remaining} Due</span> : remaining < 0 ? <span className="rounded-md bg-green-50 px-2 py-1 text-[10px] font-bold text-green-700">Adv ₹{Math.abs(remaining)}</span> : <span className="rounded-md bg-gray-100 px-2 py-1 text-xs font-bold text-gray-600">Clear</span>}
-                    <span className="text-xs text-gray-400">{isExpanded ? "▲" : "▼"}</span>
-                  </div>
-                </button>
-
-                {isExpanded && (
-                  <div className="border-t border-gray-50 bg-gray-50/60 px-4 pb-4 pt-3">
-                    <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-                      {MONTHS.map((month) => {
-                        const isBlocked = blockedMonths.includes(month);
-                        const isEditing = editCell.id === member.id && editCell.month === month;
-
-                        return (
-                          <div key={month} onClick={() => handleCellClick(member.id, month, member.payments[month])} className={`relative rounded-lg border p-2 text-center shadow-sm ${isBlocked ? "border-red-200 bg-gray-100" : isAdmin ? "border-yellow-300 cursor-pointer bg-white hover:bg-yellow-50" : "border-gray-100 bg-white"}`}>
-                            <div className="text-[10px] font-bold uppercase text-gray-400">{month} {isBlocked ? "🚫" : ""}</div>
-                            {isEditing ? (
-                              <input type="number" autoFocus className="w-full border-b-2 border-[#5a0000] bg-transparent text-center text-sm font-bold outline-none" value={editValue} onChange={(e) => setEditValue(e.target.value)} onBlur={saveInlineEdit} onKeyDown={handleInlineKeyDown} />
-                            ) : (
-                              <div className={`text-sm font-semibold ${isBlocked ? "line-through text-gray-400" : "text-gray-800"}`}>{member.payments[month] ? `₹${member.payments[month]}` : "-"}</div>
-                            )}
-                            {isAdmin && !isBlocked && !isEditing && <span className="absolute right-1 top-1 text-[8px] text-yellow-500 opacity-50">✎</span>}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
+                  ))
                 )}
               </div>
-            );
-          })}
-        </div>
-
-        {/* DESKTOP TABLE */}
-        <div className="hidden overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm md:block">
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-left">
-              <thead>
-                <tr className="border-b border-gray-100 bg-gray-50">
-                  <th className="sticky left-0 z-10 bg-gray-50 px-6 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500">Name</th>
-                  {MONTHS.map((month) => <th key={month} className={`px-4 py-4 text-center text-xs font-semibold uppercase tracking-wider ${blockedMonths.includes(month) ? "text-red-400" : "text-gray-500"}`}>{month} {blockedMonths.includes(month) ? "🚫" : ""}</th>)}
-                  <th className="bg-blue-50 px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider text-gray-900">Total</th>
-                  <th className="bg-orange-50 px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider text-gray-900">Remaining</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {sortedMembers.length === 0 && <tr><td colSpan={15} className="text-center text-gray-400 py-8 font-bold">No members yet. Admins can restore them using the yellow button above!</td></tr>}
-                {sortedMembers.map((member) => {
-                  const totalPaid = getMemberTotal(member.payments);
-                  const remaining = expectedTotalPerMember - totalPaid;
-
-                  return (
-                    <tr key={member.id} className="transition-colors hover:bg-gray-50">
-                      <td className="sticky left-0 bg-white px-6 py-4 text-sm font-medium text-gray-900 shadow-[1px_0_0_0_#f3f4f6]">
-                        <div className="flex items-center gap-2">
-                          <span>{member.name}</span>
-                          {member.isHonorary && <span className="rounded-full border border-purple-200 bg-purple-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-purple-700">Honorary</span>}
-                        </div>
-                      </td>
-                      {MONTHS.map((month) => {
-                        const isBlocked = blockedMonths.includes(month);
-                        const isEditing = editCell.id === member.id && editCell.month === month;
-
-                        return (
-                          <td key={month} onClick={() => handleCellClick(member.id, month, member.payments[month])} className={`relative px-4 py-4 text-center text-sm transition-colors ${isBlocked ? "bg-gray-50 text-gray-400" : isAdmin ? "cursor-pointer hover:bg-yellow-50 hover:shadow-inner" : "text-gray-600"}`} title={isAdmin && !isBlocked ? "Click to edit" : ""}>
-                            {isEditing ? (
-                              <input type="number" autoFocus className="w-16 border-b-2 border-red-500 bg-transparent text-center font-bold text-[#5a0000] outline-none" value={editValue} onChange={(e) => setEditValue(e.target.value)} onBlur={saveInlineEdit} onKeyDown={handleInlineKeyDown} />
-                            ) : (
-                              <>{member.payments[month] ? `₹${member.payments[month]}` : "-"}{isAdmin && !isBlocked && !isEditing && <span className="absolute right-2 top-2 text-[10px] text-gray-300 group-hover:text-yellow-600">✎</span>}</>
-                            )}
-                          </td>
-                        );
-                      })}
-                      {member.isHonorary ? (
-                        <><td className="bg-purple-50/30 px-6 py-4 text-center text-sm font-bold text-gray-400">-</td><td className="bg-purple-50/30 px-6 py-4 text-center"><span className="inline-flex items-center rounded-full border border-purple-200 bg-purple-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-purple-800">Honorary</span></td></>
-                      ) : (
-                        <><td className="bg-blue-50/30 px-6 py-4 text-center text-sm font-bold text-gray-900">₹{totalPaid}</td><td className="bg-orange-50/30 px-6 py-4 text-center">{remaining > 0 ? <span className="text-sm font-semibold text-red-600">₹{remaining} Due</span> : remaining < 0 ? <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">+₹{Math.abs(remaining)} Advance</span> : <span className="text-sm font-semibold text-orange-600">Clear</span>}</td></>
-                      )}
-                    </tr>
-                  );
-                })}
-              </tbody>
-              <tfoot className="border-t-2 border-gray-200 bg-gray-50">
-                <tr>
-                  <td className="sticky left-0 bg-gray-50 px-6 py-4 text-sm font-bold text-gray-900">TOTAL</td>
-                  {MONTHS.map((month) => <td key={month} className={`px-4 py-4 text-center text-sm font-bold ${blockedMonths.includes(month) ? "text-gray-400" : "text-gray-900"}`}>{monthlyTotals[month] > 0 ? `₹${monthlyTotals[month]}` : "-"}</td>)}
-                  <td className="bg-blue-100/50 px-6 py-4 text-center text-sm font-bold text-blue-700">₹{totalCollected}</td>
-                  <td className="bg-orange-100/50 px-6 py-4 text-center text-sm font-bold text-orange-700">₹{totalDeficit.toLocaleString()} Due</td>
-                </tr>
-              </tfoot>
-            </table>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
