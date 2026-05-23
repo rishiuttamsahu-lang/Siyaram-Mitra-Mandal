@@ -25,8 +25,10 @@ const metadataBaseUrl = (() => {
 export const metadata: Metadata = {
   metadataBase: metadataBaseUrl,
   title: "Siyaram Mitra Mandal | Shanti Sagar Cha Maharaja",
-  description:
-    "Official dashboard and gallery vault of Siyaram Mitra Mandal. Track monthly contributions, view exclusive Bappa photos, and connect with the Mandal parivar safely.",
+  
+  // 🚀 Perfect Length SEO Description (158 Characters - Won't cut off on Google)
+  description: "Official portal of Siyaram Mitra Mandal, Bhiwandi. Securely track monthly chanda contributions, explore exclusive Bappa photos, and connect with our Parivar.",
+  
   keywords: [
     "Siyaram Mitra Mandal",
     "Siyaram Mitra Mandal Bhiwandi",
@@ -45,9 +47,11 @@ export const metadata: Metadata = {
     "Siyaram Mandal"
   ],
   authors: [{ name: "Siyaram Mitra Mandal" }],
+  
   openGraph: {
-    title: "Siyaram Mitra Mandal",
-    description: "Official Member Portal & Gallery Vault",
+    title: "Siyaram Mitra Mandal | Official Member Portal",
+    // 🚀 Longer Description for WhatsApp, Facebook, and Instagram link previews
+    description: "Welcome to the official Siyaram Mitra Mandal digital portal. Experience our exclusive 3D gallery vault, track real-time monthly seva, and join the Ganeshotsav celebrations safely.",
     url: metadataBaseUrl.href,
     siteName: "Siyaram Mitra Mandal",
     images: [
@@ -61,6 +65,7 @@ export const metadata: Metadata = {
     locale: "en_IN",
     type: "website",
   },
+  
   robots: {
     index: true,
     follow: true,
@@ -71,6 +76,7 @@ export const metadata: Metadata = {
       "max-snippet": -1,
     },
   },
+  
   icons: {
     icon: [
       { url: "/logo.png", type: "image/png", sizes: "512x512" },
