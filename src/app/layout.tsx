@@ -107,7 +107,7 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link
-          href="https://fonts.googleapis.com/css2?family=Gotu&family=Rozha+One&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Gotu&family=Poppins:wght@700;900&family=Rozha+One&display=swap"
           rel="stylesheet"
         />
         <meta name="google-site-verification" content="8qtmD0p7C0NyIPpXQpFyeO-w_TzzLnLPycMB66SB40M" />

@@ -578,7 +578,7 @@ export default function Dashboard({ userData }: { userData: any }) {
   // 🔥 NAYA LOGIC YAHAN KHATAM HOTA HAI
 
   return (
-    <div className="min-h-screen bg-gray-50 px-4 py-6 text-gray-900 md:px-12 md:py-12 animate-fade-in relative overflow-x-hidden" style={{ padding: 0 }}>
+    <div className="min-h-screen bg-gray-50/50 pb-24 relative overflow-x-hidden" style={{ padding: 0 }}>
       {/* 🔥 SWIPE-TO-DISMISS TOAST NOTIFICATION PRESET WITH DYNAMIC METRIC LINE */}
       {toast.show && (
         <div 
@@ -617,55 +617,47 @@ export default function Dashboard({ userData }: { userData: any }) {
         </div>
       )}
 
-      <div className="mx-auto max-w-7xl space-y-6 md:space-y-8">
-        
-        {/* HEADER SECTION (Adapted for Cloud Dashboard) */}
-        <header className="flex flex-col items-start justify-between gap-4 border-b border-gray-200 pb-6 md:flex-row md:items-end">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight text-gray-900 md:text-4xl">
-              Siyaram Mitra Mandal
-            </h1>
-            <div className="mt-2 flex flex-wrap items-center gap-2 md:gap-3">
-              <p className="text-xs font-medium uppercase tracking-widest text-gray-500 md:text-sm">Financial Tracker</p>
-              <span className="text-gray-300">|</span>
-              <div className="mt-1 flex items-center gap-2 rounded-full border border-gray-200 bg-gray-50 px-3 py-1 shadow-sm md:mt-0">
-                <span className="text-[10px] font-semibold uppercase text-gray-500 md:text-xs">Track Up To:</span>
-                <select
-                  className="cursor-not-allowed appearance-none bg-transparent text-sm font-bold text-blue-600 outline-none"
-                  value={currentTrackingMonth}
-                  disabled
-                >
-                  {MONTHS.map((month) => (
-                    <option key={month} value={month}>
-                      {month}
-                    </option>
-                  ))}
-                </select>
-                <span className="rounded-full bg-blue-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-blue-700">
-                  Auto
-                </span>
-              </div>
-            </div>
+      {/* Header Banner */}
+      <div className="bg-gradient-to-br from-[#5A0000] to-[#3A0000] px-4 pt-8 pb-20 text-white text-center rounded-b-[2rem] shadow-lg relative">
+        <div className="max-w-4xl mx-auto flex items-center justify-between gap-4">
+          {/* Small Logo / Admin Indicator */}
+          <div
+            className={`relative flex items-center justify-center h-10 w-10 overflow-hidden rounded-full border shadow-sm transition-all duration-300 shrink-0 ${
+              isAdmin
+                ? "border-yellow-400 bg-yellow-50 shadow-[0_0_10px_rgba(250,204,21,0.6)] text-[8px] font-black text-yellow-700 text-center leading-none uppercase"
+                : "border-white/20 bg-white/10"
+            }`}
+            title={isAdmin ? "Admin Access Enabled" : "Viewer Access"}
+          >
+            {isAdmin ? "Admin" : <img src="/logo.png" alt="Siyaram Mandal Logo" className="h-full w-full object-cover" />}
           </div>
 
-          <div className="flex w-full items-center gap-4 md:w-auto">
-            <div className="flex-grow rounded-xl border border-gray-200 bg-white px-5 py-3 text-left shadow-sm md:flex-grow-0 md:text-right">
-              <span className="mb-1 block text-xs text-gray-500 uppercase tracking-wider">Grand Total (Inc. Prev Year)</span>
-              <span className="text-xl font-bold text-green-700 md:text-2xl">₹{grandTotal.toLocaleString()}</span>
-            </div>
-
-            <div
-              className={`relative flex items-center justify-center h-14 w-14 flex-shrink-0 overflow-hidden rounded-full border-2 shadow-sm transition-all duration-300 md:h-16 md:w-16 ${
-                isAdmin
-                  ? "border-yellow-400 bg-yellow-50 shadow-[0_0_15px_rgba(250,204,21,0.6)] text-xs font-bold text-yellow-700 text-center leading-tight"
-                  : "border-gray-200"
-              }`}
-              title={isAdmin ? "Admin Access Enabled" : "Viewer Access"}
+          {/* Title */}
+          <div className="flex-1 text-center">
+            <h1 
+              className="text-xl sm:text-2xl font-black uppercase tracking-widest text-yellow-400 leading-tight"
+              style={{ fontFamily: "'Cinzel', serif" }}
             >
-              {isAdmin ? "Admin Mode" : <img src="/logo.png" alt="Siyaram Mandal Logo" className="h-full w-full object-cover" />}
-            </div>
+              सियाराम मित्र मंडल
+            </h1>
+            <p 
+              className="text-[10px] text-red-200 mt-0.5 uppercase tracking-widest font-black"
+              style={{ fontFamily: "'Cinzel', serif" }}
+            >
+              Ledger Dashboard
+            </p>
           </div>
-        </header>
+
+          {/* Grand Total Micro Card */}
+          <div className="bg-white/10 backdrop-blur-md border border-white/15 px-3 py-1.5 rounded-xl text-right shrink-0">
+            <span className="block text-[8px] text-red-200 uppercase tracking-wider font-bold">Grand Total</span>
+            <span className="text-sm font-black text-green-300">₹{grandTotal.toLocaleString()}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* 🔥 THE MASTER RESPONSIVE WRAPPER */}
+      <main className="max-w-4xl mx-auto px-3 sm:px-4 -mt-12 relative z-10 space-y-4">
 
 
         {sysSettings?.announcement && (
@@ -685,43 +677,55 @@ export default function Dashboard({ userData }: { userData: any }) {
         )}
 
         {/* 3-WAY SUB-TAB NAVIGATION */}
-        <div className="bg-white p-1.5 rounded-2xl shadow-md border border-gray-100 flex flex-wrap gap-1 sm:gap-2 mb-6">
+        <div className="bg-white p-1 rounded-xl shadow-sm border border-gray-100 flex gap-1 mb-4">
           <button 
             onClick={() => setActiveSubTab('members')} 
-            className={`flex-1 py-2 sm:py-3 px-2 rounded-xl font-black text-[9px] sm:text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-1.5 cursor-pointer ${activeSubTab === 'members' ? 'bg-[#5A0000] text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}
+            className={`flex-1 py-2 px-1 rounded-lg font-black text-[10px] sm:text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer ${activeSubTab === 'members' ? 'bg-[#5A0000] text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}
           >
-            <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Members
+            <Users className="w-3.5 h-3.5" /> Members
           </button>
           <button 
             onClick={() => setActiveSubTab('buildings')} 
-            className={`flex-1 py-2 sm:py-3 px-2 rounded-xl font-black text-[9px] sm:text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-1.5 cursor-pointer ${activeSubTab === 'buildings' ? 'bg-[#5A0000] text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}
+            className={`flex-1 py-2 px-1 rounded-lg font-black text-[10px] sm:text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer ${activeSubTab === 'buildings' ? 'bg-[#5A0000] text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}
           >
-            <Building2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Buildings
+            <Building2 className="w-3.5 h-3.5" /> Buildings
           </button>
           <button 
             onClick={() => setActiveSubTab('others')} 
-            className={`flex-1 py-2 sm:py-3 px-2 rounded-xl font-black text-[9px] sm:text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-1.5 cursor-pointer ${activeSubTab === 'others' ? 'bg-[#5A0000] text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}
+            className={`flex-1 py-2 px-1 rounded-lg font-black text-[10px] sm:text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer ${activeSubTab === 'others' ? 'bg-[#5A0000] text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}
           >
-            <Store className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Dost & Dukan
+            <Store className="w-3.5 h-3.5" /> Dost & Dukan
           </button>
         </div>
 
-        {activeSubTab === 'members' ? (
+        {/* Master Tab Content Card */}
+        <div className="bg-white p-3 sm:p-5 rounded-3xl border border-gray-100 shadow-sm min-h-[500px]">
+          {activeSubTab === 'members' ? (
           <>
             {/* SUMMARY CARDS */}
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-3 md:gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <SummaryCard label="Total Collected (YTD)" value={`₹${totalCollected.toLocaleString()}`} />
               <SummaryCard label={`Total Dues (Up to ${currentTrackingMonth})`} value={`₹${totalDeficit.toLocaleString()}`} accentClassName="text-orange-600" badge={`₹${expectedTotalPerMember} Target`} />
               <SummaryCard label="Previous Year Balance" value={`₹${PREVIOUS_YEAR.toLocaleString()}`} muted />
             </div>
 
             {/* 🔥 UNIFIED SORT TOOLBAR (Mobile + Desktop dono ke liye) */}
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 rounded-2xl border border-gray-100 bg-white shadow-sm mt-2">
-              <h2 className="text-sm font-black text-gray-800 uppercase tracking-widest flex items-center gap-2">
-                👥 Member Records
-              </h2>
-              <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto">
-                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Sort By:</span>
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-3 rounded-xl border border-gray-100 bg-gray-50/50 mt-3">
+              <div className="flex items-center justify-between w-full sm:w-auto gap-2">
+                <h2 className="text-xs font-black text-gray-800 uppercase tracking-widest flex items-center gap-1.5">
+                  👥 Member Records
+                </h2>
+                <div className="flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-2 py-0.5 shadow-sm sm:hidden">
+                  <span className="text-[9px] font-semibold uppercase text-gray-500">Track:</span>
+                  <span className="text-[10px] font-bold text-blue-600">{currentTrackingMonth}</span>
+                </div>
+              </div>
+              <div className="flex items-center justify-between sm:justify-end gap-2 w-full sm:w-auto">
+                <div className="hidden sm:flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-2.5 py-0.5 shadow-sm">
+                  <span className="text-[9px] font-semibold uppercase text-gray-500">Track up to:</span>
+                  <span className="text-[10px] font-bold text-blue-600">{currentTrackingMonth}</span>
+                </div>
+                <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Sort:</span>
                 
                 {/* 🔥 NAYA PREMIUM DROPDOWN */}
                 <CustomSelect 
@@ -729,7 +733,7 @@ export default function Dashboard({ userData }: { userData: any }) {
                   onChange={setSortBy} 
                   options={SORT_OPTIONS} 
                   theme="light" 
-                  className="w-48 sm:w-56"
+                  className="w-40 sm:w-48"
                 />
               </div>
             </div>
@@ -786,30 +790,30 @@ export default function Dashboard({ userData }: { userData: any }) {
               })}
             </div>
 
-            {/* DESKTOP TABLE */}
+            {/* 🖥️ SLEEK DESKTOP TABLE */}
             <div className="hidden overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm md:block">
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto custom-scrollbar">
                 <table className="w-full border-collapse text-left">
                   <thead>
                     <tr className="border-b border-gray-100 bg-gray-50">
-                      <th className="sticky left-0 z-10 bg-gray-50 px-6 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500">Name</th>
-                      {MONTHS.map((month) => <th key={month} className={`px-4 py-4 text-center text-xs font-semibold uppercase tracking-wider ${blockedMonths.includes(month) ? "text-red-400" : "text-gray-500"}`}>{month} {blockedMonths.includes(month) ? "🚫" : ""}</th>)}
-                      <th className="bg-blue-50 px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider text-gray-900">Total</th>
-                      <th className="bg-orange-50 px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider text-gray-900">Remaining</th>
+                      <th className="sticky left-0 z-10 bg-gray-50 px-3 py-2.5 text-[10px] font-black uppercase tracking-widest text-gray-500 whitespace-nowrap shadow-[2px_0_5px_rgba(0,0,0,0.02)]">Name</th>
+                      {MONTHS.map((month) => <th key={month} className={`px-2 py-2.5 text-center text-[10px] font-black uppercase tracking-widest ${blockedMonths.includes(month) ? "text-red-400" : "text-gray-500"}`}>{month} {blockedMonths.includes(month) ? "🚫" : ""}</th>)}
+                      <th className="bg-blue-50 px-3 py-2.5 text-center text-[10px] font-black uppercase tracking-widest text-gray-900 border-l border-white">Total</th>
+                      <th className="bg-orange-50 px-3 py-2.5 text-center text-[10px] font-black uppercase tracking-widest text-gray-900 border-l border-white">Remaining</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {sortedMembers.length === 0 && <tr><td colSpan={15} className="text-center text-gray-400 py-8 font-bold">No members yet. Admins can restore them using the yellow button above!</td></tr>}
+                    {sortedMembers.length === 0 && <tr><td colSpan={15} className="text-center text-gray-400 py-6 text-xs font-bold uppercase tracking-widest">No members yet. Admins can restore them using the yellow button above!</td></tr>}
                     {sortedMembers.map((member) => {
                       const totalPaid = getMemberTotal(member.payments);
                       const remaining = expectedTotalPerMember - totalPaid;
 
                       return (
-                        <tr key={member.id} className="transition-colors hover:bg-gray-50">
-                          <td className="sticky left-0 bg-white px-6 py-4 text-sm font-medium text-gray-900 shadow-[1px_0_0_0_#f3f4f6]">
+                        <tr key={member.id} className="transition-colors hover:bg-gray-50/80 bg-white group">
+                          <td className="sticky left-0 bg-white group-hover:bg-gray-50/80 px-3 py-2 text-xs font-bold text-gray-900 shadow-[2px_0_5px_rgba(0,0,0,0.02)] whitespace-nowrap transition-colors">
                             <div className="flex items-center gap-2">
                               <span>{member.name}</span>
-                              {member.isHonorary && <span className="rounded-full border border-purple-200 bg-purple-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-purple-700">Honorary</span>}
+                              {member.isHonorary && <span className="rounded-md border border-purple-200 bg-purple-50 px-1.5 py-[2px] text-[8px] font-black uppercase tracking-wider text-purple-700">Honorary</span>}
                             </div>
                           </td>
                           {MONTHS.map((month) => {
@@ -817,19 +821,44 @@ export default function Dashboard({ userData }: { userData: any }) {
                             const isEditing = editCell.id === member.id && editCell.month === month;
 
                             return (
-                              <td key={month} onClick={() => handleCellClick(member.id, month, member.payments[month])} className={`relative px-4 py-4 text-center text-sm transition-colors ${isBlocked ? "bg-gray-50 text-gray-400" : isAdmin ? "cursor-pointer hover:bg-yellow-50 hover:shadow-inner" : "text-gray-600"}`} title={isAdmin && !isBlocked ? "Click to edit" : ""}>
+                              <td 
+                                key={month} 
+                                onClick={() => handleCellClick(member.id, month, member.payments[month])} 
+                                className={`
+                                  relative px-2 py-2 text-center text-[11px] font-black transition-all cursor-pointer group
+                                  ${isBlocked ? "bg-gray-50 text-gray-400 cursor-not-allowed" : "text-gray-700 hover:bg-yellow-50 hover:shadow-inner"}
+                                `}
+                                title={isAdmin && !isBlocked ? "Click to edit amount" : ""}
+                              >
                                 {isEditing ? (
-                                  <input type="number" autoFocus className="w-16 border-b-2 border-red-500 bg-transparent text-center font-bold text-[#5a0000] outline-none" value={editValue} onChange={(e) => setEditValue(e.target.value)} onBlur={saveInlineEdit} onKeyDown={handleInlineKeyDown} />
+                                  <input 
+                                    type="number" 
+                                    autoFocus 
+                                    className="w-12 border-b-2 border-[#5a0000] bg-transparent text-center font-black text-[#5a0000] outline-none text-[11px]" 
+                                    value={editValue} 
+                                    onChange={(e) => setEditValue(e.target.value)} 
+                                    onBlur={saveInlineEdit} 
+                                    onKeyDown={handleInlineKeyDown} 
+                                  />
                                 ) : (
-                                  <>{member.payments[month] ? `₹${member.payments[month]}` : "-"}{isAdmin && !isBlocked && !isEditing && <span className="absolute right-2 top-2 text-[10px] text-gray-300 group-hover:text-yellow-600">✎</span>}</>
+                                  <>
+                                    {member.payments[month] ? `₹${member.payments[month]}` : "-"}
+                                    
+                                    {/* 🔥 EDIT ICON: Sirf hover par dikhega, clean UI */}
+                                    {isAdmin && !isBlocked && (
+                                      <span className="absolute right-0.5 top-0.5 text-[8px] text-gray-300 group-hover:text-yellow-600 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        ✎
+                                      </span>
+                                    )}
+                                  </>
                                 )}
                               </td>
                             );
                           })}
                           {member.isHonorary ? (
-                            <><td className="bg-purple-50/30 px-6 py-4 text-center text-sm font-bold text-gray-400">-</td><td className="bg-purple-50/30 px-6 py-4 text-center"><span className="inline-flex items-center rounded-full border border-purple-200 bg-purple-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-purple-800">Honorary</span></td></>
+                            <><td className="bg-purple-50/30 px-3 py-2 text-center text-xs font-bold text-gray-400">-</td><td className="bg-purple-50/30 px-3 py-2 text-center"><span className="inline-flex items-center rounded-md border border-purple-200 bg-purple-100 px-2 py-0.5 text-[8px] font-black uppercase tracking-wider text-purple-800">Honorary</span></td></>
                           ) : (
-                            <><td className="bg-blue-50/30 px-6 py-4 text-center text-sm font-bold text-gray-900">₹{totalPaid}</td><td className="bg-orange-50/30 px-6 py-4 text-center">{remaining > 0 ? <span className="text-sm font-semibold text-red-600">₹{remaining} Due</span> : remaining < 0 ? <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">+₹{Math.abs(remaining)} Advance</span> : <span className="text-sm font-semibold text-orange-600">Clear</span>}</td></>
+                            <><td className="bg-blue-50/30 px-3 py-2 text-center text-xs font-black text-blue-700">₹{totalPaid}</td><td className="bg-orange-50/30 px-3 py-2 text-center">{remaining > 0 ? <span className="text-[10px] font-black text-red-600">₹{remaining} Due</span> : remaining < 0 ? <span className="inline-flex items-center rounded-md bg-green-100 px-2 py-0.5 text-[10px] font-black text-green-800">+₹{Math.abs(remaining)} Adv</span> : <span className="text-[10px] font-black text-gray-400">Clear</span>}</td></>
                           )}
                         </tr>
                       );
@@ -837,10 +866,10 @@ export default function Dashboard({ userData }: { userData: any }) {
                   </tbody>
                   <tfoot className="border-t-2 border-gray-200 bg-gray-50">
                     <tr>
-                      <td className="sticky left-0 bg-gray-50 px-6 py-4 text-sm font-bold text-gray-900">TOTAL</td>
-                      {MONTHS.map((month) => <td key={month} className={`px-4 py-4 text-center text-sm font-bold ${blockedMonths.includes(month) ? "text-gray-400" : "text-gray-900"}`}>{monthlyTotals[month] > 0 ? `₹${monthlyTotals[month]}` : "-"}</td>)}
-                      <td className="bg-blue-100/50 px-6 py-4 text-center text-sm font-bold text-blue-700">₹{totalCollected}</td>
-                      <td className="bg-orange-100/50 px-6 py-4 text-center text-sm font-bold text-orange-700">₹{totalDeficit.toLocaleString()} Due</td>
+                      <td className="sticky left-0 bg-gray-50 px-3 py-2.5 text-[11px] font-black text-gray-900 uppercase tracking-widest shadow-[2px_0_5px_rgba(0,0,0,0.02)]">Total</td>
+                      {MONTHS.map((month) => <td key={month} className={`px-2 py-2.5 text-center text-xs font-black ${blockedMonths.includes(month) ? "text-gray-400" : "text-gray-900"}`}>{monthlyTotals[month] > 0 ? `₹${monthlyTotals[month]}` : "-"}</td>)}
+                      <td className="bg-blue-100/50 px-3 py-2.5 text-center text-xs font-black text-blue-800 border-l border-white">₹{totalCollected}</td>
+                      <td className="bg-orange-100/50 px-3 py-2.5 text-center text-xs font-black text-orange-800 border-l border-white">₹{totalDeficit.toLocaleString()} Due</td>
                     </tr>
                   </tfoot>
                 </table>
@@ -1043,18 +1072,20 @@ export default function Dashboard({ userData }: { userData: any }) {
           </div>
         )}
       </div>
-    </div>
-  );
+    </main>
+  </div>
+);
 }
 
 function SummaryCard({ label, value, accentClassName, muted, badge }: { label: string; value: string; accentClassName?: string; muted?: boolean; badge?: string; }) {
   return (
-    <div className="flex flex-col justify-center rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-      <div className="mb-2 flex items-center justify-between gap-3">
-        <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">{label}</span>
-        {badge && <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-bold text-orange-800">{badge}</span>}
+    <div className="flex flex-col justify-center rounded-xl border border-gray-100 bg-white p-3 sm:p-4 shadow-sm">
+      <div className="mb-1 flex items-center justify-between gap-1.5">
+        <span className="text-[9px] sm:text-xs font-semibold uppercase tracking-wider text-gray-500 truncate">{label}</span>
+        {badge && <span className="rounded-full bg-orange-100 px-1.5 py-0.5 text-[8px] font-bold text-orange-800 shrink-0 hidden sm:inline-block">{badge}</span>}
       </div>
-      <span className={`text-3xl font-bold ${accentClassName ?? "text-gray-900"} ${muted ? "text-gray-400" : ""}`}>{value}</span>
+      <span className={`text-base sm:text-xl md:text-2xl font-black tracking-tight ${accentClassName ?? "text-gray-900"} ${muted ? "text-gray-400" : ""}`}>{value}</span>
+      {badge && <span className="rounded-full bg-orange-100 px-1.5 py-0.5 text-[8px] font-bold text-orange-800 shrink-0 self-start mt-1 sm:hidden">{badge}</span>}
     </div>
   );
 }
