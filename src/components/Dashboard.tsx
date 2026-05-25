@@ -733,29 +733,32 @@ export default function Dashboard({ userData }: { userData: any }) {
           </div>
         )}
 
-        {/* 4-WAY SUB-TAB NAVIGATION */}
-        <div className="bg-white p-1 rounded-xl shadow-sm border border-gray-100 flex gap-1 mb-4">
+        {/* 4-WAY SUB-TAB NAVIGATION (Optimized for Mobile) */}
+        <div className="bg-white p-1 rounded-xl shadow-sm border border-gray-100 flex gap-1 mb-4 overflow-x-auto custom-scrollbar scroll-smooth snap-x sm:overflow-visible">
           <button
             onClick={() => setActiveSubTab('members')}
-            className={`flex-1 py-2 px-1 rounded-lg font-black text-[9px] sm:text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1 sm:gap-1.5 cursor-pointer ${activeSubTab === 'members' ? 'bg-[#5A0000] text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}
+            className={`snap-center shrink-0 min-w-[100px] sm:min-w-0 sm:flex-1 py-2.5 px-3 rounded-lg font-black text-[10px] sm:text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer ${activeSubTab === 'members' ? 'bg-[#5A0000] text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}
           >
             <Users className="w-3.5 h-3.5" /> Members
           </button>
+          
           <button
             onClick={() => setActiveSubTab('buildings')}
-            className={`flex-1 py-2 px-1 rounded-lg font-black text-[9px] sm:text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1 sm:gap-1.5 cursor-pointer ${activeSubTab === 'buildings' ? 'bg-[#5A0000] text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}
+            className={`snap-center shrink-0 min-w-[100px] sm:min-w-0 sm:flex-1 py-2.5 px-3 rounded-lg font-black text-[10px] sm:text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer ${activeSubTab === 'buildings' ? 'bg-[#5A0000] text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}
           >
             <Building2 className="w-3.5 h-3.5" /> Buildings
           </button>
+          
           <button
             onClick={() => setActiveSubTab('others')}
-            className={`flex-1 py-2 px-1 rounded-lg font-black text-[9px] sm:text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1 sm:gap-1.5 cursor-pointer ${activeSubTab === 'others' ? 'bg-[#5A0000] text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}
+            className={`snap-center shrink-0 min-w-[120px] sm:min-w-0 sm:flex-1 py-2.5 px-3 rounded-lg font-black text-[10px] sm:text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer ${activeSubTab === 'others' ? 'bg-[#5A0000] text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}
           >
-            <Store className="w-3.5 h-3.5" /> Dost & Dukan
+            <Store className="w-3.5 h-3.5" /> Dost/Dukan
           </button>
+          
           <button
             onClick={() => setActiveSubTab('expenses')}
-            className={`flex-1 py-2 px-1 rounded-lg font-black text-[9px] sm:text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1 sm:gap-1.5 cursor-pointer ${activeSubTab === 'expenses' ? 'bg-[#5A0000] text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}
+            className={`snap-center shrink-0 min-w-[100px] sm:min-w-0 sm:flex-1 py-2.5 px-3 rounded-lg font-black text-[10px] sm:text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer ${activeSubTab === 'expenses' ? 'bg-[#5A0000] text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}
           >
             <IndianRupee className="w-3.5 h-3.5" /> Kharcha
           </button>

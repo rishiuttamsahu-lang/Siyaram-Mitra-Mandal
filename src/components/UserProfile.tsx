@@ -85,6 +85,15 @@ export default function UserProfile({ userData }: { userData: any }) {
     return url.replace('/upload/', '/upload/q_auto:good,w_600/');
   };
 
+  // 🔥 MOBILE OPTIMIZED VIDEO STREAMING URL 
+  const getCompressedVideoUrl = (url: string) => {
+    if (!url || !url.includes('/upload/')) return url;
+    // q_auto = Automatic Quality
+    // vc_auto = Automatic Codec (H.264 for mobile compatibility)
+    // w_800 = Resize width to 800px (Smooth 720p playback)
+    return url.replace('/upload/', '/upload/q_auto,vc_auto,w_800/');
+  };
+
   useEffect(() => {
     if (activeTab !== 'vault') return;
     const node = loadMoreRef.current;
@@ -469,12 +478,12 @@ export default function UserProfile({ userData }: { userData: any }) {
                   <div className={`relative aspect-[4/5] sm:aspect-square ${isSelected ? 'opacity-70' : 'opacity-100'}`}>
                     {item.type === 'video' ? (
                       <>
-                        <video 
-                          src={`${item.url}#t=0.1`} 
+                        {/* 🔥 RAW VIDEO KI JAGAH CLOUDINARY JPG THUMBNAIL */}
+                        <img 
+                          src={getOptimizedMediaUrl(item.url, item.type)} 
                           className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" 
-                          preload="metadata"
-                          muted
-                          playsInline
+                          alt="video-thumbnail" 
+                          loading="lazy" 
                         />
                         <div className="absolute inset-0 flex items-center justify-center bg-black/20 pointer-events-none">
                           <div className="rounded-full bg-black/50 p-2"><Play className="w-4 h-4 fill-white text-white" /></div>
@@ -682,7 +691,7 @@ export default function UserProfile({ userData }: { userData: any }) {
 
                             <video
                               ref={videoRef}
-                              src={`${item.url}#t=0.1`}
+                              src={getCompressedVideoUrl(item.url)}
                               poster={getOptimizedMediaUrl(item.url, item.type)}
                               preload="metadata"
                               playsInline

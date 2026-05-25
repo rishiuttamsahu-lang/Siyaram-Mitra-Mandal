@@ -367,6 +367,15 @@ export default function Gallery({ userData }: { userData: any }) {
     return url.replace('/upload/', '/upload/q_auto:good,w_600/');
   };
 
+  // 🔥 MOBILE OPTIMIZED VIDEO STREAMING URL 
+  const getCompressedVideoUrl = (url: string) => {
+    if (!url || !url.includes('/upload/')) return url;
+    // q_auto = Automatic Quality
+    // vc_auto = Automatic Codec (H.264 for mobile compatibility)
+    // w_800 = Resize width to 800px (Smooth 720p playback)
+    return url.replace('/upload/', '/upload/q_auto,vc_auto,w_800/');
+  };
+
   return (
     <div className="space-y-4 animate-fade-in pb-24">
       <Script src="https://upload-widget.cloudinary.com/global/all.js" strategy="afterInteractive" onLoad={() => setIsCloudinaryReady(true)} />
@@ -500,7 +509,7 @@ export default function Gallery({ userData }: { userData: any }) {
                             {/* 🔥 UPDATED VIDEO ELEMENT WITH MUTED STATE */}
                             <video
                               ref={videoRef}
-                              src={item.url}
+                              src={getCompressedVideoUrl(item.url)}
                               poster={getOptimizedMediaUrl(item.url, item.type)}
                               playsInline
                               loop
