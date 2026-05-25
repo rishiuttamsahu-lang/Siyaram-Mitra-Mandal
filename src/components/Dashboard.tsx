@@ -92,6 +92,8 @@ const MONTHS = [
   "SEPT", "OCT", "NOV", "DEC", "JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG",
 ] as const;
 
+const DELETE_SYNC_BASE_URL = process.env.NEXT_PUBLIC_RENDER_BOT_URL?.replace(/\/$/, "");
+
 type Month = (typeof MONTHS)[number];
 
 type Member = {
@@ -423,11 +425,19 @@ export default function Dashboard({ userData }: { userData: any }) {
   };
 
   // 🔥 NEW LOG DELETE HANDLER
-  const handleDeleteOtherLog = async (id: string, name: string) => {
+  const handleDeleteOtherLog = async (id: string, name: string, amount: number) => {
     const confirmDelete = window.confirm(`Kya aap "${name}" ka record sach me delete karna chahte hain?`);
     if (!confirmDelete) return;
 
     try {
+      if (DELETE_SYNC_BASE_URL) {
+        await fetch(`${DELETE_SYNC_BASE_URL}/api/delete-sync`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, amount, type: "Income" })
+        });
+      }
+
       await deleteDoc(doc(db, "other_chanda", id));
       triggerToast("Deleted 🗑️", "Record permanently removed from logs.", "info");
     } catch (err) {
@@ -436,25 +446,29 @@ export default function Dashboard({ userData }: { userData: any }) {
     }
   };
 
-  // 🔥 DEDICATED EXPENSE LOG DELETE HANDLER FOR 4TH TAB
-  const handleDeleteExpenseLog = async (id: string, name: string) => {
-    // Debugging alert taaki pata chale button trigger hua
+  // 🔥 DEDICATED EXPENSE LOG DELETE HANDLER - FIX FOR POPUP GLITCH
+  const handleDeleteExpenseLog = async (id: string, name: string, amount: number) => {
     console.log("Delete trigger for ID:", id, "Name:", name);
     
     if (!id) {
-      alert("Error: Expense ID nahi mili!");
+      triggerToast("Error ❌", "Expense ID nahi mili!", "error");
       return;
     }
 
-    const confirmDelete = window.confirm(`Kya aap "${name}" ka expense record sach me delete karna chahte hain?`);
-    if (!confirmDelete) return;
-
     try {
+      if (DELETE_SYNC_BASE_URL) {
+        await fetch(`${DELETE_SYNC_BASE_URL}/api/delete-sync`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, amount, type: "Expense" })
+        });
+      }
+
       await deleteDoc(doc(db, "expenses_log", id));
-      triggerToast("Deleted 🗑️", "Expense record permanently removed from logs.", "info");
+      triggerToast("Deleted 🗑️", `"${name}" ka kharcha permanently hata diya gaya.`, "info");
     } catch (err: any) {
       console.error("Firebase deletion crashed: ", err);
-      alert("Firebase Error: " + err.message);
+      triggerToast("Error ❌", "Hataane me koi dikkat aayi.", "error");
     }
   };
 
@@ -1123,7 +1137,7 @@ export default function Dashboard({ userData }: { userData: any }) {
 
                           {/* 🔥 DELETE ACTION BUTTON */}
                           <button
-                            onClick={() => handleDeleteOtherLog(entry.id, entry.name)}
+                            onClick={() => handleDeleteOtherLog(entry.id, entry.name, entry.amount)}
                             className="text-gray-300 hover:text-red-600 p-1 rounded-md hover:bg-red-50 sm:opacity-0 group-hover:opacity-100 transition-all cursor-pointer"
                             title="Delete Log Entry"
                           >
@@ -1154,8 +1168,8 @@ export default function Dashboard({ userData }: { userData: any }) {
                   {expenseLogs.length === 0 ? (
                      <p className="text-center text-[9px] font-bold uppercase tracking-widest text-gray-400 py-4">No expenses recorded yet.</p>
                   ) : (
-                    expenseLogs.map((exp) => (
-                      <div key={exp.id || Math.random().toString()} className="flex items-center justify-between p-2.5 border border-red-100 rounded-lg bg-red-50/20 group transition-all">
+                    expenseLogs.map((exp, index) => (
+                      <div key={exp.id || index} className="flex items-center justify-between p-2.5 border border-red-100 rounded-lg bg-red-50/20 group transition-all">
                         <div className="flex items-center gap-3 flex-1 min-w-0">
                           <div className="w-7 h-7 rounded-full bg-red-100 text-red-600 flex items-center justify-center font-black text-xs shrink-0">
                             <IndianRupee className="w-3.5 h-3.5" />
@@ -1169,16 +1183,19 @@ export default function Dashboard({ userData }: { userData: any }) {
                         <div className="flex items-center gap-3 shrink-0 pl-2">
                           <span className="font-black text-xs text-red-600">-₹{exp.amount}</span>
                           
-                          {/* 🔥 ACTION BUTTON WITH POINTER BLOCK RESOLUTION */}
+                          {/* 🔥 UPDATED ACTION BUTTON WITH EVENT PASSING */}
                           {isAdmin && (
                             <button
                               type="button"
                               onClick={(e) => {
+                                // 🚀 EVENT CHAIN CORRECTION: Propagation aur default behavior ko strictly pehle block karo
                                 e.preventDefault();
                                 e.stopPropagation();
-                                handleDeleteExpenseLog(exp.id, exp.name);
+                                
+                                // Keval ek single clean reference call pass hogi
+                                handleDeleteExpenseLog(exp.id, exp.name, exp.amount);
                               }}
-                              className="text-gray-400 hover:text-red-600 p-1.5 rounded-md hover:bg-red-50 md:opacity-0 group-hover:opacity-100 transition-all cursor-pointer relative z-50 block"
+                              className="text-gray-400 hover:text-red-600 p-1.5 rounded-md hover:bg-red-50 opacity-100 md:opacity-0 group-hover:opacity-100 transition-all cursor-pointer relative z-50 block"
                               title="Delete Log Entry"
                             >
                               <Trash2 className="w-3.5 h-3.5 pointer-events-none" />
