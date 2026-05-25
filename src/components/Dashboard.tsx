@@ -24,6 +24,15 @@ type OtherPayment = {
   timestamp?: any;
 };
 
+type ExpenseLog = {
+  id: string;
+  name: string;
+  amount: number;
+  date: string;
+  time: string;
+  timestamp?: any;
+};
+
 // 🔥 PREMIUM CUSTOM DROPDOWN COMPONENT
 const CustomSelect = ({ value, onChange, options, placeholder, theme = 'light', className = 'w-full' }: { value: any, onChange: any, options: any[], placeholder?: string, theme?: 'light' | 'dark', className?: string }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -126,7 +135,8 @@ export default function Dashboard({ userData }: { userData: any }) {
   const [sysSettings, setSysSettings] = useState<any>(null);
   const [sortBy, setSortBy] = useState<string>("default"); // 🔥 SORTING STATE
 
-  const [activeSubTab, setActiveSubTab] = useState<'members' | 'buildings' | 'others'>('buildings'); // Default to buildings
+  const [activeSubTab, setActiveSubTab] = useState<'members' | 'buildings' | 'others' | 'expenses'>('buildings'); // Default to buildings
+  const [expenseLogs, setExpenseLogs] = useState<ExpenseLog[]>([]);
   const [activeWing, setActiveWing] = useState<'A' | 'B'>('A');
 
   // Building management states
@@ -306,6 +316,25 @@ export default function Dashboard({ userData }: { userData: any }) {
     return () => unsub();
   }, []);
 
+  // 🔥 NAYA REAL-TIME LISTENER FOR EXPENSES (KHARCHA LOGS)
+  useEffect(() => {
+    const q = query(collection(db, "expenses_log"), orderBy("timestamp", "desc"));
+    const unsub = onSnapshot(q, (snap) => {
+      const data = snap.docs.map(doc => ({
+        id: doc.id,
+        name: doc.data().name || '',
+        amount: Number(doc.data().amount) || 0,
+        date: doc.data().date || '',
+        time: doc.data().time || '',
+        timestamp: doc.data().timestamp
+      })) as ExpenseLog[];
+      setExpenseLogs(data);
+    }, (error) => {
+      console.error("🔥 Expenses fetch error:", error.message);
+    });
+    return () => unsub();
+  }, []);
+
   // Compute building live metrics
   const buildingMetrics = useMemo(() => {
     const totals = { totalCollected: 0, collectedCount: 0, pendingCount: 0 };
@@ -407,6 +436,28 @@ export default function Dashboard({ userData }: { userData: any }) {
     }
   };
 
+  // 🔥 DEDICATED EXPENSE LOG DELETE HANDLER FOR 4TH TAB
+  const handleDeleteExpenseLog = async (id: string, name: string) => {
+    // Debugging alert taaki pata chale button trigger hua
+    console.log("Delete trigger for ID:", id, "Name:", name);
+    
+    if (!id) {
+      alert("Error: Expense ID nahi mili!");
+      return;
+    }
+
+    const confirmDelete = window.confirm(`Kya aap "${name}" ka expense record sach me delete karna chahte hain?`);
+    if (!confirmDelete) return;
+
+    try {
+      await deleteDoc(doc(db, "expenses_log", id));
+      triggerToast("Deleted 🗑️", "Expense record permanently removed from logs.", "info");
+    } catch (err: any) {
+      console.error("Firebase deletion crashed: ", err);
+      alert("Firebase Error: " + err.message);
+    }
+  };
+
   const handleRestoreOldData = async () => {
     if (!confirm("Kya aap sach mein purana list wapas Firebase mein daalna chahte hain?")) return;
     setIsRestoring(true);
@@ -437,9 +488,18 @@ export default function Dashboard({ userData }: { userData: any }) {
   const expectedTotalPerMember = chargeableMonths.length * MONTHLY_TARGET;
   const payingMembersCount = members.filter((member) => !member.isHonorary).length;
   const totalExpectedMandal = payingMembersCount * expectedTotalPerMember;
+  
+  // 1. Saare alag-alag tabs ki kamai (Income) calculate karo
   const totalCollected = members.reduce((sum, member) => sum + getMemberTotal(member.payments), 0);
+  const totalBuildingCollected = buildingPayments.reduce((sum, p) => p.status === 'Collected' ? sum + (Number(p.amount) || 0) : sum, 0);
+  const totalOthersCollected = otherPayments.reduce((sum, p) => p.status === 'Collected' ? sum + (Number(p.amount) || 0) : sum, 0);
   const totalDeficit = Math.max(0, totalExpectedMandal - totalCollected);
-  const grandTotal = totalCollected + PREVIOUS_YEAR;
+
+  // 2. Pure 4th Tab ka total kharcha (Expenses) nikalon
+  const totalExpensesDeduction = expenseLogs.reduce((sum, exp) => sum + (Number(exp.amount) || 0), 0);
+
+  // 3. 🔥 THE MASTER BALANCED FORMULA: Total Income - Total Expenses + Backlog
+  const grandTotal = (totalCollected + totalBuildingCollected + totalOthersCollected + PREVIOUS_YEAR) - totalExpensesDeduction;
 
   const monthlyTotals = useMemo(() =>
     MONTHS.reduce((acc, month) => {
@@ -673,25 +733,31 @@ export default function Dashboard({ userData }: { userData: any }) {
           </div>
         )}
 
-        {/* 3-WAY SUB-TAB NAVIGATION */}
+        {/* 4-WAY SUB-TAB NAVIGATION */}
         <div className="bg-white p-1 rounded-xl shadow-sm border border-gray-100 flex gap-1 mb-4">
           <button
             onClick={() => setActiveSubTab('members')}
-            className={`flex-1 py-2 px-1 rounded-lg font-black text-[10px] sm:text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer ${activeSubTab === 'members' ? 'bg-[#5A0000] text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}
+            className={`flex-1 py-2 px-1 rounded-lg font-black text-[9px] sm:text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1 sm:gap-1.5 cursor-pointer ${activeSubTab === 'members' ? 'bg-[#5A0000] text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}
           >
             <Users className="w-3.5 h-3.5" /> Members
           </button>
           <button
             onClick={() => setActiveSubTab('buildings')}
-            className={`flex-1 py-2 px-1 rounded-lg font-black text-[10px] sm:text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer ${activeSubTab === 'buildings' ? 'bg-[#5A0000] text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}
+            className={`flex-1 py-2 px-1 rounded-lg font-black text-[9px] sm:text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1 sm:gap-1.5 cursor-pointer ${activeSubTab === 'buildings' ? 'bg-[#5A0000] text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}
           >
             <Building2 className="w-3.5 h-3.5" /> Buildings
           </button>
           <button
             onClick={() => setActiveSubTab('others')}
-            className={`flex-1 py-2 px-1 rounded-lg font-black text-[10px] sm:text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer ${activeSubTab === 'others' ? 'bg-[#5A0000] text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}
+            className={`flex-1 py-2 px-1 rounded-lg font-black text-[9px] sm:text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1 sm:gap-1.5 cursor-pointer ${activeSubTab === 'others' ? 'bg-[#5A0000] text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}
           >
             <Store className="w-3.5 h-3.5" /> Dost & Dukan
+          </button>
+          <button
+            onClick={() => setActiveSubTab('expenses')}
+            className={`flex-1 py-2 px-1 rounded-lg font-black text-[9px] sm:text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1 sm:gap-1.5 cursor-pointer ${activeSubTab === 'expenses' ? 'bg-[#5A0000] text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}
+          >
+            <IndianRupee className="w-3.5 h-3.5" /> Kharcha
           </button>
         </div>
 
@@ -953,7 +1019,7 @@ export default function Dashboard({ userData }: { userData: any }) {
                               const roomNum = getRoomNumber(floor, suffix);
                               const flatId = `${activeWing}_${roomNum}`;
                               const paymentMatch = buildingPayments.find(p => p.id === flatId);
-                              const isCollected = paymentMatch?.status === 'Collected';
+                              const isCollected = paymentMatch?.status === 'Collected' && (Number(paymentMatch.amount) > 0);
                               const isSelected = selectedFlat === flatId;
 
                               return (
@@ -996,7 +1062,7 @@ export default function Dashboard({ userData }: { userData: any }) {
                 </div>
               </div>
             </div>
-          ) : (
+          ) : activeSubTab === 'others' ? (
             /* OTHERS (Dost & Dukan) TAB - COMPACT */
             <div className="space-y-4 animate-in fade-in duration-300">
               <div className="grid grid-cols-2 gap-2">
@@ -1067,7 +1133,62 @@ export default function Dashboard({ userData }: { userData: any }) {
                 </div>
               </div>
             </div>
-          )}
+          ) : activeSubTab === 'expenses' ? (
+            /* 🔥 NEW EXPENSES 4TH TAB - UPDATED BULLETPROOF UI */
+            <div className="space-y-4 animate-in fade-in duration-300">
+              <div className="bg-white border border-gray-100 p-4 rounded-xl text-center shadow-sm">
+                <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 block mb-1">Total Kharcha (Expenses)</span>
+                <span className="text-2xl font-black text-red-600">
+                  ₹{expenseLogs.reduce((sum, exp) => sum + Number(exp.amount), 0).toLocaleString('en-IN')}
+                </span>
+              </div>
+
+              <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
+                <h3 className="text-[10px] font-black text-gray-800 uppercase tracking-widest mb-3 border-b border-gray-100 pb-2">
+                  Expense Logs
+                </h3>
+                <div className="space-y-2 max-h-[400px] overflow-y-auto custom-scrollbar pr-1">
+                  {expenseLogs.length === 0 ? (
+                     <p className="text-center text-[9px] font-bold uppercase tracking-widest text-gray-400 py-4">No expenses recorded yet.</p>
+                  ) : (
+                    expenseLogs.map((exp) => (
+                      <div key={exp.id || Math.random().toString()} className="flex items-center justify-between p-2.5 border border-red-100 rounded-lg bg-red-50/20 group transition-all">
+                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                          <div className="w-7 h-7 rounded-full bg-red-100 text-red-600 flex items-center justify-center font-black text-xs shrink-0">
+                            <IndianRupee className="w-3.5 h-3.5" />
+                          </div>
+                          <div className="truncate">
+                            <p className="text-xs font-black text-gray-800 uppercase leading-none truncate">{exp.name}</p>
+                            <p className="text-[9px] font-bold text-gray-400 mt-1">{exp.date} • {exp.time}</p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-3 shrink-0 pl-2">
+                          <span className="font-black text-xs text-red-600">-₹{exp.amount}</span>
+                          
+                          {/* 🔥 ACTION BUTTON WITH POINTER BLOCK RESOLUTION */}
+                          {isAdmin && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handleDeleteExpenseLog(exp.id, exp.name);
+                              }}
+                              className="text-gray-400 hover:text-red-600 p-1.5 rounded-md hover:bg-red-50 md:opacity-0 group-hover:opacity-100 transition-all cursor-pointer relative z-50 block"
+                              title="Delete Log Entry"
+                            >
+                              <Trash2 className="w-3.5 h-3.5 pointer-events-none" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : null}
         </div>
       </main>
     </div>
