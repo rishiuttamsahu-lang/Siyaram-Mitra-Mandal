@@ -91,6 +91,9 @@ const PREVIOUS_YEAR = 6500;
 const MONTHS = [
   "SEPT", "OCT", "NOV", "DEC", "JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG",
 ] as const;
+const getTargetForMonth = (month: string): number => {
+  return ["JUN", "JUL", "AUG"].includes(month) ? 200 : 100;
+};
 
 const DELETE_SYNC_BASE_URL = process.env.NEXT_PUBLIC_RENDER_BOT_URL?.replace(/\/$/, "");
 
@@ -176,7 +179,7 @@ export default function Dashboard({ userData }: { userData: any }) {
 
   const [paymentMemberId, setPaymentMemberId] = useState("");
   const [paymentMonth, setPaymentMonth] = useState<Month>(getCurrentTrackingMonth());
-  const [paymentAmount, setPaymentAmount] = useState(String(MONTHLY_TARGET));
+  const [paymentAmount, setPaymentAmount] = useState(String(getTargetForMonth(getCurrentTrackingMonth())));
   const [newMemberName, setNewMemberName] = useState("");
   const [isNewMemberHonorary, setIsNewMemberHonorary] = useState(false);
   const [editCell, setEditCell] = useState<{ id: number | null; month: Month | null }>({ id: null, month: null });
@@ -296,6 +299,7 @@ export default function Dashboard({ userData }: { userData: any }) {
 
   useEffect(() => {
     setPaymentMonth(currentTrackingMonth);
+    setPaymentAmount(String(getTargetForMonth(currentTrackingMonth)));
   }, [currentTrackingMonth]);
 
   // Fetch Building Data Streams from Firestore
@@ -499,7 +503,7 @@ export default function Dashboard({ userData }: { userData: any }) {
   const currentMonthIndex = MONTHS.indexOf(currentTrackingMonth);
   const monthsPassed = MONTHS.slice(0, currentMonthIndex + 1);
   const chargeableMonths = monthsPassed.filter((month) => !blockedMonths.includes(month));
-  const expectedTotalPerMember = chargeableMonths.length * MONTHLY_TARGET;
+  const expectedTotalPerMember = chargeableMonths.reduce((sum, month) => sum + getTargetForMonth(month), 0);
   const payingMembersCount = members.filter((member) => !member.isHonorary).length;
   const totalExpectedMandal = payingMembersCount * expectedTotalPerMember;
   
@@ -638,8 +642,10 @@ export default function Dashboard({ userData }: { userData: any }) {
         sorted.sort((a, b) => {
           const totalA = Object.values(a.payments).reduce((sum, val) => sum + (val || 0), 0);
           const deficitA = a.isHonorary ? 0 : Math.max(0, (monthsPassed * MONTHLY_TARGET) - totalA);
+          const deficitA = a.isHonorary ? 0 : Math.max(0, expectedTotalPerMember - totalA);
           const totalB = Object.values(b.payments).reduce((sum, val) => sum + (val || 0), 0);
-          const deficitB = b.isHonorary ? 0 : Math.max(0, (monthsPassed * MONTHLY_TARGET) - totalB);
+          const deficitB = b.isHonorary ? 0 : Math.max(0, expectedTotalPerMember - totalB);
+            setPaymentAmount(String(getTargetForMonth(paymentMonth)));
           return deficitB - deficitA; // High to Low Deficit
         });
         break;
