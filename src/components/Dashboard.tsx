@@ -86,7 +86,6 @@ const CustomSelect = ({ value, onChange, options, placeholder, theme = 'light', 
 };
 // 🔥 COMPONENT KHATAM
 
-const MONTHLY_TARGET = 100;
 const PREVIOUS_YEAR = 6500;
 const MONTHS = [
   "SEPT", "OCT", "NOV", "DEC", "JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG",
@@ -561,7 +560,7 @@ export default function Dashboard({ userData }: { userData: any }) {
       [`payments.${paymentMonth}`]: currentAmount + amount
     });
 
-    setPaymentAmount(String(MONTHLY_TARGET));
+    setPaymentAmount(String(getTargetForMonth(paymentMonth)));
     setPaymentMemberId("");
   };
 
@@ -641,11 +640,9 @@ export default function Dashboard({ userData }: { userData: any }) {
       case "due-desc":
         sorted.sort((a, b) => {
           const totalA = Object.values(a.payments).reduce((sum, val) => sum + (val || 0), 0);
-          const deficitA = a.isHonorary ? 0 : Math.max(0, (monthsPassed * MONTHLY_TARGET) - totalA);
           const deficitA = a.isHonorary ? 0 : Math.max(0, expectedTotalPerMember - totalA);
           const totalB = Object.values(b.payments).reduce((sum, val) => sum + (val || 0), 0);
           const deficitB = b.isHonorary ? 0 : Math.max(0, expectedTotalPerMember - totalB);
-            setPaymentAmount(String(getTargetForMonth(paymentMonth)));
           return deficitB - deficitA; // High to Low Deficit
         });
         break;
