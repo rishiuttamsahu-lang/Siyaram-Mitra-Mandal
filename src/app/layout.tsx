@@ -49,7 +49,7 @@ export const metadata: Metadata = {
   authors: [{ name: "Siyaram Mitra Mandal" }],
   
   openGraph: {
-    title: "Siyaram Mitra Mandal | Official Member Portal",
+    title: "Siyaram Mitra Mandal Bhiwandi | Shanti Sagar Cha Maharaja",
     // 🚀 Longer Description for WhatsApp, Facebook, and Instagram link previews
     description: "Welcome to the official Siyaram Mitra Mandal digital portal. Experience our exclusive 3D gallery vault, track real-time monthly seva, and join the Ganeshotsav celebrations safely.",
     url: metadataBaseUrl.href,
