@@ -24,7 +24,7 @@ const metadataBaseUrl = (() => {
 
 export const metadata: Metadata = {
   metadataBase: metadataBaseUrl,
-  title: "Siyaram Mitra Mandal | Shanti Sagar Cha Maharaja",
+  title: "Siyaram Mitra Mandal Bhiwandi | Shanti Sagar Cha Maharaja",
   
   // 🚀 Perfect Length SEO Description (158 Characters - Won't cut off on Google)
   description: "Official portal of Siyaram Mitra Mandal, Bhiwandi. Securely track monthly chanda contributions, explore exclusive Bappa photos, and connect with our Parivar.",
