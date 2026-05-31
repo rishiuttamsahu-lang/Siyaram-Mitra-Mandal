@@ -1,7 +1,7 @@
 import { MetadataRoute } from 'next';
 
 export default function robots(): MetadataRoute.Robots {
-  const baseUrl = 'https://siyaram-mitra-mandal.vercel.app/';
+  const baseUrl = 'https://siyaram-mitra-mandal.vercel.app';
 
   return {
     rules: {
