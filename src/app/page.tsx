@@ -33,7 +33,7 @@ export default function Home() {
   const bannedUserDataRef = useRef<AppUserData | null>(null);
   const [isAuthChecking, setIsAuthChecking] = useState(true);
   const [isDeviceBanned, setIsDeviceBanned] = useState(false);
-  
+
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isPasscodeVerified, setIsPasscodeVerified] = useState(false);
 
@@ -73,13 +73,13 @@ export default function Home() {
 
   // 1. Auth Listener
   useEffect(() => {
-    let unsubUserDoc = () => {};
+    let unsubUserDoc = () => { };
 
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
         try {
           const userRef = doc(db, 'users', currentUser.uid);
-          
+
           unsubUserDoc = onSnapshot(userRef, async (userSnap) => {
             if (userSnap.exists()) {
               const data = userSnap.data() as AppUserData;
@@ -91,7 +91,7 @@ export default function Home() {
               if (isAdmin) {
                 try {
                   localStorage.removeItem('mandal_device_banned');
-                } catch {}
+                } catch { }
               }
 
               // 🔥 FAST-FORWARD: if user previously passed the passcode, resume at
@@ -106,7 +106,7 @@ export default function Home() {
                     setIntroPhase(4);
                   }
                 }
-              } catch {}
+              } catch { }
 
               const deviceIsBanned = localStorage.getItem('mandal_device_banned') === 'true';
 
@@ -123,7 +123,7 @@ export default function Home() {
 
                 try {
                   localStorage.setItem('mandal_device_banned', 'true');
-                } catch {}
+                } catch { }
                 setIsDeviceBanned(true);
                 bannedUserDataRef.current = data;
                 setBannedUserData(data);
@@ -134,7 +134,7 @@ export default function Home() {
 
               try {
                 localStorage.removeItem('mandal_device_banned');
-              } catch {}
+              } catch { }
               setIsDeviceBanned(false);
               bannedUserDataRef.current = null;
               setBannedUserData(null);
@@ -241,7 +241,7 @@ export default function Home() {
       const t2 = setTimeout(() => setIntroPhase(2), 4500);
       return () => { clearTimeout(t1); clearTimeout(t2); };
     }
-    
+
     if (introPhase === 2) {
       let i = 0;
       const typingInterval = setInterval(() => {
@@ -412,17 +412,17 @@ export default function Home() {
   return (
     <main className="min-h-screen flex flex-col relative pb-28 bg-gray-50">
       {SeoH1}
-      
+
       {/* Top Header Bar - Slides from Top */}
       <div className={`w-full bg-white/80 backdrop-blur-md border-b border-gray-200 px-4 py-3 flex justify-between items-center sticky top-0 z-30 shadow-sm transition-all duration-700 transform ${revealSequence >= 2 ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0'}`}>
         <h1 className="text-lg font-black text-[#5A0000]" style={{ fontFamily: "'Rozha One', serif" }}>सियाराम</h1>
-          <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3">
           <span className="text-xs font-bold text-gray-600">Hi, {userData.name?.split(' ')[0] || 'User'}</span>
           <button
             onClick={() => {
               try {
                 if (user?.uid) localStorage.removeItem(`mandal_pass_auth_${user.uid}`);
-              } catch {}
+              } catch { }
               void signOut(auth);
               setIsPasscodeVerified(false);
             }}
@@ -434,17 +434,17 @@ export default function Home() {
       </div>
 
       <div className="flex-1 w-full max-w-7xl mx-auto p-4 md:p-6" style={{ paddingTop: 0 }}>
-        
+
         {/* 🔥 CHANGE 2: Dashboard Logic - Ab Member aur Viewer dono ke liye initial intro dikhayega */}
         {activeTab === 'dashboard' && (
           revealSequence === 0 && userData.role?.toLowerCase() !== 'admin' ? (
             // Intro phase for Viewers AND Members
-            <ViewerHome 
-              userData={userData} 
+            <ViewerHome
+              userData={userData}
               onExplore={() => {
                 setRevealSequence(1);
-                setActiveTab('dashboard'); 
-              }} 
+                setActiveTab('dashboard');
+              }}
             />
           ) : (
             // Dashboard Content (After Intro or directly for Admin)
@@ -458,13 +458,13 @@ export default function Home() {
               <div className={`transition-opacity duration-1000 ${revealSequence >= 1 ? 'opacity-100' : 'opacity-0'} w-full flex flex-col`}>
                 <div className="w-full flex justify-center mt-2 mb-4 animate-in slide-in-from-top-4 duration-500 relative z-40">
                   <div className="bg-white/80 backdrop-blur-md border border-gray-200 rounded-full p-1 shadow-sm flex items-center gap-1">
-                    <button 
+                    <button
                       onClick={() => setShowSphereView(true)}
                       className={`px-5 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all duration-300 ${showSphereView ? 'bg-gradient-to-r from-yellow-500 to-yellow-400 text-black shadow-md' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'}`}
                     >
                       3D Vault
                     </button>
-                    <button 
+                    <button
                       onClick={() => setShowSphereView(false)}
                       className={`px-5 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all duration-300 ${!showSphereView ? 'bg-[#5a0000] text-white shadow-md' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'}`}
                     >
@@ -488,14 +488,14 @@ export default function Home() {
             )
           )
         )}
-        
+
         {/* Yahan revealSequence >= 1 use hua hai taaki Explore dabane ke baad pages easily fade-in hoke dikhein */}
         {activeTab === 'gallery' && (
           <div className={`transition-opacity duration-1000 ${revealSequence >= 1 ? 'opacity-100' : 'opacity-0'}`}>
             <Gallery userData={userData} />
           </div>
         )}
-        
+
         {activeTab === 'upload' && (
           <div className={`transition-opacity duration-1000 ${revealSequence >= 1 ? 'opacity-100' : 'opacity-0'}`}>
             <UploadSection userData={userData} />
@@ -510,7 +510,7 @@ export default function Home() {
 
         {activeTab === 'profile' && (
           <div className={`transition-opacity duration-1000 ${revealSequence >= 1 ? 'opacity-100' : 'opacity-0'}`}>
-            {userData.role === 'Admin' ? (
+            {userData.role?.toLowerCase() === 'admin' ? (
               <AdminPanel currentUserData={userData} />
             ) : (
               <UserProfile userData={userData} />
@@ -523,7 +523,7 @@ export default function Home() {
       <div className={`fixed bottom-0 w-full z-50 transition-all duration-700 transform ${revealSequence >= 1 ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0'}`}>
         <SpotlightNav activeTab={activeTab} setActiveTab={setActiveTab} userRole={userData.role} isBanned={!!effectiveUserData?.isBanned} />
       </div>
-      
+
     </main>
   );
 }

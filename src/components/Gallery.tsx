@@ -203,8 +203,8 @@ export default function Gallery({ userData }: { userData: any }) {
         item.category?.toLowerCase().includes(searchQuery.toLowerCase());
 
       let matchesType = true;
-      if (mediaType === 'Photos') matchesType = item.type === 'image';
-      if (mediaType === 'Videos') matchesType = item.type === 'video';
+      if (mediaType === 'Photos') matchesType = item.type === 'image' || item.type === 'photo' || item.type?.startsWith('image');
+      if (mediaType === 'Videos') matchesType = item.type === 'video' || item.type?.startsWith('video');
 
       return matchesCategory && matchesSearch && matchesType;
     });

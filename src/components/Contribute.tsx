@@ -4,9 +4,31 @@ import React, { useEffect, useState } from 'react';
 import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, onSnapshot, orderBy, query, setDoc, where, writeBatch } from 'firebase/firestore';
 import {
   ArrowRight, Check, CheckCircle2, ChevronLeft, Crown, Edit3, Trash2, X,
-  IndianRupee, Loader2, Medal, QrCode, ShieldCheck, Sparkles, Star, Zap
+  IndianRupee, Loader2, Medal, QrCode, ShieldCheck, Sparkles, Star, Zap, AlertTriangle
 } from 'lucide-react';
 import { db } from '@/lib/firebase';
+
+// ✅ React confirm dialog — replaces window.confirm (blocked in PWA/Next.js)
+const ConfirmModal = ({ message, onConfirm, onCancel }: { message: string; onConfirm: () => void; onCancel: () => void }) => (
+  <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-150">
+    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-5 flex flex-col gap-4">
+      <div className="flex items-start gap-3">
+        <div className="shrink-0 w-9 h-9 rounded-full bg-red-100 flex items-center justify-center">
+          <AlertTriangle className="w-5 h-5 text-red-600" />
+        </div>
+        <p className="text-sm font-semibold text-gray-800 leading-relaxed pt-1">{message}</p>
+      </div>
+      <div className="flex gap-2 justify-end">
+        <button onClick={onCancel} className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors">
+          Cancel
+        </button>
+        <button onClick={onConfirm} className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest bg-red-600 text-white hover:bg-red-700 transition-colors">
+          Delete
+        </button>
+      </div>
+    </div>
+  </div>
+);
 
 type Donor = {
   id: string;
@@ -564,15 +586,17 @@ const GlobalStyles = () => (
 const PRESET_AMOUNTS = [11, 21, 51, 101, 501, 1100];
 
 const SPARKLE_POSITIONS = [
-  { top: '12%',  left: '8%',  dur: '7s',  delay: '0s'   },
-  { top: '25%',  left: '90%', dur: '9s',  delay: '1.5s' },
-  { top: '60%',  left: '5%',  dur: '11s', delay: '3s'   },
-  { top: '75%',  left: '88%', dur: '8s',  delay: '0.7s' },
-  { top: '45%',  left: '50%', dur: '13s', delay: '2s'   },
+  { top: '12%', left: '8%', dur: '7s', delay: '0s' },
+  { top: '25%', left: '90%', dur: '9s', delay: '1.5s' },
+  { top: '60%', left: '5%', dur: '11s', delay: '3s' },
+  { top: '75%', left: '88%', dur: '8s', delay: '0.7s' },
+  { top: '45%', left: '50%', dur: '13s', delay: '2s' },
 ];
 
 export default function Contribute({ userData }: ContributeProps) {
   const [view, setView] = useState<'donate' | 'leaderboard'>('donate');
+  const [confirmModal, setConfirmModal] = useState<{ message: string; onConfirm: () => void } | null>(null);
+  const askConfirm = (message: string, onConfirm: () => void) => setConfirmModal({ message, onConfirm });
   const [amount, setAmount] = useState<number | null>(null);
   const [customAmount, setCustomAmount] = useState('');
   const [step, setStep] = useState<1 | 2 | 3>(1);
@@ -756,39 +780,33 @@ export default function Contribute({ userData }: ContributeProps) {
   };
 
   const handleDeleteDonorGroup = async (donor: Donor) => {
-    if (!confirm(`Kya aap sach me "${donor.name}" ka poora contribution record clear/delete karna chahte hain?`)) {
-      return;
-    }
-
-    setIsSavingEdit(true);
-    try {
-      // 1. Delete all chanda_payments entries by userName
-      const q = query(collection(db, 'chanda_payments'), where('userName', '==', donor.name));
-      const querySnap = await getDocs(q);
-      if (!querySnap.empty) {
-        const batch = writeBatch(db);
-        querySnap.docs.forEach((docSnap) => batch.delete(docSnap.ref));
-        await batch.commit();
-        console.log(`✅ [Contribute] Deleted chanda_payments for: ${donor.name}`);
-      }
-
-      // 2. Also delete mandal_chanda doc (keyed by email or donor id)
-      const mandalChandaKey = String(donor.email || donor.id).trim().toLowerCase();
-      if (mandalChandaKey) {
-        try {
-          await deleteDoc(doc(db, 'mandal_chanda', mandalChandaKey));
-          console.log(`✅ [Contribute] Deleted mandal_chanda doc: ${mandalChandaKey}`);
-        } catch (e) {
-          console.warn(`⚠️ [Contribute] mandal_chanda delete skipped:`, e);
+    askConfirm(`"${donor.name}" ka poora contribution record delete karein? Yeh wapas nahi aayega.`, async () => {
+      setIsSavingEdit(true);
+      try {
+        const q = query(collection(db, 'chanda_payments'), where('userName', '==', donor.name));
+        const querySnap = await getDocs(q);
+        if (!querySnap.empty) {
+          const batch = writeBatch(db);
+          querySnap.docs.forEach((docSnap) => batch.delete(docSnap.ref));
+          await batch.commit();
+          console.log(`✅ [Contribute] Deleted chanda_payments for: ${donor.name}`);
         }
+        const mandalChandaKey = String(donor.email || donor.id).trim().toLowerCase();
+        if (mandalChandaKey) {
+          try {
+            await deleteDoc(doc(db, 'mandal_chanda', mandalChandaKey));
+            console.log(`✅ [Contribute] Deleted mandal_chanda doc: ${mandalChandaKey}`);
+          } catch (e) {
+            console.warn(`⚠️ [Contribute] mandal_chanda delete skipped:`, e);
+          }
+        }
+      } catch (error) {
+        console.error('❌ [Contribute] Failed to delete donor group:', error);
+      } finally {
+        setIsSavingEdit(false);
       }
-    } catch (error) {
-      console.error('❌ [Contribute] Failed to delete donor group:', error);
-      alert('Delete request fail ho gayi. Kripya dobara try karein.');
-    } finally {
-      setIsSavingEdit(false);
-    }
-  };
+    });
+  };;
 
   const handleUpdate = async (donor: Donor, newAmount: number) => {
     if (!donor?.id || !Number.isFinite(newAmount) || newAmount < 0) return;
@@ -869,6 +887,15 @@ export default function Contribute({ userData }: ContributeProps) {
   return (
     <div className="contribute-root">
       <GlobalStyles />
+
+      {/* ✅ Confirm Dialog */}
+      {confirmModal && (
+        <ConfirmModal
+          message={confirmModal.message}
+          onConfirm={() => { setConfirmModal(null); confirmModal.onConfirm(); }}
+          onCancel={() => setConfirmModal(null)}
+        />
+      )}
 
       {/* Background decorations */}
       <div className="bg-motif" />
@@ -1201,19 +1228,19 @@ export default function Contribute({ userData }: ContributeProps) {
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <p className={`donor-name ${index === 0 ? 'top1' : ''}`}>{donor.name}</p>
                       {donor.latestMessage &&
-                       donor.latestMessage !== '' &&
-                       !donor.latestMessage.includes('Admin Manual Entry') &&
-                       !donor.latestMessage.toLowerCase().includes('inline admin edit') &&
-                       !donor.latestMessage.toLowerCase().includes('online paid (admin entry)') &&
-                       !donor.latestMessage.toLowerCase().includes('admin entry') &&
-                       !donor.latestMessage.toLowerCase().includes('additional payment added') &&
-                       !donor.latestMessage.toLowerCase().includes('admin adjustment') && (
-                        <p className="donor-msg">&ldquo;{donor.latestMessage}&rdquo;</p>
-                      )}
+                        donor.latestMessage !== '' &&
+                        !donor.latestMessage.includes('Admin Manual Entry') &&
+                        !donor.latestMessage.toLowerCase().includes('inline admin edit') &&
+                        !donor.latestMessage.toLowerCase().includes('online paid (admin entry)') &&
+                        !donor.latestMessage.toLowerCase().includes('admin entry') &&
+                        !donor.latestMessage.toLowerCase().includes('additional payment added') &&
+                        !donor.latestMessage.toLowerCase().includes('admin adjustment') && (
+                          <p className="donor-msg">&ldquo;{donor.latestMessage}&rdquo;</p>
+                        )}
                     </div>
 
                     <div className={`donor-amount ${index === 0 ? 'top1' : ''}`}>
-                      {userData.role === 'Admin' && editingId === donor.id ? (
+                      {userData.role?.toLowerCase() === 'admin' && editingId === donor.id ? (
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                           <input
                             type="number"
@@ -1241,7 +1268,7 @@ export default function Contribute({ userData }: ContributeProps) {
                       ) : (
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                           <span>₹{donor.total.toLocaleString('en-IN')}</span>
-                          {userData.role === 'Admin' && (
+                          {userData.role?.toLowerCase() === 'admin' && (
                             <div className="flex items-center gap-1">
                               <button
                                 onClick={() => handleBeginEdit(donor)}

@@ -10,6 +10,28 @@ import {
   Play, ChevronLeft, ChevronRight, X, Download, Smartphone, Unlock, ChevronDown, Coins, PlusCircle, ArrowUpRight, History, Edit3
 } from 'lucide-react';
 
+// ✅ React-based confirm dialog — replaces window.confirm which is blocked in PWAs/Next.js
+const ConfirmModal = ({ message, onConfirm, onCancel }: { message: string; onConfirm: () => void; onCancel: () => void }) => (
+  <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-150">
+    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-5 flex flex-col gap-4">
+      <div className="flex items-start gap-3">
+        <div className="shrink-0 w-9 h-9 rounded-full bg-red-100 flex items-center justify-center">
+          <AlertTriangle className="w-5 h-5 text-red-600" />
+        </div>
+        <p className="text-sm font-semibold text-gray-800 leading-relaxed pt-1">{message}</p>
+      </div>
+      <div className="flex gap-2 justify-end">
+        <button onClick={onCancel} className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors">
+          Cancel
+        </button>
+        <button onClick={onConfirm} className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest bg-red-600 text-white hover:bg-red-700 transition-colors">
+          Delete
+        </button>
+      </div>
+    </div>
+  </div>
+);
+
 // 🔥 THE NEW PREMIUM CUSTOM SELECT COMPONENT
 const CustomSelect = ({ value, onChange, options, placeholder, theme = 'light' }: { value: any, onChange: any, options: any[], placeholder?: string, theme?: 'light' | 'dark' }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -211,6 +233,9 @@ const DEFAULT_MEMBERS = [
 export default function AdminPanel({ currentUserData, userData }: { currentUserData?: any; userData?: any }) {
   const adminUser = currentUserData ?? userData;
   const [activeTab, setActiveTab] = useState("analytics");
+  // ✅ confirmModal replaces all window.confirm() calls
+  const [confirmModal, setConfirmModal] = useState<{ message: string; onConfirm: () => void } | null>(null);
+  const askConfirm = (message: string, onConfirm: () => void) => setConfirmModal({ message, onConfirm });
   const [users, setUsers] = useState<any[]>([]);
   const [media, setMedia] = useState<any[]>([]);
   const [userSearch, setUserSearch] = useState("");
@@ -308,7 +333,7 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
   });
 
   useEffect(() => {
-    if (adminUser?.role !== 'Admin') return;
+    if (adminUser?.role?.toLowerCase() !== 'admin') return;
 
     const unsubUsers = onSnapshot(collection(db, 'users'), (snap) => {
       const fetchedUsers = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
@@ -399,15 +424,16 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
   };
 
   const handleRestoreOldData = async () => {
-    if (!confirm("Kya aap sach mein purana list wapas Firebase mein daalna chahte hain?")) return;
-    setIsRestoring(true);
-    try {
-      for (const member of DEFAULT_MEMBERS) {
-        await setDoc(doc(db, "mandal_members", member.id.toString()), { id: member.id, name: member.name, payments: member.payments, isHonorary: member.isHonorary || false, createdAt: new Date().toISOString() });
-      }
-      showToast("Purana data restored! 📥", 'success');
-    } catch (error) { showToast("Error: Data restore failed.", 'error'); }
-    setIsRestoring(false);
+    askConfirm("Kya aap sach mein purana list wapas Firebase mein daalna chahte hain?", async () => {
+      setIsRestoring(true);
+      try {
+        for (const member of DEFAULT_MEMBERS) {
+          await setDoc(doc(db, "mandal_members", member.id.toString()), { id: member.id, name: member.name, payments: member.payments, isHonorary: member.isHonorary || false, createdAt: new Date().toISOString() });
+        }
+        showToast("Purana data restored! 📥", 'success');
+      } catch (error) { showToast("Error: Data restore failed.", 'error'); }
+      setIsRestoring(false);
+    });
   };
 
   const formatBytes = (bytes: number) => {
@@ -571,16 +597,16 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
   };
 
   const handleRejectChanda = async (id: string) => {
-    if (!window.confirm('Are you sure you want to reject this payment?')) return;
-    try {
-      await updateDoc(doc(db, 'chanda_payments', id), { status: 'Rejected' });
-      showToast('Payment marked as rejected.', 'success');
-      // 🔥 DEBUG LOG: confirm reject update reached Firestore
-      console.log(`✅ [AdminPanel] Successfully rejected chanda_payment: ${id}`);
-    } catch (error) {
-      console.error('❌ [AdminPanel] Reject failed:', error);
-      showToast('Unable to reject this payment.', 'error');
-    }
+    askConfirm('Are you sure you want to reject this payment?', async () => {
+      try {
+        await updateDoc(doc(db, 'chanda_payments', id), { status: 'Rejected' });
+        showToast('Payment marked as rejected.', 'success');
+        console.log(`✅ [AdminPanel] Successfully rejected chanda_payment: ${id}`);
+      } catch (error) {
+        console.error('❌ [AdminPanel] Reject failed:', error);
+        showToast('Unable to reject this payment.', 'error');
+      }
+    });
   };
 
   const handleAddChanda = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -699,7 +725,7 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
           userName: ledgerModalUser.name || targetEmail,
           userPhoto: ledgerModalUser.photo || null,
           amount: amount,
-          message: adjRemark.trim() || (amount > 0 ? 'Admin Adjustment +': 'Admin Adjustment -'),
+          message: adjRemark.trim() || (amount > 0 ? 'Admin Adjustment +' : 'Admin Adjustment -'),
           status: 'Approved',
           adminAdded: true,
           timestamp: new Date(now),
@@ -722,41 +748,38 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
 
   const handleDeleteLedgerEntry = async () => {
     if (!ledgerModalUser?.email) return;
-    if (!window.confirm(`Are you sure you want to permanently delete ${ledgerModalUser.name}'s entry? (This will also reject their online portal payments)`)) return;
-
-    try {
-      const targetEmail = String(ledgerModalUser.email).trim().toLowerCase();
-
-      await deleteDoc(doc(db, 'mandal_chanda', targetEmail));
-
-      const qPayments = query(collection(db, 'chanda_payments'), where('userEmail', '==', targetEmail));
-      const snap = await getDocs(qPayments);
-      const batch = writeBatch(db);
-      snap.docs.forEach((paymentDoc) => {
-        batch.update(paymentDoc.ref, { status: 'Rejected' });
-      });
-      await batch.commit();
-
-      // 🔥 DEBUG LOG: payments rejected via batch for targetEmail
-      console.log(`✅ [AdminPanel] Rejected ${snap.docs.length} portal payments for ${targetEmail}`);
-
-      // Also remove admin-added chanda_payments entries for this user (cleanup)
+    askConfirm(`"${ledgerModalUser.name}" ki poori entry permanently delete karein? Danveers board se hata diya jayega.`, async () => {
       try {
-        const qAdmin = query(collection(db, 'chanda_payments'), where('userEmail', '==', targetEmail), where('adminAdded', '==', true));
-        const adminSnap = await getDocs(qAdmin);
-        const batch2 = writeBatch(db);
-        adminSnap.docs.forEach((d) => batch2.delete(d.ref));
-        await batch2.commit();
-        console.log(`✅ [AdminPanel] Deleted ${adminSnap.docs.length} admin-added chanda_payments for ${targetEmail}`);
-      } catch (e) {
-        console.warn('⚠️ [AdminPanel] Failed to cleanup admin-added chanda_payments', e);
+        const targetEmail = String(ledgerModalUser.email).trim().toLowerCase();
+        await deleteDoc(doc(db, 'mandal_chanda', targetEmail));
+        const [snapByEmail, snapByUserId] = await Promise.all([
+          getDocs(query(collection(db, 'chanda_payments'), where('userEmail', '==', targetEmail))),
+          getDocs(query(collection(db, 'chanda_payments'), where('userId', '==', targetEmail))),
+        ]);
+        const allPaymentDocs = new Map<string, any>();
+        snapByEmail.docs.forEach((d) => allPaymentDocs.set(d.id, d));
+        snapByUserId.docs.forEach((d) => allPaymentDocs.set(d.id, d));
+        const batch = writeBatch(db);
+        allPaymentDocs.forEach((paymentDoc) => batch.delete(paymentDoc.ref));
+        await batch.commit();
+        console.log(`✅ [AdminPanel] Hard-deleted ${allPaymentDocs.size} chanda_payments for ${targetEmail}`);
+        try {
+          const logsSnap = await getDocs(query(collection(db, 'mandal_chanda_logs'), where('targetEmail', '==', targetEmail)));
+          if (!logsSnap.empty) {
+            const logBatch = writeBatch(db);
+            logsSnap.docs.forEach((d) => logBatch.delete(d.ref));
+            await logBatch.commit();
+          }
+        } catch (e) {
+          console.warn('⚠️ Log cleanup failed (non-critical)', e);
+        }
+        showToast('Entry fully deleted from Danveers board! 🗑️', 'success');
+        setLedgerModalUser(null);
+      } catch (error) {
+        console.error('❌ [AdminPanel] Delete failed:', error);
+        showToast('Failed to delete entry.', 'error');
       }
-
-      showToast('Entry deleted successfully! 🗑️', 'success');
-      setLedgerModalUser(null);
-    } catch (error) {
-      showToast('Failed to delete entry.', 'error');
-    }
+    });
   };
 
   const handleEditPayment = async (paymentId: string, newAmount: number) => {
@@ -779,28 +802,28 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
 
   const handleDeletePayment = async (paymentId: string) => {
     if (!paymentId) return;
-    if (!window.confirm('Delete this payment entry?')) return;
-
-    try {
-      await deleteDoc(doc(db, 'chanda_payments', paymentId));
-      console.log(`✅ [AdminPanel] Deleted chanda_payment ${paymentId}`);
-      showToast('Payment deleted.', 'success');
-    } catch (error) {
-      console.error('❌ [AdminPanel] Payment delete failed:', error);
-      showToast('Failed to delete payment.', 'error');
-    }
+    askConfirm('Is payment entry ko delete karein?', async () => {
+      try {
+        await deleteDoc(doc(db, 'chanda_payments', paymentId));
+        console.log(`✅ [AdminPanel] Deleted chanda_payment ${paymentId}`);
+        showToast('Payment deleted.', 'success');
+      } catch (error) {
+        console.error('❌ [AdminPanel] Payment delete failed:', error);
+        showToast('Failed to delete payment.', 'error');
+      }
+    });
   };
 
   const deleteMedia = async (id: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
     if (!id) return;
-    if (confirm('Permanently delete this from the Vault?')) {
+    askConfirm('Is media ko Vault se permanently delete karein?', async () => {
       try {
         await deleteDoc(doc(db, 'mandal_gallery', id));
         if (selectedIndex !== null && filteredVaultMedia[selectedIndex]?.id === id) setSelectedIndex(null);
         showToast("Media deleted successfully! 🗑️", 'success');
       } catch (error: any) { showToast(`Error deleting file: ${error.message}`, 'error'); }
-    }
+    });
   };
 
   const saveSettings = async (key: string, value: any) => {
@@ -911,10 +934,10 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
         }
       }
       showToast("All failed attempts reset! 🛡️", 'success');
-    } catch (err) {}
+    } catch (err) { }
   };
 
-  if (adminUser?.role !== 'Admin') {
+  if (adminUser?.role?.toLowerCase() !== 'admin') {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-red-500 animate-fade-in">
         <ShieldAlert className="w-16 h-16 mb-4 opacity-50" />
@@ -925,6 +948,15 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
 
   return (
     <div className="space-y-4 animate-fade-in pb-20 relative">
+      {/* ✅ Confirm Dialog — replaces window.confirm */}
+      {confirmModal && (
+        <ConfirmModal
+          message={confirmModal.message}
+          onConfirm={() => { setConfirmModal(null); confirmModal.onConfirm(); }}
+          onCancel={() => setConfirmModal(null)}
+        />
+      )}
+
       {toastMsg && (
         <div className={`fixed top-24 left-1/2 transform -translate-x-1/2 z-[100] px-4 py-2 rounded-full shadow-2xl text-xs font-bold text-white flex items-center gap-2 transition-all ${toastMsg.type === 'error' ? 'bg-red-600' : 'bg-green-600'}`}>
           {toastMsg.text}
@@ -1013,16 +1045,16 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
 
                 <div className="flex items-center gap-2 border-t sm:border-t-0 pt-2 sm:pt-0">
                   <div className="w-[120px]">
-                    <CustomSelect 
-                      value={user.role || 'Viewer'} 
-                      onChange={(val: string) => handleRoleChange(user.id || user.uid, val)} 
+                    <CustomSelect
+                      value={user.role || 'Viewer'}
+                      onChange={(val: string) => handleRoleChange(user.id || user.uid, val)}
                       options={[
                         { value: 'Viewer', label: 'Viewer' },
                         { value: 'Member', label: 'Member' },
                         { value: 'Admin', label: 'Admin' },
                         { value: 'Banned', label: 'Ban User' }
-                      ]} 
-                      theme="light" 
+                      ]}
+                      theme="light"
                     />
                   </div>
                   {user.isBanned && <button onClick={() => handleRoleChange(user.id || user.uid, 'Viewer')} className="p-2 bg-green-100 text-green-700 rounded-xl hover:bg-green-200 shadow-sm" title="Unban User"><RefreshCcw className="w-4 h-4" /></button>}
@@ -1074,7 +1106,7 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
               )}
             </div>
           </div>
-          
+
           <div className="flex flex-col gap-4 border-b border-red-100 pb-4 md:flex-row md:items-center">
             <span className="text-xs font-bold uppercase tracking-wider text-red-700">Manage Active Months:</span>
             <div className="flex flex-wrap gap-2">
@@ -1087,7 +1119,7 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
                 );
               })}
             </div>
-            
+
             {mandalMembers.length === 0 && (
               <button onClick={handleRestoreOldData} disabled={isRestoring} className="ml-auto flex items-center gap-2 rounded-xl bg-yellow-500 px-4 py-2 text-xs font-bold text-yellow-900 shadow-sm hover:bg-yellow-400 disabled:opacity-50">
                 {isRestoring ? 'Restoring...' : '📥 Restore Data'}
@@ -1102,18 +1134,18 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
               <form onSubmit={handleLogPayment} className="flex flex-col gap-3">
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   {/* 🔥 FINANCE SELECTS */}
-                  <CustomSelect 
-                    value={paymentMemberId} 
-                    onChange={setPaymentMemberId} 
-                    options={mandalMembers.map(m => ({ value: m.id, label: m.name }))} 
-                    placeholder="Select Member" 
-                    theme="light" 
+                  <CustomSelect
+                    value={paymentMemberId}
+                    onChange={setPaymentMemberId}
+                    options={mandalMembers.map(m => ({ value: m.id, label: m.name }))}
+                    placeholder="Select Member"
+                    theme="light"
                   />
-                  <CustomSelect 
-                    value={paymentMonth} 
-                    onChange={setPaymentMonth} 
-                    options={MONTHS.map(month => ({ value: month, label: month }))} 
-                    theme="light" 
+                  <CustomSelect
+                    value={paymentMonth}
+                    onChange={setPaymentMonth}
+                    options={MONTHS.map(month => ({ value: month, label: month }))}
+                    theme="light"
                   />
                 </div>
                 <div className="flex gap-2 mt-1">
@@ -1142,7 +1174,7 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
       {/* TAB: CHANDA MANAGEMENT */}
       {activeTab === 'chanda' && (
         <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-3 animate-in fade-in zoom-in duration-300 mt-4">
-          
+
           {/* Add / Update Form Section (Appears above table on Mobile, left on Desktop) */}
           <div className="rounded-2xl sm:rounded-3xl border border-gray-200 bg-white p-4 sm:p-5 shadow-sm lg:col-span-1 h-fit">
             <div className="mb-3 sm:mb-4 flex items-center gap-1.5 sm:gap-2 border-b border-gray-100 pb-2 sm:pb-3">
@@ -1209,7 +1241,76 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
             </form>
           </div>
 
-          
+          {/* ===== DANVEERS LEADERBOARD CONTROL ===== */}
+          <div className="rounded-2xl sm:rounded-3xl border border-yellow-200 bg-gradient-to-br from-yellow-50 to-orange-50 shadow-sm col-span-full overflow-hidden flex flex-col mt-4">
+            <div className="flex flex-row items-center justify-between gap-2 border-b border-yellow-100 bg-yellow-100/60 px-3 py-3 sm:px-4">
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <Coins className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-yellow-600" />
+                <h3 className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-yellow-800">Danveers Board Control</h3>
+              </div>
+              <span className="text-[9px] sm:text-[10px] font-bold text-yellow-600">{mergedChandaList.length} donors</span>
+            </div>
+
+            <div className="max-h-[400px] flex-1 overflow-y-auto custom-scrollbar p-3 sm:p-4 space-y-2">
+              {mergedChandaList.length === 0 ? (
+                <div className="py-10 text-center text-[10px] sm:text-xs font-bold uppercase tracking-widest text-yellow-500/60">No donors yet.</div>
+              ) : (
+                mergedChandaList.map((donor: any, idx: number) => (
+                  <div key={donor.email || idx} className="flex items-center justify-between gap-3 rounded-xl border border-yellow-100 bg-white px-3 py-2.5 shadow-sm hover:shadow-md transition-shadow">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <span className={`shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-black text-white ${idx === 0 ? 'bg-yellow-500' : idx === 1 ? 'bg-gray-400' : idx === 2 ? 'bg-amber-700' : 'bg-gray-300'}`}>
+                        {idx + 1}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-[11px] sm:text-xs font-black text-gray-900 truncate">{donor.name || 'Anonymous'}</p>
+                        <p className="text-[9px] text-gray-400 font-bold truncate">{donor.email}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-xs sm:text-sm font-black text-green-700">₹{Number(donor.totalAmount || 0).toLocaleString('en-IN')}</span>
+                      <button
+                        onClick={() => setLedgerModalUser(donor)}
+                        className="p-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
+                        title="View / Edit / Adjust"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => {
+                          const targetEmail = String(donor.email || '').trim().toLowerCase();
+                          if (!targetEmail) { showToast('No email found for this donor.', 'error'); return; }
+                          askConfirm(`${donor.name} ko Danveers board se delete karein? Yeh wapas nahi aayega.`, async () => {
+                            try {
+                              await deleteDoc(doc(db, 'mandal_chanda', targetEmail));
+                              const [s1, s2] = await Promise.all([
+                                getDocs(query(collection(db, 'chanda_payments'), where('userEmail', '==', targetEmail))),
+                                getDocs(query(collection(db, 'chanda_payments'), where('userId', '==', targetEmail))),
+                              ]);
+                              const allDocs = new Map<string, any>();
+                              s1.docs.forEach((d) => allDocs.set(d.id, d));
+                              s2.docs.forEach((d) => allDocs.set(d.id, d));
+                              if (allDocs.size > 0) {
+                                const b = writeBatch(db);
+                                allDocs.forEach((d) => b.delete(d.ref));
+                                await b.commit();
+                              }
+                              showToast(`${donor.name} removed from Danveers board! 🗑️`, 'success');
+                            } catch (e) {
+                              showToast('Delete failed. Try again.', 'error');
+                            }
+                          });
+                        }}
+                        className="p-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
+                        title="Delete from Danveers board"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
 
           {/* Chanda Payments Live Feed (Raw Transactions) */}
           <div className="rounded-2xl sm:rounded-3xl border border-gray-200 bg-white shadow-sm col-span-full overflow-hidden flex flex-col mt-4">
@@ -1243,73 +1344,74 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
                         console.log('[AdminPanel Payments Feed] Sample payment doc:', payment);
                       }
                       return (
-                      <tr key={payment.id} className="hover:bg-gray-50 transition-colors">
-                        <td className="p-2 sm:p-3 text-[8px] sm:text-[10px] font-mono text-gray-400 truncate max-w-[60px]">{idx + 1}</td>
-                        <td className="p-2 sm:p-3 text-[10px] sm:text-xs font-bold text-gray-900 truncate">{payment.userName || payment.userId || 'N/A'}</td>
-                        <td className="p-2 sm:p-3 text-[10px] text-gray-500 truncate">{payment.userEmail || payment.email || 'Email missing'}</td>
-                        <td className="p-2 sm:p-3 text-right">
-                          {editingPaymentId === payment.id ? (
-                            <div className="flex items-center justify-end gap-1.5">
-                              <input
-                                type="number"
-                                value={tempPaymentAmount}
-                                onChange={(e) => setTempPaymentAmount(Number(e.target.value))}
-                                className="w-16 sm:w-20 px-2 py-1 bg-white border border-gray-300 rounded text-[10px] font-bold text-gray-900 outline-none focus:border-[#5a0000]"
-                              />
-                              <button
-                                onClick={() => handleEditPayment(payment.id, tempPaymentAmount)}
-                                disabled={isEditingPayment}
-                                className="p-1 bg-green-100 text-green-700 rounded hover:bg-green-200 disabled:opacity-50"
-                                aria-label="Confirm"
-                              >
-                                <CheckCircle2 className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                onClick={() => setEditingPaymentId(null)}
-                                className="p-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
-                                aria-label="Cancel"
-                              >
-                                <X className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          ) : (
-                            <span className="font-black text-gray-900">₹{Number(payment.amount || 0).toLocaleString('en-IN')}</span>
-                          )}
-                        </td>
-                        <td className="p-2 sm:p-3 text-right">
-                          <div className="text-[10px] font-bold text-gray-700">
-                            {payment.timestamp?.toDate ? (
-                              <>
-                                {payment.timestamp.toDate().toLocaleDateString('en-IN')}<br />
-                                <span className="text-[9px] text-gray-400 font-medium">
-                                  {payment.timestamp.toDate().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
-                                </span>
-                              </>
+                        <tr key={payment.id} className="hover:bg-gray-50 transition-colors">
+                          <td className="p-2 sm:p-3 text-[8px] sm:text-[10px] font-mono text-gray-400 truncate max-w-[60px]">{idx + 1}</td>
+                          <td className="p-2 sm:p-3 text-[10px] sm:text-xs font-bold text-gray-900 truncate">{payment.userName || payment.userId || 'N/A'}</td>
+                          <td className="p-2 sm:p-3 text-[10px] text-gray-500 truncate">{payment.userEmail || payment.email || 'Email missing'}</td>
+                          <td className="p-2 sm:p-3 text-right">
+                            {editingPaymentId === payment.id ? (
+                              <div className="flex items-center justify-end gap-1.5">
+                                <input
+                                  type="number"
+                                  value={tempPaymentAmount}
+                                  onChange={(e) => setTempPaymentAmount(Number(e.target.value))}
+                                  className="w-16 sm:w-20 px-2 py-1 bg-white border border-gray-300 rounded text-[10px] font-bold text-gray-900 outline-none focus:border-[#5a0000]"
+                                />
+                                <button
+                                  onClick={() => handleEditPayment(payment.id, tempPaymentAmount)}
+                                  disabled={isEditingPayment}
+                                  className="p-1 bg-green-100 text-green-700 rounded hover:bg-green-200 disabled:opacity-50"
+                                  aria-label="Confirm"
+                                >
+                                  <CheckCircle2 className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => setEditingPaymentId(null)}
+                                  className="p-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+                                  aria-label="Cancel"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
                             ) : (
-                              'N/A'
+                              <span className="font-black text-gray-900">₹{Number(payment.amount || 0).toLocaleString('en-IN')}</span>
                             )}
-                          </div>
-                        </td>
-                        <td className="p-2 sm:p-3 text-right space-x-1.5">
-                          {editingPaymentId !== payment.id && (
-                            <>
-                              <button
-                                onClick={() => { setEditingPaymentId(payment.id); setTempPaymentAmount(Number(payment.amount || 0)); }}
-                                className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 rounded text-[9px] font-bold hover:bg-blue-200 transition-colors"
-                              >
-                                <Edit3 className="w-3 h-3" /> Edit
-                              </button>
-                              <button
-                                onClick={() => handleDeletePayment(payment.id)}
-                                className="inline-flex items-center gap-1 px-2 py-1 bg-red-100 text-red-700 rounded text-[9px] font-bold hover:bg-red-200 transition-colors"
-                              >
-                                <Trash2 className="w-3 h-3" /> Delete
-                              </button>
-                            </>
-                          )}
-                        </td>
-                      </tr>
-                    )})}
+                          </td>
+                          <td className="p-2 sm:p-3 text-right">
+                            <div className="text-[10px] font-bold text-gray-700">
+                              {payment.timestamp?.toDate ? (
+                                <>
+                                  {payment.timestamp.toDate().toLocaleDateString('en-IN')}<br />
+                                  <span className="text-[9px] text-gray-400 font-medium">
+                                    {payment.timestamp.toDate().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                                  </span>
+                                </>
+                              ) : (
+                                'N/A'
+                              )}
+                            </div>
+                          </td>
+                          <td className="p-2 sm:p-3 text-right space-x-1.5">
+                            {editingPaymentId !== payment.id && (
+                              <>
+                                <button
+                                  onClick={() => { setEditingPaymentId(payment.id); setTempPaymentAmount(Number(payment.amount || 0)); }}
+                                  className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 rounded text-[9px] font-bold hover:bg-blue-200 transition-colors"
+                                >
+                                  <Edit3 className="w-3 h-3" /> Edit
+                                </button>
+                                <button
+                                  onClick={() => handleDeletePayment(payment.id)}
+                                  className="inline-flex items-center gap-1 px-2 py-1 bg-red-100 text-red-700 rounded text-[9px] font-bold hover:bg-red-200 transition-colors"
+                                >
+                                  <Trash2 className="w-3 h-3" /> Delete
+                                </button>
+                              </>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })}
                   </tbody>
                 </table>
               )}
@@ -1332,19 +1434,19 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
               {/* 🔥 VAULT PREMIUM SELECTS (DARK MODE) */}
               <div className="flex flex-wrap gap-2 md:gap-3">
                 <div className="flex-1 sm:flex-none min-w-[120px]">
-                  <CustomSelect value={vaultType} onChange={setVaultType} options={[{value: 'all', label: 'All Media'}, {value: 'image', label: 'Images Only'}, {value: 'video', label: 'Videos Only'}]} theme="dark" />
+                  <CustomSelect value={vaultType} onChange={setVaultType} options={[{ value: 'all', label: 'All Media' }, { value: 'image', label: 'Images Only' }, { value: 'video', label: 'Videos Only' }]} theme="dark" />
                 </div>
                 <div className="flex-1 sm:flex-none min-w-[120px]">
-                  <CustomSelect value={vaultPrivacy} onChange={setVaultPrivacy} options={[{value: 'all', label: 'All Privacy'}, {value: 'public', label: 'Public'}, {value: 'private', label: 'Private'}]} theme="dark" />
+                  <CustomSelect value={vaultPrivacy} onChange={setVaultPrivacy} options={[{ value: 'all', label: 'All Privacy' }, { value: 'public', label: 'Public' }, { value: 'private', label: 'Private' }]} theme="dark" />
                 </div>
                 <div className="flex-1 sm:flex-none min-w-[120px]">
-                  <CustomSelect value={vaultSort} onChange={setVaultSort} options={[{value: 'newest', label: 'Newest'}, {value: 'oldest', label: 'Oldest'}]} theme="dark" />
+                  <CustomSelect value={vaultSort} onChange={setVaultSort} options={[{ value: 'newest', label: 'Newest' }, { value: 'oldest', label: 'Oldest' }]} theme="dark" />
                 </div>
                 <div className="flex-1 sm:flex-none min-w-[130px]">
-                  <CustomSelect value={vaultUploader} onChange={setVaultUploader} options={[{value: 'all', label: 'All Uploaders'}, ...uniqueUploaders.map(email => ({ value: email, label: email?.split('@')[0] }))]} theme="dark" />
+                  <CustomSelect value={vaultUploader} onChange={setVaultUploader} options={[{ value: 'all', label: 'All Uploaders' }, ...uniqueUploaders.map(email => ({ value: email, label: email?.split('@')[0] }))]} theme="dark" />
                 </div>
                 <div className="flex-1 sm:flex-none min-w-[130px]">
-                  <CustomSelect value={vaultDate} onChange={setVaultDate} options={[{value: 'all', label: 'All Time'}, {value: '7days', label: 'Last 7 Days'}, {value: '30days', label: 'Last 30 Days'}]} theme="dark" />
+                  <CustomSelect value={vaultDate} onChange={setVaultDate} options={[{ value: 'all', label: 'All Time' }, { value: '7days', label: 'Last 7 Days' }, { value: '30days', label: 'Last 30 Days' }]} theme="dark" />
                 </div>
               </div>
             </div>
@@ -1390,7 +1492,7 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
               <div className="w-6 h-6 border-4 border-yellow-500/20 border-t-yellow-500 rounded-full animate-spin"></div>
             </div>
           )}
-          
+
           {selectedMedia && (
             <div className="fixed inset-0 z-[200] flex flex-col bg-black/95 backdrop-blur-xl animate-fade-in touch-none">
               <div className="absolute top-0 w-full p-4 flex justify-between items-start z-50 bg-gradient-to-b from-black/80 to-transparent pointer-events-none">
@@ -1584,7 +1686,7 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
       {activeTab === "security" && (
         <div className="space-y-3 animate-fade-in">
           <div className="bg-white p-3 sm:p-4 rounded-xl border border-gray-100 shadow-sm">
-            <h3 className="font-black text-gray-800 flex items-center gap-2 mb-3 text-sm"><AlertTriangle className="w-4 h-4 text-orange-500"/> Security Monitors</h3>
+            <h3 className="font-black text-gray-800 flex items-center gap-2 mb-3 text-sm"><AlertTriangle className="w-4 h-4 text-orange-500" /> Security Monitors</h3>
             <div className="space-y-2">
               <div className="flex justify-between items-center p-2.5 bg-gray-50 rounded-lg border border-gray-100">
                 <div>
@@ -1604,7 +1706,7 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
             </div>
           </div>
           <div className="bg-[#1a0505] p-3 sm:p-4 rounded-xl shadow-xl border border-red-900/50 max-h-60 overflow-y-auto">
-            <p className="text-red-400 font-bold mb-2 flex items-center gap-1.5 text-xs"><Activity className="w-3 h-3"/> Real Activity Stream</p>
+            <p className="text-red-400 font-bold mb-2 flex items-center gap-1.5 text-xs"><Activity className="w-3 h-3" /> Real Activity Stream</p>
             <div className="space-y-1.5 font-mono text-[9px] sm:text-[10px]">
               {activeUsers.map((user) => <p key={user.id || user.uid || user.email || user.lastLogin} className="text-gray-300"><span className="text-green-500">[{new Date(user.lastLogin).toLocaleTimeString()}]</span> {user.name} logged into the portal.</p>)}
             </div>
@@ -1615,7 +1717,7 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
       {activeTab === "settings" && (
         <div className="space-y-3 animate-fade-in">
           <div className="bg-white p-3 sm:p-4 rounded-xl border border-gray-100 shadow-sm space-y-3">
-            <h3 className="font-black text-gray-800 flex items-center gap-2 border-b border-gray-100 pb-2 text-sm"><Lock className="w-4 h-4 text-[#5A0000]"/> Access Rules</h3>
+            <h3 className="font-black text-gray-800 flex items-center gap-2 border-b border-gray-100 pb-2 text-sm"><Lock className="w-4 h-4 text-[#5A0000]" /> Access Rules</h3>
             <div>
               <label className="text-[10px] font-bold text-gray-500 uppercase">Secret Mandal Passcode</label>
               <div className="flex mt-1 gap-2">
@@ -1625,7 +1727,7 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
             </div>
           </div>
           <div className="bg-white p-3 sm:p-4 rounded-xl border border-gray-100 shadow-sm space-y-4">
-            <h3 className="font-black text-gray-800 flex items-center gap-2 border-b border-gray-100 pb-2 text-sm"><Shield className="w-4 h-4 text-[#5A0000]"/> Anti-Leak & Downloads</h3>
+            <h3 className="font-black text-gray-800 flex items-center gap-2 border-b border-gray-100 pb-2 text-sm"><Shield className="w-4 h-4 text-[#5A0000]" /> Anti-Leak & Downloads</h3>
             <div className="flex items-center justify-between">
               <div><p className="text-xs font-bold text-gray-800">Allow HD Downloads</p></div>
               <button onClick={() => saveSettings('hdDownloads', !settings.hdDownloads)} className={`w-8 h-4 rounded-full transition-colors relative ${settings.hdDownloads ? 'bg-green-500' : 'bg-gray-300'}`}><div className={`w-3 h-3 bg-white rounded-full absolute top-0.5 transition-transform ${settings.hdDownloads ? 'translate-x-4' : 'translate-x-0.5'}`}></div></button>

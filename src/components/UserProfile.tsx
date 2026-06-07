@@ -476,7 +476,7 @@ export default function UserProfile({ userData }: { userData: any }) {
                   className={`group relative overflow-hidden rounded-[16px] border-2 bg-gray-100 cursor-pointer transition-all ${isSelected ? 'border-[#5a0000] scale-95 shadow-inner' : 'border-gray-200 shadow-sm hover:shadow-md'}`}
                 >
                   <div className={`relative aspect-[4/5] sm:aspect-square ${isSelected ? 'opacity-70' : 'opacity-100'}`}>
-                    {item.type === 'video' ? (
+                    {item.type === 'video' || item.type?.startsWith('video') ? (
                       <>
                         {/* 🔥 RAW VIDEO KI JAGAH CLOUDINARY JPG THUMBNAIL */}
                         <img 
@@ -682,7 +682,7 @@ export default function UserProfile({ userData }: { userData: any }) {
                 return (
                   <div key={item.id} className="min-w-full h-full flex items-center justify-center px-4" onClick={(e) => e.stopPropagation()}>
                     {isNear ? (
-                      item.type === 'video' ? (
+                      item.type === 'video' || item.type?.startsWith('video') ? (
                         index === selectedIndex ? (
                           <div className="relative w-full h-full flex items-center justify-center bg-black">
                             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
