@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { auth, db, googleProvider } from '@/lib/firebase';
-import { signInWithRedirect, getRedirectResult, signOut, type User } from 'firebase/auth';
+import { signInWithPopup, signOut, type User } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { Eye, EyeOff } from 'lucide-react';
 
@@ -42,10 +42,28 @@ export default function Welcome({ onAuthSuccess, firebaseUser }: WelcomeProps) {
   const [cachedUserData, setCachedUserData] = useState<UserData | null>(null);
 
   const handleGoogleLogin = async () => {
-    setErrorMsg('');
-    setIsLoading(true);
     try {
-      await signInWithRedirect(auth, googleProvider);
+      const result = await signInWithPopup(auth, googleProvider);
+      setErrorMsg('');
+      setIsLoading(true);
+
+      const currentUser = result.user;
+      const userRef = doc(db, 'users', currentUser.uid);
+      const userSnap = await getDoc(userRef);
+
+      if (userSnap.exists()) {
+        const userData = userSnap.data() as Partial<UserData> & { isBanned?: boolean };
+        if (userData.isBanned) {
+          // Banned user detected -> Don't sign out. Let page.tsx catch isBanned via snapshot.
+          setUser(currentUser);
+          setIsLoading(false);
+          return;
+        }
+      }
+
+      setUser(currentUser);
+      setAttempts(3);
+      setPhase(2);
     } catch (error: unknown) {
       console.error('Google sign-in error:', error);
       const msg = error instanceof Error ? error.message : 'Login fail ho gaya. Dobara try karein.';
@@ -53,24 +71,6 @@ export default function Welcome({ onAuthSuccess, firebaseUser }: WelcomeProps) {
       setIsLoading(false);
     }
   };
-
-  useEffect(() => {
-    const checkRedirect = async () => {
-      try {
-        const result = await getRedirectResult(auth);
-        if (result?.user) {
-          setUser(result.user);
-          setAttempts(3);
-          setPhase(2);
-        }
-      } catch (error: unknown) {
-        console.error('Google redirect sign-in error:', error);
-        const msg = error instanceof Error ? error.message : 'Login fail ho gaya. Dobara try karein.';
-        setErrorMsg(msg);
-      }
-    };
-    checkRedirect();
-  }, []);
 
   const verifyPasscode = async (e: React.FormEvent) => {
     e.preventDefault();
