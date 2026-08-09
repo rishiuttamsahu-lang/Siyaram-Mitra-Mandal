@@ -534,7 +534,7 @@ export default function Dashboard({ userData }: { userData: any }) {
   const totalExpensesDeduction = expenseLogs.reduce((sum, exp) => sum + (Number(exp.amount) || 0), 0);
 
   // 3. 🔥 THE MASTER BALANCED FORMULA: Total Income - Total Expenses + Backlog
-  const grandTotal = (totalCollected + totalBuildingCollected + totalOthersCollected + PREVIOUS_YEAR) - totalExpensesDeduction;
+  const grandTotal = (totalCollected + totalBuildingCollected + totalOthersCollected + previousYearBalance) - totalExpensesDeduction;
 
   const monthlyTotals = useMemo(() =>
     MONTHS.reduce((acc, month) => {
@@ -807,7 +807,7 @@ export default function Dashboard({ userData }: { userData: any }) {
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <SummaryCard label="Total Collected (YTD)" value={`₹${totalCollected.toLocaleString()}`} />
                 <SummaryCard label={`Total Dues (Up to ${currentTrackingMonth})`} value={`₹${totalDeficit.toLocaleString()}`} accentClassName="text-orange-600" badge={`₹${expectedTotalPerMember} Target`} />
-                <SummaryCard label="Previous Year Balance" value={`₹${PREVIOUS_YEAR.toLocaleString()}`} muted />
+                <SummaryCard label="Previous Year Balance" value={`₹${previousYearBalance.toLocaleString()}`} muted />
               </div>
 
               {/* 🔥 UNIFIED SORT TOOLBAR (Mobile + Desktop dono ke liye) */}
