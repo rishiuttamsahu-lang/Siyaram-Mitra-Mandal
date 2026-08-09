@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Script from 'next/script';
 import { db } from '@/lib/firebase';
+import { getTimestampMillis } from '@/lib/utils';
 import { collection, onSnapshot, query, orderBy, addDoc, doc, deleteDoc, updateDoc, arrayUnion, arrayRemove, where } from 'firebase/firestore';
 import { Upload, Play, Shield, Search, Filter, X, ChevronLeft, ChevronRight, Download, Smartphone, Heart, Trash2, Info, Share2, Bookmark, Edit, Save, ChevronDown, CheckCircle2 } from 'lucide-react';
 

@@ -286,18 +286,16 @@ export default function UserProfile({ userData }: { userData: any }) {
   const handleBulkDelete = async () => {
     if (!window.confirm(`Delete ${selectedIds.length} items permanently?`)) return;
     try {
-      const batch = writeBatch(db);
-      selectedIds.forEach(id => batch.delete(doc(db, 'mandal_gallery', id)));
-      await batch.commit();
+      const ops = selectedIds.map(id => (b: any) => b.delete(doc(db, 'mandal_gallery', id)));
+      await commitChunkedBatches(db, ops);
       exitSelectMode();
     } catch (err) { alert("Bulk delete failed"); }
   };
 
   const handleBulkLock = async (lock: boolean) => {
     try {
-      const batch = writeBatch(db);
-      selectedIds.forEach(id => batch.update(doc(db, 'mandal_gallery', id), { isPrivate: lock }));
-      await batch.commit();
+      const ops = selectedIds.map(id => (b: any) => b.update(doc(db, 'mandal_gallery', id), { isPrivate: lock }));
+      await commitChunkedBatches(db, ops);
       exitSelectMode();
     } catch (err) { alert("Bulk lock failed"); }
   };
