@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { db } from '@/lib/firebase';
+import { commitChunkedBatches } from '@/lib/utils';
 import { collection, query, where, onSnapshot, doc, updateDoc, deleteDoc, writeBatch, getDocs, getDoc } from 'firebase/firestore';
 import {
   Mail, Lock, Unlock, Trash2, Edit3, Database, LayoutGrid, X, Settings, Save, Play, ChevronLeft, ChevronRight, Smartphone, Download, Image as ImageIcon, ShieldCheck, Camera, Loader2, CheckCircle2
@@ -201,15 +202,17 @@ export default function UserProfile({ userData }: { userData: any }) {
     e.preventDefault();
     setIsUpdating(true);
     try {
-      const batch = writeBatch(db);
+      const ops: Array<(batch: any) => void> = [];
 
       // 1. Core Profile Document Update
       const userRef = doc(db, 'users', userData.uid);
-      batch.update(userRef, { 
-        name: displayName || "", 
-        bio: bio || "",
-        photoURL: photoURL || "", 
-        isAccountPrivate: isAccountPrivate ?? false 
+      ops.push((batch) => {
+        batch.update(userRef, { 
+          name: displayName || "", 
+          bio: bio || "",
+          photoURL: photoURL || "", 
+          isAccountPrivate: isAccountPrivate ?? false 
+        });
       });
 
       // 2. Gallery Vault Records Update
@@ -220,7 +223,7 @@ export default function UserProfile({ userData }: { userData: any }) {
             uploadedBy: displayName || ""
           };
           if (isAccountPrivate) mediaUpdates.isPrivate = true;
-          batch.update(mediaRef, mediaUpdates);
+          ops.push((batch) => batch.update(mediaRef, mediaUpdates));
         });
       }
 
@@ -228,9 +231,11 @@ export default function UserProfile({ userData }: { userData: any }) {
       const paymentsQuery = query(collection(db, 'chanda_payments'), where('userId', '==', userData.uid));
       const paymentsSnap = await getDocs(paymentsQuery);
       paymentsSnap.forEach((paymentDoc) => {
-        batch.update(paymentDoc.ref, { 
-          userName: displayName || "", 
-          userPhoto: photoURL || "" 
+        ops.push((batch) => {
+          batch.update(paymentDoc.ref, { 
+            userName: displayName || "", 
+            userPhoto: photoURL || "" 
+          });
         });
       });
 
@@ -240,15 +245,17 @@ export default function UserProfile({ userData }: { userData: any }) {
         const chandaRef = doc(db, 'mandal_chanda', targetEmail);
         const chandaSnap = await getDoc(chandaRef);
         if (chandaSnap.exists()) {
-          batch.update(chandaRef, { 
-            name: displayName || "", 
-            photoURL: photoURL || "" 
+          ops.push((batch) => {
+            batch.update(chandaRef, { 
+              name: displayName || "", 
+              photoURL: photoURL || "" 
+            });
           });
         }
       }
 
-      // Commit all changes together
-      await batch.commit();
+      // Commit all changes safely in chunked batches
+      await commitChunkedBatches(db, ops);
       setIsEditModalOpen(false);
     } catch (error: any) {
       alert(`Failed to save profile globally: ${error.message}`);

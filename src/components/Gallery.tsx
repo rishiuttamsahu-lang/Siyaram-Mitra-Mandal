@@ -211,8 +211,8 @@ export default function Gallery({ userData }: { userData: any }) {
     });
 
     filtered.sort((a, b) => {
-      if (sortBy === 'Newest') return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-      if (sortBy === 'Oldest') return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      if (sortBy === 'Newest') return getTimestampMillis(b) - getTimestampMillis(a);
+      if (sortBy === 'Oldest') return getTimestampMillis(a) - getTimestampMillis(b);
       if (sortBy === 'Popular') return (b.likes?.length || 0) - (a.likes?.length || 0);
       return 0;
     });

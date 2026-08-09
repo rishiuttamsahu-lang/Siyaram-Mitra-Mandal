@@ -7,6 +7,7 @@ import {
   IndianRupee, Loader2, Medal, QrCode, ShieldCheck, Sparkles, Star, Zap, AlertTriangle
 } from 'lucide-react';
 import { db } from '@/lib/firebase';
+import { commitChunkedBatches } from '@/lib/utils';
 
 // ✅ React confirm dialog — replaces window.confirm (blocked in PWA/Next.js)
 const ConfirmModal = ({ message, onConfirm, onCancel }: { message: string; onConfirm: () => void; onCancel: () => void }) => (
@@ -758,8 +759,10 @@ export default function Contribute({ userData }: ContributeProps) {
     };
   }, []);
 
-  const finalAmount = amount ?? (customAmount ? parseInt(customAmount, 10) : 0);
-  const canContinue = finalAmount > 0;
+  const parsedCustomAmount = customAmount ? parseFloat(customAmount) : 0;
+  const validCustomAmount = Number.isFinite(parsedCustomAmount) && parsedCustomAmount >= 1 && parsedCustomAmount <= 100000 ? Math.floor(parsedCustomAmount) : 0;
+  const finalAmount = amount ?? validCustomAmount;
+  const canContinue = finalAmount > 0 && finalAmount <= 100000;
   const getUpiUrl = () => {
     const noteToken = `VAULT-${currentSessionId || 'SESSION'}`;
     return `upi://pay?pa=${MANDAL_UPI_ID}&pn=${encodeURIComponent(MANDAL_NAME)}&am=${finalAmount}.00&tn=${encodeURIComponent(noteToken)}&cu=INR`;
@@ -845,9 +848,8 @@ export default function Contribute({ userData }: ContributeProps) {
         const q = query(collection(db, 'chanda_payments'), where('userName', '==', donor.name));
         const querySnap = await getDocs(q);
         if (!querySnap.empty) {
-          const batch = writeBatch(db);
-          querySnap.docs.forEach((docSnap) => batch.delete(docSnap.ref));
-          await batch.commit();
+          const deleteOps = querySnap.docs.map((docSnap) => (b: any) => b.delete(docSnap.ref));
+          await commitChunkedBatches(db, deleteOps);
           console.log(`✅ [Contribute] Deleted chanda_payments for: ${donor.name}`);
         }
         const mandalChandaKey = String(donor.email || donor.id).trim().toLowerCase();

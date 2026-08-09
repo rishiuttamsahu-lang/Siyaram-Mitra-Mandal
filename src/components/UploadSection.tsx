@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { db } from '@/lib/firebase';
+import { getTimestampMillis } from '@/lib/utils';
 import { collection, query, where, onSnapshot, doc, updateDoc, deleteDoc, writeBatch, getDocs, getDoc } from 'firebase/firestore';
 import {
   Mail, Lock, Unlock, Trash2, Edit3, Database, LayoutGrid, X, Settings, Save, Play, ChevronLeft, ChevronRight, Smartphone, Download, Image as ImageIcon, ShieldCheck, Camera, Loader2, CheckCircle2
