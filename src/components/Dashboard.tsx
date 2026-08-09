@@ -137,6 +137,7 @@ export default function Dashboard({ userData }: { userData: any }) {
   const [expandedMemberId, setExpandedMemberId] = useState<number | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [sysSettings, setSysSettings] = useState<any>(null);
+  const [previousYearBalance, setPreviousYearBalance] = useState<number>(6500);
   const [sortBy, setSortBy] = useState<string>("default"); // 🔥 SORTING STATE
 
   const [activeSubTab, setActiveSubTab] = useState<'members' | 'buildings' | 'others' | 'expenses'>('buildings'); // Default to buildings
@@ -278,10 +279,13 @@ export default function Dashboard({ userData }: { userData: any }) {
       setMembers(fetchedMembers);
     });
 
-    // Listen to Blocked Months Config
+    // Listen to Blocked Months Config & Opening Balance
     const unsubConfig = onSnapshot(doc(db, "mandal_settings", "config"), (docSnap) => {
-      if (docSnap.exists() && docSnap.data().blockedMonths) {
-        setBlockedMonths(docSnap.data().blockedMonths);
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data.blockedMonths) setBlockedMonths(data.blockedMonths);
+        if (data.previousYearBalance !== undefined) setPreviousYearBalance(Number(data.previousYearBalance) || 0);
+        else if (data.openingBalance !== undefined) setPreviousYearBalance(Number(data.openingBalance) || 0);
       }
     });
 
@@ -434,11 +438,18 @@ export default function Dashboard({ userData }: { userData: any }) {
 
     try {
       if (DELETE_SYNC_BASE_URL) {
-        await fetch(`${DELETE_SYNC_BASE_URL}/api/delete-sync`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name, amount, type: "Income" })
-        });
+        try {
+          const res = await fetch(`${DELETE_SYNC_BASE_URL}/api/delete-sync`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name, amount, type: "Income" })
+          });
+          if (!res.ok) {
+            console.warn(`⚠️ [Dashboard] delete-sync responded with status ${res.status}`);
+          }
+        } catch (syncErr) {
+          console.warn("⚠️ [Dashboard] Bot sync endpoint unreachable:", syncErr);
+        }
       }
 
       await deleteDoc(doc(db, "other_chanda", id));
@@ -460,11 +471,18 @@ export default function Dashboard({ userData }: { userData: any }) {
 
     try {
       if (DELETE_SYNC_BASE_URL) {
-        await fetch(`${DELETE_SYNC_BASE_URL}/api/delete-sync`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name, amount, type: "Expense" })
-        });
+        try {
+          const res = await fetch(`${DELETE_SYNC_BASE_URL}/api/delete-sync`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name, amount, type: "Expense" })
+          });
+          if (!res.ok) {
+            console.warn(`⚠️ [Dashboard] delete-sync responded with status ${res.status}`);
+          }
+        } catch (syncErr) {
+          console.warn("⚠️ [Dashboard] Bot sync endpoint unreachable:", syncErr);
+        }
       }
 
       await deleteDoc(doc(db, "expenses_log", id));

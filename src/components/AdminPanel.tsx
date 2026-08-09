@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { db } from '@/lib/firebase';
+import { getTimestampMillis, commitChunkedBatches } from '@/lib/utils';
 import { collection, onSnapshot, doc, updateDoc, deleteDoc, query, orderBy, setDoc, getDoc, where, getDocs, writeBatch, addDoc } from 'firebase/firestore';
 import UserProfile from '@/components/UserProfile';
 import {
@@ -540,7 +541,7 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
     const typeMatch = vaultType === 'all' ? true : vaultType === 'image' ? item.type?.startsWith('image') : item.type?.startsWith('video');
     const privacyMatch = vaultPrivacy === 'all' ? true : vaultPrivacy === 'private' ? item.isPrivate === true : item.isPrivate === false;
     const uploaderMatch = vaultUploader === 'all' ? true : item.uploaderEmail === vaultUploader;
-    const itemDate = new Date(item.timestamp?.seconds ? item.timestamp.seconds * 1000 : item.createdAt || 0);
+    const itemDate = new Date(getTimestampMillis(item));
     const daysDiff = (new Date().getTime() - itemDate.getTime()) / (1000 * 3600 * 24);
     let dateMatch = true;
     if (vaultDate === '7days') dateMatch = daysDiff <= 7;
@@ -548,8 +549,8 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
     const captionMatch = vaultCaption === 'all' ? true : vaultCaption === 'has_caption' ? !!item.caption : !item.caption;
     return searchMatch && typeMatch && privacyMatch && uploaderMatch && dateMatch && captionMatch;
   }).sort((a: any, b: any) => {
-    const timeA = a.timestamp?.seconds || a.createdAt || 0;
-    const timeB = b.timestamp?.seconds || b.createdAt || 0;
+    const timeA = getTimestampMillis(a);
+    const timeB = getTimestampMillis(b);
     return vaultSort === 'newest' ? timeB - timeA : timeA - timeB;
   });
 
@@ -586,9 +587,65 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
 
   const handleApproveChanda = async (id: string) => {
     try {
-      await updateDoc(doc(db, 'chanda_payments', id), { status: 'Approved' });
-      showToast('Chanda approved successfully! ✅', 'success');
-      // 🔥 DEBUG LOG: confirm approve update reached Firestore
+      const paymentRef = doc(db, 'chanda_payments', id);
+      const paymentSnap = await getDoc(paymentRef);
+      if (!paymentSnap.exists()) {
+        showToast('Payment record not found.', 'error');
+        return;
+      }
+      const paymentData = paymentSnap.data();
+      const amount = Number(paymentData.amount) || 0;
+      const userName = (paymentData.userName || '').trim();
+      const userEmail = (paymentData.userEmail || paymentData.userId || '').trim().toLowerCase();
+
+      await updateDoc(paymentRef, { status: 'Approved' });
+
+      // 1. Sync with mandal_chanda ledger
+      if (userEmail && userEmail.includes('@')) {
+        const chandaRef = doc(db, 'mandal_chanda', userEmail);
+        const chandaSnap = await getDoc(chandaRef);
+        const prevTotal = chandaSnap.exists()
+          ? (Number(chandaSnap.data()?.totalAmount) || Number(chandaSnap.data()?.total) || 0)
+          : 0;
+        const nextTotal = prevTotal + amount;
+
+        await setDoc(chandaRef, {
+          email: userEmail,
+          name: userName || 'Online Donor',
+          photoURL: paymentData.userPhoto || null,
+          totalAmount: nextTotal,
+          total: nextTotal,
+          latestMessage: paymentData.message || 'Online payment approved',
+          lastUpdated: new Date().toISOString(),
+          updatedBy: currentUserData?.email || 'admin',
+        }, { merge: true });
+
+        await setDoc(doc(db, 'mandal_chanda_logs', `${userEmail}_${Date.now()}`), {
+          adminEmail: currentUserData?.email || 'admin',
+          targetEmail: userEmail,
+          amountAdded: amount,
+          message: paymentData.message || 'Approved online contribution',
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      // 2. Sync with mandal_members ledger if donor is a member
+      if (userName || userEmail) {
+        const matchingMember = mandalMembers.find((m) => {
+          if (userName && m.name && m.name.toLowerCase() === userName.toLowerCase()) return true;
+          return false;
+        });
+        if (matchingMember) {
+          const curMonth = getCurrentTrackingMonth();
+          const curAmount = matchingMember.payments?.[curMonth] || 0;
+          await updateDoc(doc(db, 'mandal_members', matchingMember.id.toString()), {
+            [`payments.${curMonth}`]: curAmount + amount,
+          });
+          console.log(`✅ [AdminPanel] Synced ₹${amount} online payment to member ${matchingMember.name} for ${curMonth}`);
+        }
+      }
+
+      showToast('Chanda approved successfully & synced! ✅', 'success');
       console.log(`✅ [AdminPanel] Successfully approved chanda_payment: ${id}`);
     } catch (error) {
       console.error('❌ [AdminPanel] Approve failed:', error);
