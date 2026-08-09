@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from 'react';
-import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, onSnapshot, orderBy, query, setDoc, where, writeBatch } from 'firebase/firestore';
+import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, onSnapshot, orderBy, query, setDoc, where, writeBatch, updateDoc } from 'firebase/firestore';
 import {
   ArrowRight, Check, CheckCircle2, ChevronLeft, Crown, Edit3, Trash2, X,
   IndianRupee, Loader2, Medal, QrCode, ShieldCheck, Sparkles, Star, Zap, AlertTriangle
@@ -49,6 +49,7 @@ type PaymentDoc = {
   userPhoto?: string | null;
   amount?: number | string;
   message?: string;
+  sessionToken?: string;
 };
 
 type ContributeProps = {
@@ -609,9 +610,33 @@ export default function Contribute({ userData }: ContributeProps) {
   const [tempAmount, setTempAmount] = useState<number>(0);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
 
+  // 🔥 NAYI INTERNALS: Realtime verification states
+  const [currentSessionId, setCurrentSessionId] = useState<string>("");
+
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
   }, []);
+
+  // 🔥 INSTANT REALTIME STREAM: Listen dynamically to active payment doc
+  useEffect(() => {
+    if (step !== 2 || !currentSessionId) return;
+
+    // Listen to collection with specific real-time metadata flag
+    const q = query(
+      collection(db, 'chanda_payments'), 
+      where('sessionToken', '==', currentSessionId),
+      where('status', '==', 'Approved')
+    );
+
+    const unsubVerify = onSnapshot(q, (snapshot) => {
+      if (!snapshot.empty) {
+        console.log("🚀 Realtime Check: Webhook auto-approved transaction!");
+        setStep(3); // Direct forward user to Success Tab Box!
+      }
+    });
+
+    return () => unsubVerify();
+  }, [step, currentSessionId]);
 
   useEffect(() => {
     let approvedPayments: PaymentDoc[] = [];
@@ -735,14 +760,36 @@ export default function Contribute({ userData }: ContributeProps) {
 
   const finalAmount = amount ?? (customAmount ? parseInt(customAmount, 10) : 0);
   const canContinue = finalAmount > 0;
-  const getUpiUrl = () =>
-    `upi://pay?pa=${MANDAL_UPI_ID}&pn=${encodeURIComponent(MANDAL_NAME)}&am=${finalAmount}.00&cu=INR`;
+  const getUpiUrl = () => {
+    const noteToken = `VAULT-${currentSessionId || 'SESSION'}`;
+    return `upi://pay?pa=${MANDAL_UPI_ID}&pn=${encodeURIComponent(MANDAL_NAME)}&am=${finalAmount}.00&tn=${encodeURIComponent(noteToken)}&cu=INR`;
+  };
 
-  const handleProceed = () => {
+  const handleProceed = async () => {
     if (!canContinue) return;
+    
+    // Create random unique string token for reference checking mapping
+    const trackingToken = `TXN${Date.now()}${Math.floor(1000 + Math.random() * 9000)}`;
+    setCurrentSessionId(trackingToken);
     setAmount(finalAmount);
     setIsQrLoaded(false);
     setStep(2);
+
+    // Initialize payment draft placeholder inside collection so webhook easily maps target fields
+    try {
+      await addDoc(collection(db, 'chanda_payments'), {
+        userId: userData.uid || 'anonymous',
+        userName: userData.name || 'Anonymous Donor',
+        userEmail: userData.email || '',
+        userPhoto: userData.photoURL || null,
+        amount: finalAmount,
+        status: 'Pending', // Awaiting webhook approval
+        sessionToken: trackingToken,
+        timestamp: new Date(),
+      });
+    } catch (err) {
+      console.error("Session draft tracking failed:", err);
+    }
   };
 
   const handleSubmitChanda = async (e: React.FormEvent) => {
@@ -750,17 +797,29 @@ export default function Contribute({ userData }: ContributeProps) {
     if (!amount || utr.length < 6) return;
     setIsSubmitting(true);
     try {
-      await addDoc(collection(db, 'chanda_payments'), {
-        userId: userData.uid || 'anonymous',
-        userName: userData.name,
-        userEmail: userData.email || '',
-        userPhoto: userData.photoURL || null,
-        amount,
-        utr_number: utr,
-        message,
-        status: 'Pending',
-        timestamp: new Date(),
-      });
+      let updated = false;
+      if (currentSessionId) {
+        const q = query(collection(db, 'chanda_payments'), where('sessionToken', '==', currentSessionId));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          const docRef = doc(db, 'chanda_payments', snap.docs[0].id);
+          await updateDoc(docRef, { utr_number: utr, message });
+          updated = true;
+        }
+      }
+      if (!updated) {
+        await addDoc(collection(db, 'chanda_payments'), {
+          userId: userData.uid || 'anonymous',
+          userName: userData.name || 'Anonymous Donor',
+          userEmail: userData.email || '',
+          userPhoto: userData.photoURL || null,
+          amount,
+          utr_number: utr,
+          message,
+          status: 'Pending',
+          timestamp: new Date(),
+        });
+      }
       setStep(3);
     } catch (error) {
       console.error('Error submitting contribution:', error);
@@ -1065,6 +1124,17 @@ export default function Contribute({ userData }: ContributeProps) {
                     </a>
                     <p className="upi-hint">Works with GPay · PhonePe · Paytm · BHIM</p>
                   </div>
+                </div>
+
+                {/* 🔥 REALTIME DETECTOR ACTIVE NOTIFIER */}
+                <div className="glass-card border border-dashed border-green-500 bg-green-50/10 p-4 mb-4 text-center space-y-2 animate-pulse">
+                  <div className="flex items-center justify-center gap-2 text-green-700 text-xs font-black uppercase tracking-widest">
+                    <span className="w-2.5 h-2.5 rounded-full bg-green-500 animate-ping"></span>
+                    Realtime Checking Payment...
+                  </div>
+                  <p className="text-[10px] text-gray-400 font-bold uppercase leading-tight">
+                    UPI app pe pay karne ke baad is page ko band mat karna.<br />System automatically detect kar raha hai.
+                  </p>
                 </div>
 
                 {/* Verification Form */}
