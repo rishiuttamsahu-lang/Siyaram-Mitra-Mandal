@@ -268,13 +268,14 @@ export default function Dashboard({ userData }: { userData: any }) {
 
   // 1. Fetch Real-time Data from Firebase
   useEffect(() => {
-    // Listen to Members
     const unsubMembers = onSnapshot(collection(db, "mandal_members"), (snap) => {
       const fetchedMembers: Member[] = snap.docs.map(doc => ({
         id: doc.data().id,
         name: doc.data().name,
         payments: doc.data().payments || {},
         isHonorary: doc.data().isHonorary || false,
+        isRemoved: doc.data().isRemoved || false,
+        exemptMonths: doc.data().exemptMonths || [],
       }));
       // Sort by ID
       fetchedMembers.sort((a, b) => a.id - b.id);
@@ -527,6 +528,11 @@ export default function Dashboard({ userData }: { userData: any }) {
   // individually exempted from (e.g. months before they joined the mandal).
   const getMemberExpectedTotal = (member: Member) => {
     const memberExempt: Month[] = member.exemptMonths || [];
+    if (member.isRemoved) {
+      const paidTotal = getMemberTotal(member.payments);
+      const normalExpected = chargeableMonths.filter((month) => !memberExempt.includes(month)).reduce((sum, month) => sum + getTargetForMonth(month), 0);
+      return Math.min(paidTotal, normalExpected);
+    }
     return chargeableMonths.filter((month) => !memberExempt.includes(month)).reduce((sum, month) => sum + getTargetForMonth(month), 0);
   };
   const payingMembersCount = members.filter((member) => !member.isHonorary && !member.isRemoved).length;
@@ -665,10 +671,10 @@ export default function Dashboard({ userData }: { userData: any }) {
         break;
       case "due-desc":
         sorted.sort((a, b) => {
-          const totalA = Object.values(a.payments).reduce((sum, val) => sum + (val || 0), 0);
-          const deficitA = a.isHonorary ? 0 : Math.max(0, expectedTotalPerMember - totalA);
-          const totalB = Object.values(b.payments).reduce((sum, val) => sum + (val || 0), 0);
-          const deficitB = b.isHonorary ? 0 : Math.max(0, expectedTotalPerMember - totalB);
+          const totalA = getMemberTotal(a.payments);
+          const deficitA = a.isHonorary || a.isRemoved ? 0 : Math.max(0, getMemberExpectedTotal(a) - totalA);
+          const totalB = getMemberTotal(b.payments);
+          const deficitB = b.isHonorary || b.isRemoved ? 0 : Math.max(0, getMemberExpectedTotal(b) - totalB);
           return deficitB - deficitA; // High to Low Deficit
         });
         break;
