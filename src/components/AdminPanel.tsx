@@ -378,7 +378,7 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
     const unsubMandalMembers = onSnapshot(collection(db, "mandal_members"), (snap) => {
       const fetchedMembers = snap.docs.map(doc => {
         const data = doc.data() as any;
-        return { id: data.id, name: data.name, payments: data.payments || {}, isHonorary: data.isHonorary || false };
+        return { id: data.id, name: data.name, payments: data.payments || {}, isHonorary: data.isHonorary || false, isRemoved: data.isRemoved || false };
       });
       fetchedMembers.sort((a, b) => a.id - b.id);
       setMandalMembers(fetchedMembers);
@@ -424,20 +424,43 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
     showToast(`Member Added! 🎉`, 'success');
   };
 
-  // ✅ Remove a member from the mandal (e.g. member shifting away / leaving mid-way).
-  // This deletes their row from "mandal_members" entirely — their pending/unpaid months
-  // simply disappear along with them (nothing left to chase), while past logged payments
-  // remain untouched in the finance history for accounting records.
-  const handleDeleteMember = (memberId: number, memberName: string) => {
-    askConfirm(`"${memberName}" ko Mandal members se hata dein? Inke pending/baaki mahino ka hisaab bhi saath hi hat jayega. Yeh wapas nahi aayega.`, async () => {
+  // ✅ Soft-remove a member from the mandal (e.g. member shifting away / leaving mid-way).
+  // Member is hidden from active lists (payment dropdown, paying count) via `isRemoved: true`,
+  // but their document + full month-wise payment history stays intact in Firestore for records.
+  const handleRemoveMember = (memberId: number, memberName: string) => {
+    askConfirm(`"${memberName}" ko active members se hata dein? Inka pura payment history safe rahega, sirf active list se hat jayenge. Baad me restore bhi kar sakte hain.`, async () => {
       try {
-        await deleteDoc(doc(db, "mandal_members", memberId.toString()));
-        showToast(`${memberName} ko member list se hata diya gaya. 🗑️`, 'success');
+        await updateDoc(doc(db, "mandal_members", memberId.toString()), { isRemoved: true, removedAt: new Date().toISOString() });
+        showToast(`${memberName} ko active list se hata diya gaya. 🗑️`, 'success');
       } catch (error) {
-        showToast("Error: Member delete nahi ho paya.", 'error');
+        showToast("Error: Member remove nahi ho paya.", 'error');
       }
     });
   };
+
+  const handleRestoreMember = async (memberId: number, memberName: string) => {
+    try {
+      await updateDoc(doc(db, "mandal_members", memberId.toString()), { isRemoved: false });
+      showToast(`${memberName} wapas active list me aa gaye! ✅`, 'success');
+    } catch (error) {
+      showToast("Error: Member restore nahi ho paya.", 'error');
+    }
+  };
+
+  // ✅ Per-member month blocking — jab koi member baad me (mid-year) join karta hai, to
+  // uske pichle (join se pehle wale) mahino ko individually block kar sakte hain, taaki
+  // usse un mahino ka paisa na maanga jaye, bina baaki sabke liye wo mahina block kiye.
+  const toggleMemberExemptMonth = async (member: any, month: Month) => {
+    const currentExempt: Month[] = member.exemptMonths || [];
+    const newExempt = currentExempt.includes(month) ? currentExempt.filter((m: Month) => m !== month) : [...currentExempt, month];
+    try {
+      await updateDoc(doc(db, "mandal_members", member.id.toString()), { exemptMonths: newExempt });
+    } catch (error) {
+      showToast("Error: Month block/unblock nahi ho paya.", 'error');
+    }
+  };
+
+  const [expandedMemberForMonths, setExpandedMemberForMonths] = useState<number | null>(null);
 
   const handleRestoreOldData = async () => {
     askConfirm("Kya aap sach mein purana list wapas Firebase mein daalna chahte hain?", async () => {
@@ -463,7 +486,11 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
   const totalStorage = media.reduce((acc, curr) => acc + (curr.size || 0), 0);
   const totalVideos = media.filter(m => m.type === 'video').length;
   const bannedUsersCount = users.filter(u => u.isBanned).length;
-  const payingMembersCount = mandalMembers.filter((member) => !member.isHonorary).length;
+  // ✅ Removed members are kept in the DB (soft-delete) so their payment history stays
+  // intact for accounting — they're just filtered out of active lists/dropdowns/counts.
+  const activeMandalMembers = mandalMembers.filter((member) => !member.isRemoved);
+  const removedMandalMembers = mandalMembers.filter((member) => member.isRemoved);
+  const payingMembersCount = activeMandalMembers.filter((member) => !member.isHonorary).length;
   const pendingChandaPayments = chandaPayments.filter((payment) => payment.status === 'Pending');
   const usersById = useMemo(() => {
     const lookup = new Map<string, any>();
@@ -1209,7 +1236,7 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
                   <CustomSelect
                     value={paymentMemberId}
                     onChange={setPaymentMemberId}
-                    options={mandalMembers.map(m => ({ value: m.id, label: m.name }))}
+                    options={activeMandalMembers.map(m => ({ value: m.id, label: m.name }))}
                     placeholder="Select Member"
                     theme="light"
                   />
@@ -1246,30 +1273,81 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
           <div className="rounded-xl border border-red-100 bg-white p-4 shadow-sm">
             <h3 className="mb-3 flex items-center justify-between text-sm font-bold uppercase tracking-wide text-red-800">
               <span>All Members</span>
-              <span className="text-[10px] font-semibold text-gray-400">{mandalMembers.length} total</span>
+              <span className="text-[10px] font-semibold text-gray-400">{activeMandalMembers.length} active</span>
             </h3>
-            <div className="custom-scrollbar max-h-[320px] space-y-2 overflow-y-auto pr-1">
-              {mandalMembers.length === 0 ? (
+            <p className="mb-3 text-[10px] font-semibold leading-relaxed text-gray-500">
+              💡 Naam par click karke uske individual mahine block/unblock karein — jaise agar member baad me (mid-year) join hua ho, to uske pichle mahino ko block kar dein taaki usse un mahino ka paisa na maanga jaye.
+            </p>
+            <div className="custom-scrollbar max-h-[420px] space-y-2 overflow-y-auto pr-1">
+              {activeMandalMembers.length === 0 ? (
                 <p className="py-4 text-center text-xs font-bold uppercase tracking-widest text-gray-400">No members yet</p>
               ) : (
-                mandalMembers.map((member) => (
-                  <div key={member.id} className="flex items-center justify-between gap-3 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
-                    <div className="min-w-0">
-                      <p className="truncate text-xs font-bold text-gray-800">{member.name}</p>
-                      {member.isHonorary && <span className="text-[9px] font-bold uppercase tracking-wider text-yellow-600">Honorary</span>}
+                activeMandalMembers.map((member) => {
+                  const isExpanded = expandedMemberForMonths === member.id;
+                  const memberExempt: Month[] = member.exemptMonths || [];
+                  return (
+                    <div key={member.id} className="rounded-lg border border-gray-100 bg-gray-50 overflow-hidden">
+                      <div className="flex items-center justify-between gap-3 px-3 py-2">
+                        <button type="button" onClick={() => setExpandedMemberForMonths(isExpanded ? null : member.id)} className="flex min-w-0 flex-1 items-center gap-2 text-left">
+                          <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                          <div className="min-w-0">
+                            <p className="truncate text-xs font-bold text-gray-800">{member.name}</p>
+                            <div className="flex items-center gap-1.5">
+                              {member.isHonorary && <span className="text-[9px] font-bold uppercase tracking-wider text-yellow-600">Honorary</span>}
+                              {memberExempt.length > 0 && <span className="text-[9px] font-bold uppercase tracking-wider text-blue-600">{memberExempt.length} month(s) blocked</span>}
+                            </div>
+                          </div>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveMember(member.id, member.name)}
+                          title="Remove member"
+                          className="shrink-0 rounded-lg border border-red-100 bg-red-50 p-2 text-red-600 transition-colors hover:bg-red-100"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                      {isExpanded && (
+                        <div className="border-t border-gray-200 bg-white px-3 py-2.5">
+                          <p className="mb-2 text-[9px] font-bold uppercase tracking-wider text-gray-400">Is member ke liye mahine block karein:</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {MONTHS.map((month) => {
+                              const isMemberBlocked = memberExempt.includes(month);
+                              return (
+                                <button key={month} type="button" onClick={() => toggleMemberExemptMonth(member, month)} className={`rounded-full px-2.5 py-1 text-[9px] font-bold transition-colors ${isMemberBlocked ? "bg-blue-600 text-white shadow-inner" : "border border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100"}`}>
+                                  {month} {isMemberBlocked ? "🚫" : ""}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteMember(member.id, member.name)}
-                      title="Remove member"
-                      className="shrink-0 rounded-lg border border-red-100 bg-red-50 p-2 text-red-600 transition-colors hover:bg-red-100"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
+
+            {removedMandalMembers.length > 0 && (
+              <div className="mt-4 border-t border-red-100 pt-3">
+                <h4 className="mb-2 text-[10px] font-bold uppercase tracking-widest text-gray-400">Removed Members ({removedMandalMembers.length})</h4>
+                <div className="custom-scrollbar max-h-[200px] space-y-2 overflow-y-auto pr-1">
+                  {removedMandalMembers.map((member) => (
+                    <div key={member.id} className="flex items-center justify-between gap-3 rounded-lg border border-gray-100 bg-gray-100 px-3 py-2 opacity-70">
+                      <p className="truncate text-xs font-bold text-gray-600">{member.name}</p>
+                      <button
+                        type="button"
+                        onClick={() => handleRestoreMember(member.id, member.name)}
+                        title="Restore member"
+                        className="shrink-0 flex items-center gap-1 rounded-lg border border-green-200 bg-green-50 px-2 py-1.5 text-[9px] font-bold uppercase tracking-wider text-green-700 transition-colors hover:bg-green-100"
+                      >
+                        <RefreshCcw className="h-3 w-3" /> Restore
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

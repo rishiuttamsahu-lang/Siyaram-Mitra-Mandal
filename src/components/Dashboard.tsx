@@ -521,8 +521,14 @@ export default function Dashboard({ userData }: { userData: any }) {
   const monthsPassed = MONTHS.slice(0, currentMonthIndex + 1);
   const chargeableMonths = monthsPassed.filter((month) => !blockedMonths.includes(month));
   const expectedTotalPerMember = chargeableMonths.reduce((sum, month) => sum + getTargetForMonth(month), 0);
-  const payingMembersCount = members.filter((member) => !member.isHonorary).length;
-  const totalExpectedMandal = payingMembersCount * expectedTotalPerMember;
+  // ✅ Per-member expected total — subtracts months this specific member has been
+  // individually exempted from (e.g. months before they joined the mandal).
+  const getMemberExpectedTotal = (member: Member) => {
+    const memberExempt: Month[] = (member as any).exemptMonths || [];
+    return chargeableMonths.filter((month) => !memberExempt.includes(month)).reduce((sum, month) => sum + getTargetForMonth(month), 0);
+  };
+  const payingMembersCount = members.filter((member) => !member.isHonorary && !(member as any).isRemoved).length;
+  const totalExpectedMandal = members.filter((member) => !member.isHonorary && !(member as any).isRemoved).reduce((sum, member) => sum + getMemberExpectedTotal(member), 0);
   
   // 1. Saare alag-alag tabs ki kamai (Income) calculate karo
   const totalCollected = members.reduce((sum, member) => sum + getMemberTotal(member.payments), 0);
@@ -639,7 +645,7 @@ export default function Dashboard({ userData }: { userData: any }) {
   // 🔥 YAHAN SE NAYA LOGIC SHURU HOTA HAI
   const sortedMembers = useMemo(() => {
     const monthsPassed = Math.max(0, MONTHS.indexOf(currentTrackingMonth) + 1);
-    let sorted = [...members];
+    let sorted = [...members].filter((m) => !m.isRemoved);
 
     switch (sortBy) {
       case "name-asc":
@@ -844,7 +850,7 @@ export default function Dashboard({ userData }: { userData: any }) {
                 {sortedMembers.length === 0 && <p className="text-center text-gray-400 py-4 font-bold">No members yet. Admins can add or restore them above!</p>}
                 {sortedMembers.map((member) => {
                   const totalPaid = getMemberTotal(member.payments);
-                  const remaining = expectedTotalPerMember - totalPaid;
+                  const remaining = getMemberExpectedTotal(member) - totalPaid;
                   const isExpanded = expandedMemberId === member.id;
 
                   return (
@@ -868,7 +874,7 @@ export default function Dashboard({ userData }: { userData: any }) {
                         <div className="border-t border-gray-50 bg-gray-50/60 px-4 pb-4 pt-3">
                           <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
                             {MONTHS.map((month) => {
-                              const isBlocked = blockedMonths.includes(month);
+                              const isBlocked = blockedMonths.includes(month) || ((member as any).exemptMonths || []).includes(month);
                               const isEditing = editCell.id === member.id && editCell.month === month;
 
                               return (
@@ -907,7 +913,7 @@ export default function Dashboard({ userData }: { userData: any }) {
                       {sortedMembers.length === 0 && <tr><td colSpan={15} className="text-center text-gray-400 py-6 text-xs font-bold uppercase tracking-widest">No members yet. Admins can restore them using the yellow button above!</td></tr>}
                       {sortedMembers.map((member) => {
                         const totalPaid = getMemberTotal(member.payments);
-                        const remaining = expectedTotalPerMember - totalPaid;
+                        const remaining = getMemberExpectedTotal(member) - totalPaid;
 
                         return (
                           <tr key={member.id} className="transition-colors hover:bg-gray-50/80 bg-white group">
@@ -918,7 +924,7 @@ export default function Dashboard({ userData }: { userData: any }) {
                               </div>
                             </td>
                             {MONTHS.map((month) => {
-                              const isBlocked = blockedMonths.includes(month);
+                              const isBlocked = blockedMonths.includes(month) || ((member as any).exemptMonths || []).includes(month);
                               const isEditing = editCell.id === member.id && editCell.month === month;
 
                               return (
