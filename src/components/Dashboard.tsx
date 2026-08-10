@@ -103,6 +103,8 @@ type Member = {
   name: string;
   payments: Partial<Record<Month, number>>;
   isHonorary?: boolean;
+  isRemoved?: boolean;
+  exemptMonths?: Month[];
 };
 
 const DEFAULT_MEMBERS: Member[] = [
@@ -524,11 +526,11 @@ export default function Dashboard({ userData }: { userData: any }) {
   // ✅ Per-member expected total — subtracts months this specific member has been
   // individually exempted from (e.g. months before they joined the mandal).
   const getMemberExpectedTotal = (member: Member) => {
-    const memberExempt: Month[] = (member as any).exemptMonths || [];
+    const memberExempt: Month[] = member.exemptMonths || [];
     return chargeableMonths.filter((month) => !memberExempt.includes(month)).reduce((sum, month) => sum + getTargetForMonth(month), 0);
   };
-  const payingMembersCount = members.filter((member) => !member.isHonorary && !(member as any).isRemoved).length;
-  const totalExpectedMandal = members.filter((member) => !member.isHonorary && !(member as any).isRemoved).reduce((sum, member) => sum + getMemberExpectedTotal(member), 0);
+  const payingMembersCount = members.filter((member) => !member.isHonorary && !member.isRemoved).length;
+  const totalExpectedMandal = members.filter((member) => !member.isHonorary && !member.isRemoved).reduce((sum, member) => sum + getMemberExpectedTotal(member), 0);
   
   // 1. Saare alag-alag tabs ki kamai (Income) calculate karo
   const totalCollected = members.reduce((sum, member) => sum + getMemberTotal(member.payments), 0);
@@ -874,7 +876,7 @@ export default function Dashboard({ userData }: { userData: any }) {
                         <div className="border-t border-gray-50 bg-gray-50/60 px-4 pb-4 pt-3">
                           <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
                             {MONTHS.map((month) => {
-                              const isBlocked = blockedMonths.includes(month) || ((member as any).exemptMonths || []).includes(month);
+                              const isBlocked = blockedMonths.includes(month) || (member.exemptMonths || []).includes(month);
                               const isEditing = editCell.id === member.id && editCell.month === month;
 
                               return (
@@ -924,7 +926,7 @@ export default function Dashboard({ userData }: { userData: any }) {
                               </div>
                             </td>
                             {MONTHS.map((month) => {
-                              const isBlocked = blockedMonths.includes(month) || ((member as any).exemptMonths || []).includes(month);
+                              const isBlocked = blockedMonths.includes(month) || (member.exemptMonths || []).includes(month);
                               const isEditing = editCell.id === member.id && editCell.month === month;
 
                               return (
