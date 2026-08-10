@@ -424,6 +424,21 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
     showToast(`Member Added! 🎉`, 'success');
   };
 
+  // ✅ Remove a member from the mandal (e.g. member shifting away / leaving mid-way).
+  // This deletes their row from "mandal_members" entirely — their pending/unpaid months
+  // simply disappear along with them (nothing left to chase), while past logged payments
+  // remain untouched in the finance history for accounting records.
+  const handleDeleteMember = (memberId: number, memberName: string) => {
+    askConfirm(`"${memberName}" ko Mandal members se hata dein? Inke pending/baaki mahino ka hisaab bhi saath hi hat jayega. Yeh wapas nahi aayega.`, async () => {
+      try {
+        await deleteDoc(doc(db, "mandal_members", memberId.toString()));
+        showToast(`${memberName} ko member list se hata diya gaya. 🗑️`, 'success');
+      } catch (error) {
+        showToast("Error: Member delete nahi ho paya.", 'error');
+      }
+    });
+  };
+
   const handleRestoreOldData = async () => {
     askConfirm("Kya aap sach mein purana list wapas Firebase mein daalna chahte hain?", async () => {
       setIsRestoring(true);
@@ -1222,6 +1237,38 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
                 </label>
                 <button type="submit" className="mt-auto rounded-xl bg-green-700 px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-green-800 shadow-sm">Add to Mandal</button>
               </form>
+              <p className="mt-3 text-[10px] font-semibold leading-relaxed text-gray-500">
+                💡 Naye member ne pehle se hi kuch paisa diya hai? Pehle usse yahan add karein, phir left side wale &quot;Add / Update Payment&quot; form se uska pehle se diya hua amount uske naam par jis mahine ka hai us mahine me log kar dein.
+              </p>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-red-100 bg-white p-4 shadow-sm">
+            <h3 className="mb-3 flex items-center justify-between text-sm font-bold uppercase tracking-wide text-red-800">
+              <span>All Members</span>
+              <span className="text-[10px] font-semibold text-gray-400">{mandalMembers.length} total</span>
+            </h3>
+            <div className="custom-scrollbar max-h-[320px] space-y-2 overflow-y-auto pr-1">
+              {mandalMembers.length === 0 ? (
+                <p className="py-4 text-center text-xs font-bold uppercase tracking-widest text-gray-400">No members yet</p>
+              ) : (
+                mandalMembers.map((member) => (
+                  <div key={member.id} className="flex items-center justify-between gap-3 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-xs font-bold text-gray-800">{member.name}</p>
+                      {member.isHonorary && <span className="text-[9px] font-bold uppercase tracking-wider text-yellow-600">Honorary</span>}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteMember(member.id, member.name)}
+                      title="Remove member"
+                      className="shrink-0 rounded-lg border border-red-100 bg-red-50 p-2 text-red-600 transition-colors hover:bg-red-100"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>
