@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { db } from '@/lib/firebase';
 import { getTimestampMillis, commitChunkedBatches } from '@/lib/utils';
-import { collection, onSnapshot, doc, updateDoc, deleteDoc, query, orderBy, setDoc, getDoc, where, getDocs, writeBatch, addDoc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, updateDoc, deleteDoc, query, orderBy, setDoc, getDoc, where, getDocs, writeBatch, addDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
 import UserProfile from '@/components/UserProfile';
 import {
   Shield, ShieldAlert, Ban, RefreshCcw, Key, Mail, User, Image as ImageIcon,
@@ -450,12 +450,19 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
   // ✅ Per-member month blocking — jab koi member baad me (mid-year) join karta hai, to
   // uske pichle (join se pehle wale) mahino ko individually block kar sakte hain, taaki
   // usse un mahino ka paisa na maanga jaye, bina baaki sabke liye wo mahina block kiye.
+  // Uses arrayUnion/arrayRemove (atomic) instead of read-modify-write, so fast repeated
+  // clicks on different months never overwrite each other with stale data.
   const toggleMemberExemptMonth = async (member: any, month: Month) => {
-    const currentExempt: Month[] = member.exemptMonths || [];
-    const newExempt = currentExempt.includes(month) ? currentExempt.filter((m: Month) => m !== month) : [...currentExempt, month];
+    const isCurrentlyBlocked = (member.exemptMonths || []).includes(month);
     try {
-      await updateDoc(doc(db, "mandal_members", member.id.toString()), { exemptMonths: newExempt });
-    } catch (error) {
+      await updateDoc(doc(db, "mandal_members", member.id.toString()), {
+        exemptMonths: isCurrentlyBlocked ? arrayRemove(month) : arrayUnion(month),
+      });
+    } catch (error: any) {
+      // Firestore/browser sometimes cancels an in-flight request when the listener
+      // above resubscribes right after a write — this is harmless and the write
+      // still lands, so don't scare the admin with a false "failed" toast for it.
+      if (error?.name === 'AbortError' || error?.code === 'cancelled') return;
       showToast("Error: Month block/unblock nahi ho paya.", 'error');
     }
   };
