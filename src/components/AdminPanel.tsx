@@ -378,7 +378,15 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
     const unsubMandalMembers = onSnapshot(collection(db, "mandal_members"), (snap) => {
       const fetchedMembers = snap.docs.map(doc => {
         const data = doc.data() as any;
-        return { id: data.id, name: data.name, payments: data.payments || {}, isHonorary: data.isHonorary || false, isRemoved: data.isRemoved || false };
+        return {
+          id: data.id,
+          name: data.name,
+          payments: data.payments || {},
+          isHonorary: data.isHonorary || false,
+          isRemoved: data.isRemoved || false,
+          exemptMonths: data.exemptMonths || [],
+          preRemovalExemptMonths: data.preRemovalExemptMonths || [],
+        };
       });
       fetchedMembers.sort((a, b) => a.id - b.id);
       setMandalMembers(fetchedMembers);
@@ -425,13 +433,31 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
   };
 
   // ✅ Soft-remove a member from the mandal (e.g. member shifting away / leaving mid-way).
-  // Member is hidden from active lists (payment dropdown, paying count) via `isRemoved: true`,
-  // but their document + full month-wise payment history stays intact in Firestore for records.
+  // Member is hidden from active lists via `isRemoved: true`, but payment history stays intact.
+  // All pending/unpaid months are automatically exempted (dues set to 0/maaf).
   const handleRemoveMember = (memberId: number, memberName: string) => {
-    askConfirm(`"${memberName}" ko active members se hata dein? Inka pura payment history safe rahega, sirf active list se hat jayenge. Baad me restore bhi kar sakte hain.`, async () => {
+    askConfirm(`"${memberName}" ko active members se hata dein? Inke saare pending months ke dues 0 (maaf) ho jayenge aur payment history safe rahegi.`, async () => {
       try {
-        await updateDoc(doc(db, "mandal_members", memberId.toString()), { isRemoved: true, removedAt: new Date().toISOString() });
-        showToast(`${memberName} ko active list se hata diya gaya. 🗑️`, 'success');
+        const memberToUpdate = mandalMembers.find((m) => m.id === memberId);
+
+        // Find all pending/unpaid months where target wasn't met (or ₹0 paid)
+        const pendingMonths: Month[] = (MONTHS as readonly Month[]).filter((month) => {
+          const paid = memberToUpdate?.payments?.[month] || 0;
+          const target = ["JUN", "JUL", "AUG"].includes(month) ? 200 : 100;
+          return paid < target;
+        });
+
+        const currentExempt: Month[] = memberToUpdate?.exemptMonths || [];
+        const updatedExempt = Array.from(new Set([...currentExempt, ...pendingMonths]));
+
+        await updateDoc(doc(db, "mandal_members", memberId.toString()), {
+          isRemoved: true,
+          removedAt: new Date().toISOString(),
+          exemptMonths: updatedExempt,
+          preRemovalExemptMonths: currentExempt,
+        });
+
+        showToast(`${memberName} ko delete/remove kar diya gaya aur pending dues 0 (maaf) ho gaye! 🗑️`, 'success');
       } catch (error) {
         showToast("Error: Member remove nahi ho paya.", 'error');
       }
@@ -440,8 +466,15 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
 
   const handleRestoreMember = async (memberId: number, memberName: string) => {
     try {
-      await updateDoc(doc(db, "mandal_members", memberId.toString()), { isRemoved: false });
-      showToast(`${memberName} wapas active list me aa gaye! ✅`, 'success');
+      const memberToRestore = mandalMembers.find((m) => m.id === memberId);
+      const restoredExempt = memberToRestore?.preRemovalExemptMonths ?? [];
+
+      await updateDoc(doc(db, "mandal_members", memberId.toString()), {
+        isRemoved: false,
+        exemptMonths: restoredExempt,
+      });
+
+      showToast(`${memberName} wapas active list me restore ho gaye! ✅`, 'success');
     } catch (error) {
       showToast("Error: Member restore nahi ho paya.", 'error');
     }
