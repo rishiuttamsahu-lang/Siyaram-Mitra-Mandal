@@ -452,18 +452,49 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
   // usse un mahino ka paisa na maanga jaye, bina baaki sabke liye wo mahina block kiye.
   // Uses arrayUnion/arrayRemove (atomic) instead of read-modify-write, so fast repeated
   // clicks on different months never overwrite each other with stale data.
+  // Also updates local state immediately (optimistic) so mobile users see the tap
+  // register instantly, instead of waiting for the Firestore snapshot to come back.
   const toggleMemberExemptMonth = async (member: any, month: Month) => {
     const isCurrentlyBlocked = (member.exemptMonths || []).includes(month);
+
+    // Optimistic local update — instant visual feedback
+    setMandalMembers((prev) =>
+      prev.map((m) =>
+        m.id === member.id
+          ? {
+              ...m,
+              exemptMonths: isCurrentlyBlocked
+                ? (m.exemptMonths || []).filter((mo: Month) => mo !== month)
+                : [...(m.exemptMonths || []), month],
+            }
+          : m
+      )
+    );
+
     try {
       await updateDoc(doc(db, "mandal_members", member.id.toString()), {
         exemptMonths: isCurrentlyBlocked ? arrayRemove(month) : arrayUnion(month),
       });
+      showToast(isCurrentlyBlocked ? `${month} unblock ho gaya ✅` : `${month} block ho gaya 🚫`, 'success');
     } catch (error: any) {
       // Firestore/browser sometimes cancels an in-flight request when the listener
       // above resubscribes right after a write — this is harmless and the write
       // still lands, so don't scare the admin with a false "failed" toast for it.
       if (error?.name === 'AbortError' || error?.code === 'cancelled') return;
       showToast("Error: Month block/unblock nahi ho paya.", 'error');
+      // revert optimistic update since the write actually failed
+      setMandalMembers((prev) =>
+        prev.map((m) =>
+          m.id === member.id
+            ? {
+                ...m,
+                exemptMonths: isCurrentlyBlocked
+                  ? [...(m.exemptMonths || []), month]
+                  : (m.exemptMonths || []).filter((mo: Month) => mo !== month),
+              }
+            : m
+        )
+      );
     }
   };
 
@@ -1317,11 +1348,16 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
                       {isExpanded && (
                         <div className="border-t border-gray-200 bg-white px-3 py-2.5">
                           <p className="mb-2 text-[9px] font-bold uppercase tracking-wider text-gray-400">Is member ke liye mahine block karein:</p>
-                          <div className="flex flex-wrap gap-1.5">
+                          <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap sm:gap-1.5">
                             {MONTHS.map((month) => {
                               const isMemberBlocked = memberExempt.includes(month);
                               return (
-                                <button key={month} type="button" onClick={() => toggleMemberExemptMonth(member, month)} className={`rounded-full px-2.5 py-1 text-[9px] font-bold transition-colors ${isMemberBlocked ? "bg-blue-600 text-white shadow-inner" : "border border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100"}`}>
+                                <button
+                                  key={month}
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); toggleMemberExemptMonth(member, month); }}
+                                  className={`min-h-[38px] rounded-full px-3 py-2 text-[11px] font-bold transition-colors active:scale-95 ${isMemberBlocked ? "bg-blue-600 text-white shadow-inner" : "border border-gray-300 bg-gray-50 text-gray-700 hover:bg-gray-100"}`}
+                                >
                                   {month} {isMemberBlocked ? "🚫" : ""}
                                 </button>
                               );
