@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { auth, db } from '@/lib/firebase';
 import { onAuthStateChanged, signOut, type User } from 'firebase/auth';
-import { doc, getDoc, onSnapshot, updateDoc } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
 
 import Welcome from '@/components/Welcome';
 import BannedPage from '@/components/BannedPage';
@@ -13,10 +13,9 @@ import AdminPanel from '@/components/AdminPanel';
 import UserProfile from '@/components/UserProfile';
 import Contribute from '@/components/Contribute';
 import UploadSection from '@/components/UploadSection';
-import ViewerHome from '@/components/ViewerHome';
 import ViewerDashboard from '@/components/ViewerDashboard';
 import { SpotlightNav } from '@/components/ui/spotlight-nav';
-import { LogOut, Shield } from 'lucide-react';
+import { LogOut } from 'lucide-react';
 
 export default function Home() {
   type AppUserData = {
@@ -35,22 +34,11 @@ export default function Home() {
   const [isDeviceBanned, setIsDeviceBanned] = useState(false);
 
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [isPasscodeVerified, setIsPasscodeVerified] = useState(false);
-
-  const [introPhase, setIntroPhase] = useState(0);
-  const [loadingProgress, setLoadingProgress] = useState(0);
-  const [typedText, setTypedText] = useState('');
-  const [isTypingDone, setIsTypingDone] = useState(false);
-  const [isSplashExiting, setIsSplashExiting] = useState(false);
-  const [isShieldExiting, setIsShieldExiting] = useState(false);
-
-  const [revealSequence, setRevealSequence] = useState(3);
   const [showSphereView, setShowSphereView] = useState(true);
 
-  // NOTE: localStorage-based passcode fast-forward is now handled inside the
-  // onAuthStateChanged -> onSnapshot flow so we react immediately when we know
-  // the user's document and role. This avoids duplicate listeners and race
-  // conditions on initial load.
+  // Return Splash: Quick Screen 7 (English Welcome) for returning logged-in users
+  const [showReturnSplash, setShowReturnSplash] = useState(false);
+  const [isSplashExiting, setIsSplashExiting] = useState(false);
 
   useEffect(() => {
     try {
@@ -62,8 +50,6 @@ export default function Home() {
       console.error('Storage access error:', error);
     }
   }, []);
-
-  const welcomeText = "Deviyon aur sajjanon, Siyaram Mitra Mandal mein aapka hardik swagat hai. Yeh portal Bappa ki aarti, visarjan aur mandal ki pavitra yaadon ko ek saath sanjone ke liye banaya gaya hai. Yahan aap mandal se judi photos aur videos dekh aur upload kar sakte hain. Yeh website keval Siyaram Mitra Mandal parivar ke sadasyon aur mataon-behnon ke liye hai, taaki sabhi ki privacy aur sammaan poori tarah surakshit rahe. Kisi baahari vyakti ko yahan pravesh ki anumati nahi hai.";
 
   const SeoH1 = (
     <h1 className="sr-only opacity-0 absolute pointer-events-none w-1 h-1 overflow-hidden" aria-hidden="false">
@@ -94,20 +80,6 @@ export default function Home() {
                 } catch { }
               }
 
-              // 🔥 FAST-FORWARD: if user previously passed the passcode, resume at
-              // introPhase 4 (skip intro) for non-admins so returning users land
-              // directly into the Welcome/Profile flow. Admins still see the full
-              // intro/reveal sequence.
-              try {
-                const savedAuth = localStorage.getItem(`mandal_pass_auth_${currentUser.uid}`);
-                if (savedAuth === 'true') {
-                  setIsPasscodeVerified(true);
-                  if (!isAdmin) {
-                    setIntroPhase(4);
-                  }
-                }
-              } catch { }
-
               const deviceIsBanned = localStorage.getItem('mandal_device_banned') === 'true';
 
               if (!isAdmin && (data.isBanned || deviceIsBanned)) {
@@ -127,7 +99,6 @@ export default function Home() {
                 setIsDeviceBanned(true);
                 bannedUserDataRef.current = data;
                 setBannedUserData(data);
-                setIsPasscodeVerified(true);
                 setIsAuthChecking(false);
                 return;
               }
@@ -139,11 +110,11 @@ export default function Home() {
               bannedUserDataRef.current = null;
               setBannedUserData(null);
 
-              // 🔥 CHANGE 1: Admin direct jayega, Member aur Viewer ko Intro phase se start karwayenge
-              if (isAdmin) {
-                setRevealSequence(3);
-              } else {
-                setRevealSequence(0);
+              // Returning logged-in user: Show quick Screen 7 English splash once
+              const hasSeenSplash = sessionStorage.getItem(`smm_return_splash_${currentUser.uid}`);
+              if (!hasSeenSplash) {
+                setShowReturnSplash(true);
+                sessionStorage.setItem(`smm_return_splash_${currentUser.uid}`, 'true');
               }
             } else {
               setUser(currentUser);
@@ -157,15 +128,10 @@ export default function Home() {
       } else {
         unsubUserDoc();
         setUser(null);
-
         if (!bannedUserDataRef.current) {
           setUserData(null);
-          setIsPasscodeVerified(false);
           setBannedUserData(null);
-        } else {
-          setIsPasscodeVerified(true);
         }
-
         setIsAuthChecking(false);
       }
     });
@@ -176,101 +142,26 @@ export default function Home() {
     };
   }, []);
 
+  // Timer for Return Splash (Screen 7)
   useEffect(() => {
-    if (revealSequence === 1) {
-      const t1 = setTimeout(() => setRevealSequence(2), 700);
-      return () => clearTimeout(t1);
-    } else if (revealSequence === 2) {
-      const t2 = setTimeout(() => setRevealSequence(3), 700);
-      return () => clearTimeout(t2);
-    }
-  }, [revealSequence]);
+    if (!showReturnSplash) return;
+    const t1 = setTimeout(() => setIsSplashExiting(true), 2800);
+    const t2 = setTimeout(() => setShowReturnSplash(false), 3300);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, [showReturnSplash]);
 
-  // 2. REAL LOADING BAR + INTRO SEQUENCE
-  useEffect(() => {
-    if (introPhase === 0) {
-      let isFontsLoaded = false;
-
-      const loadAllFonts = async () => {
-        if (typeof document !== 'undefined' && document.fonts) {
-          try {
-            await Promise.all([
-              document.fonts.load('400 16px "Rozha One"'),
-              document.fonts.load('400 16px "Cinzel"'),
-              document.fonts.load('700 16px "Cinzel"'),
-              document.fonts.load('900 16px "Cinzel"'),
-              document.fonts.load('400 16px "Gotu"'),
-              document.fonts.load('700 16px "Gotu"'),
-              document.fonts.load('900 16px "Gotu"')
-            ]);
-            await document.fonts.ready;
-            isFontsLoaded = true;
-          } catch (err) {
-            console.warn('Font loading issue:', err);
-            isFontsLoaded = true;
-          }
-        } else {
-          isFontsLoaded = true;
-        }
-      };
-
-      loadAllFonts();
-
-      const interval = setInterval(() => {
-        setLoadingProgress((prev) => {
-          if (!isFontsLoaded && prev >= 89) {
-            return 89;
-          }
-
-          if (isFontsLoaded && prev >= 100) {
-            clearInterval(interval);
-            setTimeout(() => setIntroPhase(1), 500);
-            return 100;
-          }
-
-          const speed = isFontsLoaded && prev >= 89 ? 11 : Math.floor(Math.random() * 15) + 5;
-          return Math.min(prev + speed, 100);
-        });
-      }, 100);
-
-      return () => clearInterval(interval);
-    }
-
-    if (introPhase === 1) {
-      const t1 = setTimeout(() => setIsSplashExiting(true), 4000);
-      const t2 = setTimeout(() => setIntroPhase(2), 4500);
-      return () => { clearTimeout(t1); clearTimeout(t2); };
-    }
-
-    if (introPhase === 2) {
-      let i = 0;
-      const typingInterval = setInterval(() => {
-        if (i < welcomeText.length) {
-          setTypedText(welcomeText.slice(0, i + 1));
-          i++;
-        } else {
-          clearInterval(typingInterval);
-          setIsTypingDone(true);
-          setTimeout(() => setIntroPhase(3), 3500);
-        }
-      }, 40);
-      return () => clearInterval(typingInterval);
-    }
-
-    if (introPhase === 3) {
-      const t3 = setTimeout(() => setIsShieldExiting(true), 2500);
-      const t4 = setTimeout(() => setIntroPhase(4), 3000);
-      return () => { clearTimeout(t3); clearTimeout(t4); };
-    }
-  }, [introPhase]);
+  const handleSkipReturnSplash = () => {
+    setIsSplashExiting(true);
+    setTimeout(() => setShowReturnSplash(false), 200);
+  };
 
   useEffect(() => {
     if (typeof document === 'undefined') return;
-
     let metaThemeColor = document.querySelector('meta[name="theme-color"]');
-
-    const isWelcomePage = !user || !userData || !isPasscodeVerified;
-    const targetColor = (introPhase < 4 || isAuthChecking || isWelcomePage || revealSequence === 0) ? '#4A0001' : '#ffffff';
+    const targetColor = isAuthChecking || !user || showReturnSplash ? '#4A0001' : '#ffffff';
 
     if (metaThemeColor) {
       metaThemeColor.setAttribute('content', targetColor);
@@ -280,119 +171,19 @@ export default function Home() {
       metaThemeColor.setAttribute('content', targetColor);
       document.head.appendChild(metaThemeColor);
     }
-  }, [introPhase, isAuthChecking, user, userData, isPasscodeVerified, revealSequence]);
+  }, [isAuthChecking, user, showReturnSplash]);
 
-  const handleUniversalSkip = (targetPhase: number) => {
-    if (targetPhase === 2) setIsSplashExiting(true);
-    if (targetPhase === 4) setIsShieldExiting(true);
-    setTimeout(() => setIntroPhase(targetPhase), 300);
-  };
-
-  if (introPhase === 0) {
-    return (
-      <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-[#0a0202] select-none">
-        {SeoH1}
-        <div className="w-64 relative mt-10">
-          <div className="absolute -top-6 left-0 w-full flex justify-center">
-            <span className="text-yellow-400 text-xs font-black tracking-widest" style={{ fontFamily: "'Cinzel', serif" }}>
-              {loadingProgress}%
-            </span>
-          </div>
-
-          <div className="h-[1px] w-full bg-white/10 rounded-full relative">
-            <div
-              className="absolute top-0 left-0 h-full bg-gradient-to-r from-transparent via-yellow-600 to-yellow-200 transition-all duration-150 ease-linear rounded-full"
-              style={{ width: `${loadingProgress}%` }}
-            >
-              <div className="absolute right-0 top-1/2 -translate-y-1/2 w-2 h-2 bg-yellow-100 rounded-full shadow-[0_0_10px_#fff,0_0_20px_#eab308,0_0_30px_#eab308] blur-[0.5px]" />
-            </div>
-          </div>
-
-          <span className="block text-center mt-4 text-yellow-500/20 text-[8px] uppercase tracking-[0.3em] font-black animate-pulse">
-            Syncing Vault...
-          </span>
-
-          <div className="absolute top-[-9999px] left-[-9999px] opacity-0 pointer-events-none select-none">
-            <span style={{ fontFamily: "'Rozha One', serif", fontWeight: 400 }}>गणपती बाप्पा मोरया</span>
-            <span style={{ fontFamily: "'Gotu', sans-serif", fontWeight: 700 }}>सियाराम मित्रमंडळ</span>
-            <span style={{ fontFamily: "'Gotu', sans-serif", fontWeight: 900 }}>Welcome</span>
-            <span style={{ fontFamily: "'Cinzel', serif", fontWeight: 900 }}>100% Secured</span>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (introPhase === 1) {
-    return (
-      <div onClick={() => handleUniversalSkip(2)} className={`fixed inset-0 z-[9999] flex items-center justify-center overflow-hidden bg-gradient-to-br from-[#5a0000] via-[#3a0000] to-black px-6 transition-opacity duration-500 cursor-pointer ${isSplashExiting ? "opacity-0" : "opacity-100"}`}>
-        {SeoH1}
-        <style>{`
-          @keyframes premiumFadeIn { 0% { opacity: 0; transform: translateY(15px); filter: blur(4px); } 100% { opacity: 1; transform: translateY(0); filter: blur(0); } }
-          @keyframes lineExpand { 0% { width: 0; opacity: 0; } 100% { width: 12rem; opacity: 1; } }
-          .animate-text-1 { animation: premiumFadeIn 1.5s cubic-bezier(0.25, 1, 0.5, 1) forwards; }
-          .animate-line { animation: lineExpand 1s ease-out 1s forwards; opacity: 0; }
-          .animate-text-2 { opacity: 0; animation: premiumFadeIn 1.5s cubic-bezier(0.25, 1, 0.5, 1) 1.5s forwards; }
-        `}</style>
-        <div className="absolute h-[280px] w-[280px] rounded-full border border-yellow-600/30 shadow-[0_0_60px_rgba(202,138,4,0.15)] md:h-[380px] md:w-[380px]" />
-        <div className="absolute h-[300px] w-[300px] rounded-full border-[2px] border-yellow-700/40 animate-ping md:h-[400px] md:w-[400px]" style={{ animationDuration: "3s" }} />
-        <div className="relative z-10 flex flex-col items-center space-y-8 p-6 text-center drop-shadow-2xl">
-          <h1 className="animate-text-1 font-normal tracking-wide" style={{ fontFamily: "'Rozha One', serif" }}>
-            <span className="bg-gradient-to-r from-yellow-200 via-yellow-400 to-yellow-600 bg-clip-text text-5xl md:text-7xl text-transparent">गणपती बाप्पा मोरया</span>
-          </h1>
-          <div className="animate-line h-[2px] w-48 bg-gradient-to-r from-transparent via-yellow-600/80 to-transparent" />
-          <h2 className="animate-text-2 text-3xl md:text-5xl font-bold tracking-wider text-yellow-50 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]" style={{ fontFamily: "'Gotu', sans-serif" }}>सियाराम मित्रमंडळ</h2>
-        </div>
-      </div>
-    );
-  }
-
-  if (introPhase === 2) {
-    return (
-      <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center overflow-hidden bg-gradient-to-br from-[#5a0000] via-[#3a0000] to-black px-6 cursor-pointer" onClick={() => handleUniversalSkip(3)}>
-        {SeoH1}
-        <div className="max-w-3xl w-full relative z-10">
-          <p className="text-yellow-50/90 text-lg md:text-2xl leading-relaxed text-center min-h-[200px]" style={{ fontFamily: "'Gotu', sans-serif" }}>
-            {typedText}
-            {!isTypingDone && <span className="animate-pulse border-r-2 border-yellow-400 ml-1"></span>}
-          </p>
-        </div>
-        <button className="absolute bottom-12 text-yellow-500/50 hover:text-yellow-400 text-xs md:text-sm font-bold tracking-widest uppercase transition-colors" onClick={(e) => { e.stopPropagation(); handleUniversalSkip(3); }}>
-          Tap anywhere to skip ➔
-        </button>
-      </div>
-    );
-  }
-
-  if (introPhase === 3) {
-    return (
-      <div onClick={() => handleUniversalSkip(4)} className={`fixed inset-0 z-[9999] flex flex-col items-center justify-center overflow-hidden bg-gradient-to-br from-[#5a0000] via-[#3a0000] to-black px-6 transition-opacity duration-500 cursor-pointer ${isShieldExiting ? 'opacity-0' : 'opacity-100'}`}>
-        {SeoH1}
-        <div className="flex flex-col items-center justify-center space-y-6">
-          <div className="relative flex h-28 w-28 items-center justify-center">
-            <div className="absolute inset-0 rounded-full bg-yellow-400/20 animate-ping" style={{ animationDuration: '2.5s' }} />
-            <div className="absolute inset-2 rounded-full bg-yellow-400/30 animate-pulse" />
-            <Shield className="relative z-10 h-16 w-16 text-yellow-500 drop-shadow-[0_0_20px_rgba(234,179,8,0.8)]" strokeWidth={1.5} />
-          </div>
-          <div className="space-y-3 text-center">
-            <h3 className="text-2xl font-black tracking-tight text-yellow-50 md:text-4xl" style={{ fontFamily: "'Gotu', sans-serif" }}>100% Secured & Private</h3>
-            <div className="mx-auto h-px w-24 bg-gradient-to-r from-transparent via-yellow-600/50 to-transparent" />
-            <p className="text-[10px] font-bold uppercase tracking-widest text-yellow-200/70 md:text-xs">For Members of Siyaram Mitra Mandal</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
+  // Spinner while Firebase checks session
   if (isAuthChecking) {
     return (
-      <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-gray-50">
+      <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-[#0a0202]">
         {SeoH1}
         <div className="relative">
-          <div className="w-12 h-12 rounded-full border-4 border-gray-200 border-t-[#5a0000] animate-spin"></div>
-          <div className="absolute inset-0 w-12 h-12 rounded-full border-4 border-transparent border-b-yellow-500 animate-[spin_2s_linear_infinite]"></div>
+          <div className="w-12 h-12 rounded-full border-4 border-white/10 border-t-yellow-500 animate-spin"></div>
         </div>
-        <p className="mt-4 text-[10px] font-black uppercase tracking-widest text-[#5a0000] animate-pulse">Verifying Access...</p>
+        <p className="mt-4 text-[10px] font-black uppercase tracking-widest text-yellow-500/80 animate-pulse">
+          Opening Siyaram Mandal...
+        </p>
       </div>
     );
   }
@@ -403,30 +194,88 @@ export default function Home() {
     return <>{SeoH1}<BannedPage /></>;
   }
 
-  // Phase 4: Final Check (Login dikhana hai ya App)
-  if (!user || !userData || !isPasscodeVerified) {
-    return <>{SeoH1}<Welcome key={user?.uid ?? 'guest'} firebaseUser={user} onAuthSuccess={(data) => { setUserData(data); setIsPasscodeVerified(true); }} /></>;
+  // Not logged in: Directly show Google Sign-in screen with subsequent welcome transitions
+  if (!user || !userData) {
+    return (
+      <>
+        {SeoH1}
+        <Welcome
+          key={user?.uid ?? 'guest'}
+          firebaseUser={user}
+          onAuthSuccess={(data) => {
+            setUserData(data);
+            setUser(auth.currentUser);
+          }}
+        />
+      </>
+    );
   }
 
-  // MAIN APP AFTER LOGIN
+  // Returning user: Quick Screen 7 English Welcome Splash
+  if (showReturnSplash) {
+    return (
+      <div
+        onClick={handleSkipReturnSplash}
+        className={`fixed inset-0 z-[9999] flex items-center justify-center overflow-hidden bg-gradient-to-br from-[#5a0000] via-[#3a0000] to-black px-6 transition-opacity duration-500 cursor-pointer select-none ${
+          isSplashExiting ? 'opacity-0 pointer-events-none' : 'opacity-100'
+        }`}
+      >
+        {SeoH1}
+        <style>{`
+          @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400..900&family=Rozha+One&display=swap');
+          .cinzel-font { font-family: "Cinzel", serif; }
+          @keyframes premiumFadeIn {
+            0% { opacity: 0; transform: translateY(12px); filter: blur(4px); }
+            100% { opacity: 1; transform: translateY(0); filter: blur(0); }
+          }
+          .animate-splash-text { animation: premiumFadeIn 1s cubic-bezier(0.25, 1, 0.5, 1) both; }
+        `}</style>
+        <div className="relative z-10 flex flex-col items-center p-4 text-center drop-shadow-2xl w-full max-w-lg">
+          <div className="animate-splash-text mb-3" style={{ animationDelay: '0.2s' }}>
+            <img src="/royal-crest.png" alt="Crest" className="w-16 md:w-24 mx-auto drop-shadow-[0_0_15px_rgba(255,215,0,0.5)]" />
+          </div>
+          <h1 className="cinzel-font font-bold tracking-widest leading-relaxed uppercase">
+            <span className="block text-lg md:text-3xl mb-1 animate-splash-text bg-gradient-to-r from-yellow-200 via-yellow-400 to-yellow-600 bg-clip-text text-transparent" style={{ animationDelay: '0.4s' }}>
+              Welcome
+            </span>
+            <span className="block text-xs md:text-lg mb-1 text-yellow-500/80 animate-splash-text" style={{ animationDelay: '0.7s' }}>
+              To
+            </span>
+            <span className="block text-xl sm:text-2xl md:text-5xl animate-splash-text bg-gradient-to-r from-yellow-200 via-yellow-400 to-yellow-600 bg-clip-text text-transparent" style={{ animationDelay: '1s' }}>
+              Siyaram Mitra Mandal
+            </span>
+          </h1>
+          <p className="mt-4 text-[9px] font-black uppercase tracking-[0.2em] text-yellow-500/40 animate-pulse">
+            Tap anywhere to enter ➔
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const isViewer = userData.role?.toLowerCase() === 'viewer';
+  const isAdmin = userData.role?.toLowerCase() === 'admin';
+
+  // MAIN PORTAL
   return (
-    <main className="min-h-screen flex flex-col relative pb-28 bg-gray-50">
+    <main className="min-h-screen flex flex-col relative pb-28 bg-gray-50 animate-in fade-in duration-300">
       {SeoH1}
 
-      {/* Top Header Bar - Slides from Top */}
-      <div className={`w-full bg-white/80 backdrop-blur-md border-b border-gray-200 px-4 py-3 flex justify-between items-center sticky top-0 z-30 shadow-sm transition-all duration-700 transform ${revealSequence >= 2 ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0'}`}>
-        <h1 className="text-lg font-black text-[#5A0000]" style={{ fontFamily: "'Rozha One', serif" }}>सियाराम</h1>
+      {/* Top Header Bar */}
+      <div className="w-full bg-white/80 backdrop-blur-md border-b border-gray-200 px-4 py-3 flex justify-between items-center sticky top-0 z-30 shadow-sm">
+        <h1 className="text-lg font-black text-[#5A0000]" style={{ fontFamily: "'Rozha One', serif" }}>
+          सियाराम
+        </h1>
         <div className="flex items-center gap-3">
-          <span className="text-xs font-bold text-gray-600">Hi, {userData.name?.split(' ')[0] || 'User'}</span>
+          <span className="text-xs font-bold text-gray-600">
+            Hi, {userData.name?.split(' ')[0] || 'User'}
+          </span>
           <button
             onClick={() => {
-              try {
-                if (user?.uid) localStorage.removeItem(`mandal_pass_auth_${user.uid}`);
-              } catch { }
               void signOut(auth);
-              setIsPasscodeVerified(false);
             }}
             className="bg-red-50 text-red-600 p-2 rounded-full hover:bg-red-100 transition-colors"
+            title="Sign out"
           >
             <LogOut className="w-4 h-4" />
           </button>
@@ -434,83 +283,77 @@ export default function Home() {
       </div>
 
       <div className="flex-1 w-full max-w-7xl mx-auto p-4 md:p-6" style={{ paddingTop: 0 }}>
-
-        {/* 🔥 CHANGE 2: Dashboard Logic - Ab Member aur Viewer dono ke liye initial intro dikhayega */}
+        {/* DASHBOARD TAB */}
         {activeTab === 'dashboard' && (
-          revealSequence === 0 && userData.role?.toLowerCase() !== 'admin' ? (
-            // Intro phase for Viewers AND Members
-            <ViewerHome
-              userData={userData}
-              onExplore={() => {
-                setRevealSequence(1);
-                setActiveTab('dashboard');
-              }}
-            />
+          isViewer ? (
+            // Viewer Role: Sees 3D Vault directly (No Feed toggle)
+            <div className="w-full">
+              <ViewerDashboard userData={userData} />
+            </div>
           ) : (
-            // Dashboard Content (After Intro or directly for Admin)
-            userData.role?.toLowerCase() === 'viewer' ? (
-              // Viewer gets only Sphere Vault
-              <div className={`transition-opacity duration-1000 ${revealSequence >= 1 ? 'opacity-100' : 'opacity-0'}`}>
-                <ViewerDashboard userData={userData} />
-              </div>
-            ) : (
-              // Admin/Member get toggle dashboard (3D Vault or Feed)
-              <div className={`transition-opacity duration-1000 ${revealSequence >= 1 ? 'opacity-100' : 'opacity-0'} w-full flex flex-col`}>
-                <div className="w-full flex justify-center mt-2 mb-4 animate-in slide-in-from-top-4 duration-500 relative z-40">
-                  <div className="bg-white/80 backdrop-blur-md border border-gray-200 rounded-full p-1 shadow-sm flex items-center gap-1">
-                    <button
-                      onClick={() => setShowSphereView(true)}
-                      className={`px-5 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all duration-300 ${showSphereView ? 'bg-gradient-to-r from-yellow-500 to-yellow-400 text-black shadow-md' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'}`}
-                    >
-                      3D Vault
-                    </button>
-                    <button
-                      onClick={() => setShowSphereView(false)}
-                      className={`px-5 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all duration-300 ${!showSphereView ? 'bg-[#5a0000] text-white shadow-md' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'}`}
-                    >
-                      Members Feed
-                    </button>
-                  </div>
+            // Member & Admin Roles: Toggle between 3D Vault and Members Feed
+            <div className="w-full flex flex-col">
+              <div className="w-full flex justify-center mt-2 mb-4 animate-in slide-in-from-top-4 duration-300 relative z-40">
+                <div className="bg-white/80 backdrop-blur-md border border-gray-200 rounded-full p-1 shadow-sm flex items-center gap-1">
+                  <button
+                    onClick={() => setShowSphereView(true)}
+                    className={`px-5 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all duration-300 ${
+                      showSphereView
+                        ? 'bg-gradient-to-r from-yellow-500 to-yellow-400 text-black shadow-md'
+                        : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
+                    }`}
+                  >
+                    3D Vault
+                  </button>
+                  <button
+                    onClick={() => setShowSphereView(false)}
+                    className={`px-5 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all duration-300 ${
+                      !showSphereView
+                        ? 'bg-[#5a0000] text-white shadow-md'
+                        : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
+                    }`}
+                  >
+                    Members Feed
+                  </button>
                 </div>
+              </div>
 
-                <div className="w-full relative">
-                  {showSphereView ? (
-                    <div className="animate-in fade-in zoom-in-95 duration-500">
-                      <ViewerDashboard userData={userData} />
-                    </div>
-                  ) : (
-                    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                      <Dashboard userData={userData} />
-                    </div>
-                  )}
-                </div>
+              <div className="w-full relative">
+                {showSphereView ? (
+                  <div className="animate-in fade-in zoom-in-95 duration-300">
+                    <ViewerDashboard userData={userData} />
+                  </div>
+                ) : (
+                  <div className="animate-in fade-in slide-in-from-bottom-4 duration-300">
+                    <Dashboard userData={userData} />
+                  </div>
+                )}
               </div>
-            )
+            </div>
           )
         )}
 
-        {/* Yahan revealSequence >= 1 use hua hai taaki Explore dabane ke baad pages easily fade-in hoke dikhein */}
         {activeTab === 'gallery' && (
-          <div className={`transition-opacity duration-1000 ${revealSequence >= 1 ? 'opacity-100' : 'opacity-0'}`}>
+          <div className="animate-in fade-in duration-300">
             <Gallery userData={userData} />
           </div>
         )}
 
         {activeTab === 'upload' && (
-          <div className={`transition-opacity duration-1000 ${revealSequence >= 1 ? 'opacity-100' : 'opacity-0'}`}>
+          <div className="animate-in fade-in duration-300">
             <UploadSection userData={userData} />
           </div>
         )}
 
         {activeTab === 'contribute' && (
-          <div className={`transition-opacity duration-1000 ${revealSequence >= 1 ? 'opacity-100' : 'opacity-0'}`}>
+          <div className="animate-in fade-in duration-300">
             <Contribute userData={userData} />
           </div>
         )}
 
         {activeTab === 'profile' && (
-          <div className={`transition-opacity duration-1000 ${revealSequence >= 1 ? 'opacity-100' : 'opacity-0'}`}>
-            {userData.role?.toLowerCase() === 'admin' ? (
+          <div className="animate-in fade-in duration-300">
+            {isAdmin ? (
               <AdminPanel currentUserData={userData} />
             ) : (
               <UserProfile userData={userData} />
@@ -519,11 +362,15 @@ export default function Home() {
         )}
       </div>
 
-      {/* BOTTOM SPOTLIGHT NAVIGATION - Slides from Bottom */}
-      <div className={`fixed bottom-0 w-full z-50 transition-all duration-700 transform ${revealSequence >= 1 ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0'}`}>
-        <SpotlightNav activeTab={activeTab} setActiveTab={setActiveTab} userRole={userData.role} isBanned={!!effectiveUserData?.isBanned} />
+      {/* BOTTOM SPOTLIGHT NAVIGATION */}
+      <div className="fixed bottom-0 w-full z-50">
+        <SpotlightNav
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          userRole={userData.role}
+          isBanned={!!effectiveUserData?.isBanned}
+        />
       </div>
-
     </main>
   );
 }

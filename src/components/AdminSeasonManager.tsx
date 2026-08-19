@@ -421,32 +421,32 @@ export default function AdminSeasonManager({
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-300">
+    <div className="space-y-3 sm:space-y-5 animate-in fade-in duration-300">
       {/* ─── Top Control Bar ───────────────────────────────── */}
-      <div className="bg-white rounded-2xl sm:rounded-3xl border border-gray-200 p-4 sm:p-6 shadow-sm">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-100 pb-5">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-red-50 border border-red-200 flex items-center justify-center text-[#5a0000]">
-              <Coins className="w-5 h-5" />
+      <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-5 shadow-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border-b border-gray-100 pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-red-50 border border-red-200 flex items-center justify-center text-[#5a0000] shrink-0">
+              <Coins className="w-4 h-4" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-base sm:text-lg font-black text-gray-900 uppercase tracking-tight">
-                  Chanda Seasons & Finance Management
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <h2 className="text-sm sm:text-base font-black text-gray-900 uppercase tracking-tight">
+                  Chanda & Finance
                 </h2>
                 {activeSeason && (
-                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 border border-emerald-300 text-emerald-800 text-[10px] font-black uppercase tracking-wider">
-                    Current: {activeSeason.name}
+                  <span className="px-2 py-0.5 rounded-full bg-emerald-100 border border-emerald-300 text-emerald-800 text-[9px] font-black uppercase tracking-wider">
+                    {activeSeason.name}
                   </span>
                 )}
               </div>
-              <p className="text-xs font-semibold text-gray-500">
-                Manage yearly Mandal seasons, monthly targets, member dues, and pending approvals
+              <p className="text-[10px] sm:text-xs font-semibold text-gray-500">
+                Seasons, monthly schedules, overrides & approvals
               </p>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <button
               onClick={() => {
                 setNewSeasonName('2026–27');
@@ -455,90 +455,90 @@ export default function AdminSeasonManager({
                 setNewEndDate('2027-08-31');
                 setShowCreateModal(true);
               }}
-              className="px-3.5 py-2 rounded-xl bg-[#5a0000] text-white font-black text-xs uppercase tracking-wider hover:bg-[#7a0000] transition-colors flex items-center gap-1.5 shadow-sm active:scale-95"
+              className="px-3 py-1.5 rounded-lg bg-[#5a0000] text-white font-black text-[10px] sm:text-xs uppercase tracking-wider hover:bg-[#7a0000] transition-colors flex items-center gap-1 shadow-sm active:scale-95"
             >
-              <Plus className="w-4 h-4" /> Create Season
+              <Plus className="w-3.5 h-3.5" /> Create Season
             </button>
           </div>
         </div>
 
         {/* Live Metrics Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-5">
-          <div className="bg-amber-50/60 border border-amber-100 rounded-2xl p-3.5">
-            <span className="text-[10px] font-black uppercase tracking-wider text-amber-600 block mb-1">Live Season</span>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 mt-3">
+          <div className="bg-amber-50/60 border border-amber-100 rounded-xl p-2.5 sm:p-3">
+            <span className="text-[9px] font-black uppercase tracking-wider text-amber-600 block mb-0.5">Live Season</span>
             <div className="flex items-center justify-between">
-              <span className="text-sm font-black text-amber-900 truncate">
+              <span className="text-xs sm:text-sm font-black text-amber-900 truncate">
                 {activeSeason ? activeSeason.name : 'None'}
               </span>
-              <CheckCircle2 className="w-4 h-4 text-amber-600" />
+              <CheckCircle2 className="w-3.5 h-3.5 text-amber-600 shrink-0" />
             </div>
           </div>
 
-          <div className="bg-emerald-50/60 border border-emerald-100 rounded-2xl p-3.5">
-            <span className="text-[10px] font-black uppercase tracking-wider text-emerald-600 block mb-1">Target / Member</span>
+          <div className="bg-emerald-50/60 border border-emerald-100 rounded-xl p-2.5 sm:p-3">
+            <span className="text-[9px] font-black uppercase tracking-wider text-emerald-600 block mb-0.5">Target / Member</span>
             <div className="flex items-center justify-between">
-              <span className="text-lg font-black text-emerald-700">₹{stats.totalTargetSum.toLocaleString('en-IN')}</span>
-              <IndianRupee className="w-4 h-4 text-emerald-600" />
+              <span className="text-sm sm:text-base font-black text-emerald-700">₹{stats.totalTargetSum.toLocaleString('en-IN')}</span>
+              <IndianRupee className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
             </div>
           </div>
 
-          <div className="bg-blue-50/60 border border-blue-100 rounded-2xl p-3.5">
-            <span className="text-[10px] font-black uppercase tracking-wider text-blue-600 block mb-1">Active Members</span>
+          <div className="bg-blue-50/60 border border-blue-100 rounded-xl p-2.5 sm:p-3">
+            <span className="text-[9px] font-black uppercase tracking-wider text-blue-600 block mb-0.5">Active Members</span>
             <div className="flex items-center justify-between">
-              <span className="text-lg font-black text-blue-800">{stats.membersCount}</span>
-              <UserCheck className="w-4 h-4 text-blue-600" />
+              <span className="text-sm sm:text-base font-black text-blue-800">{stats.membersCount}</span>
+              <UserCheck className="w-3.5 h-3.5 text-blue-600 shrink-0" />
             </div>
           </div>
 
-          <div className="bg-rose-50/60 border border-rose-100 rounded-2xl p-3.5">
-            <span className="text-[10px] font-black uppercase tracking-wider text-rose-600 block mb-1">Pending Approvals</span>
+          <div className="bg-rose-50/60 border border-rose-100 rounded-xl p-2.5 sm:p-3">
+            <span className="text-[9px] font-black uppercase tracking-wider text-rose-600 block mb-0.5">Pending Approvals</span>
             <div className="flex items-center justify-between">
-              <span className="text-lg font-black text-rose-800">{stats.pendingCount}</span>
-              <Clock className="w-4 h-4 text-rose-600" />
+              <span className="text-sm sm:text-base font-black text-rose-800">{stats.pendingCount}</span>
+              <Clock className="w-3.5 h-3.5 text-rose-600 shrink-0" />
             </div>
           </div>
         </div>
       </div>
 
       {/* ─── Season Selector Tabs & Actions ────────────────── */}
-      <div className="bg-white rounded-2xl sm:rounded-3xl border border-gray-200 p-4 sm:p-6 shadow-sm space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-3">
-          <div className="flex items-center gap-2">
-            <Calendar className="w-4 h-4 text-[#5a0000]" />
-            <h3 className="text-xs sm:text-sm font-black uppercase tracking-wider text-gray-800">
+      <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4 shadow-sm space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-2">
+          <div className="flex items-center gap-1.5">
+            <Calendar className="w-3.5 h-3.5 text-[#5a0000]" />
+            <h3 className="text-xs font-black uppercase tracking-wider text-gray-800">
               Select Mandal Season
             </h3>
           </div>
 
           {selectedSeason && (
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-1.5">
               <button
                 onClick={() => handleOpenEditSeason(selectedSeason)}
-                className="px-3 py-1.5 rounded-lg bg-gray-100 text-gray-800 font-black text-[11px] uppercase tracking-wider hover:bg-gray-200 flex items-center gap-1 border border-gray-200"
+                className="px-2 py-1 rounded-md bg-gray-100 text-gray-800 font-bold text-[10px] uppercase tracking-wider hover:bg-gray-200 flex items-center gap-1 border border-gray-200"
               >
-                <Edit3 className="w-3.5 h-3.5" /> Edit Season Settings
+                <Edit3 className="w-3 h-3" /> Settings
               </button>
 
               {selectedSeason.status !== 'active' && (
                 <button
                   onClick={() => handleActivateSeason(selectedSeason)}
-                  className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white font-black text-[11px] uppercase tracking-wider hover:bg-emerald-700 flex items-center gap-1 shadow-sm"
+                  className="px-2 py-1 rounded-md bg-emerald-600 text-white font-bold text-[10px] uppercase tracking-wider hover:bg-emerald-700 flex items-center gap-1 shadow-sm"
                 >
-                  <Check className="w-3.5 h-3.5" /> Set as Live Active
+                  <Check className="w-3 h-3" /> Set Live
                 </button>
               )}
 
               {displaySeasons.length > 1 && (
                 <button
                   onClick={() => handleDeleteSeason(selectedSeason)}
-                  className="px-2.5 py-1.5 rounded-lg bg-rose-50 text-rose-600 font-black text-[11px] uppercase tracking-wider hover:bg-rose-100 flex items-center gap-1 border border-rose-200"
+                  className="px-2 py-1 rounded-md bg-rose-50 text-rose-600 font-bold text-[10px] uppercase tracking-wider hover:bg-rose-100 flex items-center gap-1 border border-rose-200"
                   title="Delete this season"
                 >
-                  <Trash2 className="w-3.5 h-3.5" /> Delete Season
+                  <Trash2 className="w-3 h-3" /> Delete
                 </button>
               )}
 
-              <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest border ${
+              <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider border ${
                 selectedSeason.status === 'active'
                   ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
                   : selectedSeason.status === 'draft'
@@ -552,25 +552,25 @@ export default function AdminSeasonManager({
         </div>
 
         {/* Season Chips */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 custom-scrollbar">
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 custom-scrollbar">
           {displaySeasons.map((s) => {
             const isSelected = s.id === selectedSeasonId;
             return (
               <button
                 key={s.id}
                 onClick={() => setSelectedSeasonId(s.id)}
-                className={`px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all shrink-0 flex items-center gap-2 ${
+                className={`px-3 py-1.5 rounded-lg font-bold text-[11px] uppercase tracking-wider transition-all shrink-0 flex items-center gap-1.5 ${
                   isSelected
-                    ? 'bg-[#5a0000] text-white shadow-md'
+                    ? 'bg-[#5a0000] text-white shadow-sm'
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                 }`}
               >
                 <span>{s.name}</span>
                 {s.status === 'active' && (
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
                 )}
                 {s.status === 'closed' && (
-                  <span className="text-[9px] opacity-70">🔒</span>
+                  <span className="text-[8px] opacity-70">🔒</span>
                 )}
               </button>
             );
@@ -579,42 +579,42 @@ export default function AdminSeasonManager({
 
         {/* Sub-views inside Season & Finance */}
         {selectedSeasonId && (
-          <div className="border-t border-gray-100 pt-4 mt-2">
-            <div className="flex items-center justify-between gap-2 overflow-x-auto pb-2 custom-scrollbar">
-              <div className="flex gap-2">
+          <div className="border-t border-gray-100 pt-2.5">
+            <div className="flex items-center justify-between gap-1.5 overflow-x-auto pb-1 custom-scrollbar">
+              <div className="flex gap-1.5">
                 <button
                   onClick={() => setActiveSubView('schedule')}
-                  className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
+                  className={`px-2.5 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold uppercase tracking-wider transition-all shrink-0 ${
                     activeSubView === 'schedule'
                       ? 'bg-[#5a0000] text-white shadow-sm'
                       : 'bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-200'
                   }`}
                 >
-                  1. Monthly Due Schedule ({dues.length})
+                  Schedule ({dues.length})
                 </button>
 
                 <button
                   onClick={() => setActiveSubView('overrides')}
-                  className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
+                  className={`px-2.5 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold uppercase tracking-wider transition-all shrink-0 ${
                     activeSubView === 'overrides'
                       ? 'bg-[#5a0000] text-white shadow-sm'
                       : 'bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-200'
                   }`}
                 >
-                  2. Member Overrides ({overrides.length})
+                  Overrides ({overrides.length})
                 </button>
 
                 <button
                   onClick={() => setActiveSubView('approvals')}
-                  className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 ${
+                  className={`px-2.5 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-1 shrink-0 ${
                     activeSubView === 'approvals'
                       ? 'bg-[#5a0000] text-white shadow-sm'
                       : 'bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-200'
                   }`}
                 >
-                  <span>3. Pending Approvals</span>
+                  <span>Approvals</span>
                   {stats.pendingCount > 0 && (
-                    <span className="px-1.5 py-0.2 bg-rose-500 text-white rounded-full text-[10px]">
+                    <span className="px-1 py-0.2 bg-rose-500 text-white rounded-full text-[9px] font-bold">
                       {stats.pendingCount}
                     </span>
                   )}
@@ -622,31 +622,31 @@ export default function AdminSeasonManager({
 
                 <button
                   onClick={() => setActiveSubView('members')}
-                  className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
+                  className={`px-2.5 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold uppercase tracking-wider transition-all shrink-0 ${
                     activeSubView === 'members'
                       ? 'bg-[#5a0000] text-white shadow-sm'
                       : 'bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-200'
                   }`}
                 >
-                  4. Mandal Members ({stats.membersCount})
+                  Members ({stats.membersCount})
                 </button>
               </div>
 
               {activeSubView === 'schedule' && (
                 <button
                   onClick={() => setShowBulkModal(true)}
-                  className="px-3 py-1.5 rounded-lg bg-gray-100 text-gray-800 font-black text-[11px] uppercase tracking-wider hover:bg-gray-200 flex items-center gap-1 shrink-0 border border-gray-200"
+                  className="px-2 py-1 rounded-md bg-gray-100 text-gray-800 font-bold text-[10px] uppercase tracking-wider hover:bg-gray-200 flex items-center gap-1 shrink-0 border border-gray-200"
                 >
-                  <Edit3 className="w-3.5 h-3.5" /> Bulk Set Amounts
+                  <Edit3 className="w-3 h-3" /> Bulk Set
                 </button>
               )}
 
               {activeSubView === 'overrides' && (
                 <button
                   onClick={() => setShowOverrideModal(true)}
-                  className="px-3 py-1.5 rounded-lg bg-[#5a0000] text-white font-black text-[11px] uppercase tracking-wider hover:bg-[#7a0000] flex items-center gap-1 shrink-0"
+                  className="px-2 py-1 rounded-md bg-[#5a0000] text-white font-bold text-[10px] uppercase tracking-wider hover:bg-[#7a0000] flex items-center gap-1 shrink-0"
                 >
-                  <Plus className="w-3.5 h-3.5" /> Add Override
+                  <Plus className="w-3 h-3" /> Add
                 </button>
               )}
             </div>
@@ -656,44 +656,44 @@ export default function AdminSeasonManager({
 
       {/* ─── TAB 1: MONTHLY DUE SCHEDULE MATRIX ────────────── */}
       {selectedSeasonId && activeSubView === 'schedule' && (
-        <div className="bg-white rounded-2xl sm:rounded-3xl border border-gray-200 p-4 sm:p-6 shadow-sm space-y-4">
-          <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+        <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4 shadow-sm space-y-3">
+          <div className="flex items-center justify-between border-b border-gray-100 pb-2">
             <div>
-              <h3 className="text-xs sm:text-sm font-black uppercase tracking-wider text-gray-800">
-                12-Month Schedule for {selectedSeason?.name}
+              <h3 className="text-xs font-black uppercase tracking-wider text-gray-800">
+                12-Month Schedule ({selectedSeason?.name})
               </h3>
-              <p className="text-[11px] font-semibold text-gray-500">
-                Each month has a customizable target (e.g. ₹100 or ₹150). Click &apos;Edit Amount&apos; anytime.
+              <p className="text-[10px] font-semibold text-gray-500">
+                Customize targets per month or lock/unlock months
               </p>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2 sm:gap-2.5">
             {dues.map((month) => {
               const isLocked = month.locked;
               return (
                 <div
                   key={month.monthKey}
-                  className={`bg-gray-50 border rounded-2xl p-3.5 flex flex-col justify-between transition-all relative ${
-                    isLocked ? 'border-red-200 bg-red-50/20' : 'border-gray-200 hover:border-amber-400 hover:shadow-md'
+                  className={`bg-gray-50 border rounded-xl p-2.5 flex flex-col justify-between transition-all relative ${
+                    isLocked ? 'border-red-200 bg-red-50/20' : 'border-gray-200 hover:border-amber-400 hover:shadow-sm'
                   }`}
                 >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-[10px] font-black uppercase tracking-wider text-gray-500">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[9px] font-black uppercase tracking-wider text-gray-500">
                       {month.monthOrder}. {month.monthKey}
                     </span>
                     <button
                       onClick={() => handleToggleLock(month)}
-                      className={`p-1 rounded-md text-xs ${month.locked ? 'text-red-500 hover:bg-red-50' : 'text-gray-400 hover:text-gray-700'}`}
+                      className={`p-0.5 rounded text-xs ${month.locked ? 'text-red-500 hover:bg-red-50' : 'text-gray-400 hover:text-gray-700'}`}
                       title={month.locked ? 'Locked: Click to Unlock' : 'Open: Click to Lock'}
                     >
-                      {month.locked ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
+                      {month.locked ? <Lock className="w-3 h-3" /> : <Unlock className="w-3 h-3" />}
                     </button>
                   </div>
 
-                  <div className="my-1">
-                    <span className="text-xs font-bold text-gray-700 block">{month.monthName}</span>
-                    <span className="text-lg font-black text-gray-900 block mt-0.5">₹{month.dueAmount}</span>
+                  <div className="my-0.5">
+                    <span className="text-[11px] font-bold text-gray-700 block truncate">{month.monthName}</span>
+                    <span className="text-base font-black text-gray-900 block mt-0.5">₹{month.dueAmount}</span>
                   </div>
 
                   <button
@@ -703,9 +703,9 @@ export default function AdminSeasonManager({
                       setEditReason('');
                       setShowEditMonthModal(true);
                     }}
-                    className="mt-2 w-full py-1.5 rounded-lg bg-white border border-gray-200 text-[10px] font-black uppercase tracking-wider text-gray-800 hover:bg-gray-100 flex items-center justify-center gap-1 shadow-2xs cursor-pointer"
+                    className="mt-1.5 w-full py-1 rounded-md bg-white border border-gray-200 text-[9px] font-black uppercase tracking-wider text-gray-800 hover:bg-gray-100 flex items-center justify-center gap-1 shadow-2xs cursor-pointer"
                   >
-                    <Edit3 className="w-3 h-3" /> Edit Target
+                    <Edit3 className="w-2.5 h-2.5" /> Edit Target
                   </button>
                 </div>
               );
@@ -716,34 +716,34 @@ export default function AdminSeasonManager({
 
       {/* ─── TAB 2: MEMBER OVERRIDES ────────────────────────── */}
       {selectedSeasonId && activeSubView === 'overrides' && (
-        <div className="bg-white rounded-2xl sm:rounded-3xl border border-gray-200 p-4 sm:p-6 shadow-sm space-y-4">
-          <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+        <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4 shadow-sm space-y-3">
+          <div className="flex items-center justify-between border-b border-gray-100 pb-2">
             <div>
-              <h3 className="text-xs sm:text-sm font-black uppercase tracking-wider text-gray-800">
+              <h3 className="text-xs font-black uppercase tracking-wider text-gray-800">
                 Custom Member / Flat Overrides
               </h3>
-              <p className="text-[11px] font-semibold text-gray-500">
-                Special arrangements for specific members or flats taking precedence over season default
+              <p className="text-[10px] font-semibold text-gray-500">
+                Special arrangements taking precedence over default schedule
               </p>
             </div>
           </div>
 
           {overrides.length === 0 ? (
-            <div className="py-10 text-center border-2 border-dashed border-gray-200 rounded-2xl">
-              <UserPlus className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+            <div className="py-8 text-center border-2 border-dashed border-gray-200 rounded-xl">
+              <UserPlus className="w-6 h-6 text-gray-300 mx-auto mb-1.5" />
               <p className="text-xs font-bold text-gray-500 uppercase">No custom overrides configured</p>
-              <p className="text-[10px] text-gray-400 mt-1">All members pay the standard monthly schedule</p>
+              <p className="text-[10px] text-gray-400 mt-0.5">All members pay the standard monthly schedule</p>
               <button
                 onClick={() => setShowOverrideModal(true)}
-                className="mt-3 px-4 py-2 bg-[#5a0000] text-white rounded-xl text-xs font-black uppercase tracking-wider hover:bg-[#7a0000]"
+                className="mt-2.5 px-3 py-1.5 bg-[#5a0000] text-white rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-[#7a0000]"
               >
                 Add First Override
               </button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 sm:gap-3">
               {overrides.map((ov) => (
-                <div key={ov.id} className="bg-gray-50 border border-gray-200 rounded-2xl p-4 flex flex-col justify-between hover:shadow-sm">
+                <div key={ov.id} className="bg-gray-50 border border-gray-200 rounded-xl p-3 flex flex-col justify-between hover:shadow-sm">
                   <div>
                     <div className="flex items-start justify-between">
                       <span className="text-xs font-black text-gray-900">
@@ -754,18 +754,18 @@ export default function AdminSeasonManager({
                         className="p-1 text-red-500 hover:bg-red-50 rounded-md"
                         title="Delete Override"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <Trash2 className="w-3 h-3" />
                       </button>
                     </div>
-                    <span className="text-[10px] font-black uppercase tracking-wider text-amber-600 block mt-1">
+                    <span className="text-[9px] font-black uppercase tracking-wider text-amber-600 block mt-0.5">
                       Month: {ov.monthKey}
                     </span>
-                    <p className="text-[11px] text-gray-500 italic mt-1">&quot;{ov.reason}&quot;</p>
+                    <p className="text-[10px] text-gray-500 italic mt-0.5">&quot;{ov.reason}&quot;</p>
                   </div>
 
-                  <div className="mt-3 pt-2 border-t border-gray-200/60 flex items-center justify-between">
-                    <span className="text-[10px] font-bold text-gray-400">Override Target:</span>
-                    <span className="text-sm font-black text-emerald-700">₹{ov.overrideAmount} / month</span>
+                  <div className="mt-2 pt-1.5 border-t border-gray-200/60 flex items-center justify-between">
+                    <span className="text-[9px] font-bold text-gray-400">Override:</span>
+                    <span className="text-xs sm:text-sm font-black text-emerald-700">₹{ov.overrideAmount} / mo</span>
                   </div>
                 </div>
               ))}
@@ -776,48 +776,48 @@ export default function AdminSeasonManager({
 
       {/* ─── TAB 3: PENDING APPROVALS ───────────────────────── */}
       {selectedSeasonId && activeSubView === 'approvals' && (
-        <div className="bg-white rounded-2xl sm:rounded-3xl border border-gray-200 p-4 sm:p-6 shadow-sm space-y-4">
-          <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+        <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4 shadow-sm space-y-3">
+          <div className="flex items-center justify-between border-b border-gray-100 pb-2">
             <div>
-              <h3 className="text-xs sm:text-sm font-black uppercase tracking-wider text-gray-800">
-                Pending Online Chanda Approvals ({pendingChandaPayments.length})
+              <h3 className="text-xs font-black uppercase tracking-wider text-gray-800">
+                Pending Approvals ({pendingChandaPayments.length})
               </h3>
-              <p className="text-[11px] font-semibold text-gray-500">
+              <p className="text-[10px] font-semibold text-gray-500">
                 Review UTRs submitted by members and approve/reject contributions
               </p>
             </div>
           </div>
 
           {pendingChandaPayments.length === 0 ? (
-            <div className="py-10 text-center border-2 border-dashed border-gray-200 rounded-2xl">
-              <CheckCircle2 className="w-8 h-8 text-emerald-400 mx-auto mb-2" />
+            <div className="py-8 text-center border-2 border-dashed border-gray-200 rounded-xl">
+              <CheckCircle2 className="w-6 h-6 text-emerald-400 mx-auto mb-1.5" />
               <p className="text-xs font-bold text-gray-500 uppercase">No pending approvals</p>
-              <p className="text-[10px] text-gray-400 mt-1">All online contributions are cleared</p>
+              <p className="text-[10px] text-gray-400 mt-0.5">All online contributions are cleared</p>
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-2">
               {pendingChandaPayments.map((payment) => (
-                <div key={payment.id} className="flex flex-col md:flex-row md:items-center justify-between gap-3 p-4 rounded-2xl border border-amber-200 bg-amber-50/40">
+                <div key={payment.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-xl border border-amber-200 bg-amber-50/40">
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-black text-gray-900">{payment.userName || 'Unknown'}</span>
-                      <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-xs font-black">
+                      <span className="text-xs sm:text-sm font-black text-gray-900">{payment.userName || 'Unknown'}</span>
+                      <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-black">
                         ₹{payment.amount || 0}
                       </span>
                     </div>
-                    <p className="text-[11px] text-gray-500 font-semibold mt-1">
-                      UTR: <span className="font-mono bg-white px-1.5 py-0.5 rounded border border-gray-200 text-gray-900">{payment.utr_number || 'N/A'}</span>
+                    <p className="text-[10px] text-gray-500 font-semibold mt-0.5">
+                      UTR: <span className="font-mono bg-white px-1 py-0.2 rounded border border-gray-200 text-gray-900">{payment.utr_number || 'N/A'}</span>
                     </p>
                     {payment.message && (
-                      <p className="text-[10px] text-gray-600 italic mt-1">&quot;{payment.message}&quot;</p>
+                      <p className="text-[9px] text-gray-600 italic mt-0.5">&quot;{payment.message}&quot;</p>
                     )}
                   </div>
 
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex items-center gap-1.5 shrink-0">
                     {onApproveChanda && (
                       <button
                         onClick={() => onApproveChanda(payment.id)}
-                        className="px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs font-black uppercase tracking-wider hover:bg-emerald-700 shadow-sm"
+                        className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-[10px] sm:text-xs font-black uppercase tracking-wider hover:bg-emerald-700 shadow-sm"
                       >
                         Approve
                       </button>
@@ -825,7 +825,7 @@ export default function AdminSeasonManager({
                     {onRejectChanda && (
                       <button
                         onClick={() => onRejectChanda(payment.id)}
-                        className="px-3 py-2 rounded-xl bg-red-100 text-red-700 text-xs font-black uppercase tracking-wider hover:bg-red-200"
+                        className="px-2.5 py-1.5 rounded-lg bg-red-100 text-red-700 text-[10px] sm:text-xs font-black uppercase tracking-wider hover:bg-red-200"
                       >
                         Reject
                       </button>
@@ -840,29 +840,29 @@ export default function AdminSeasonManager({
 
       {/* ─── TAB 4: MANDAL MEMBERS & EXEMPT MONTHS ───────────── */}
       {selectedSeasonId && activeSubView === 'members' && (
-        <div className="bg-white rounded-2xl sm:rounded-3xl border border-gray-200 p-4 sm:p-6 shadow-sm space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-3">
+        <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4 shadow-sm space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-2">
             <div>
-              <h3 className="text-xs sm:text-sm font-black uppercase tracking-wider text-gray-800">
+              <h3 className="text-xs font-black uppercase tracking-wider text-gray-800">
                 Mandal Members & Exemptions
               </h3>
-              <p className="text-[11px] font-semibold text-gray-500">
-                Manage registered Mandal members and block previous months for late joiners
+              <p className="text-[10px] font-semibold text-gray-500">
+                Manage registered members and block previous months for late joiners
               </p>
             </div>
 
             {onAddMember && setNewMemberName && setIsNewMemberHonorary && (
-              <form onSubmit={onAddMember} className="flex flex-wrap items-center gap-2">
+              <form onSubmit={onAddMember} className="flex flex-wrap items-center gap-1.5">
                 <input
                   type="text"
                   placeholder="New Member Name"
                   value={newMemberName}
                   onChange={(e) => setNewMemberName(e.target.value)}
-                  className="px-3 py-1.5 rounded-xl border border-gray-200 text-xs font-bold bg-gray-50 outline-none"
+                  className="px-2.5 py-1 rounded-lg border border-gray-200 text-xs font-bold bg-gray-50 outline-none"
                 />
                 <button
                   type="submit"
-                  className="px-3 py-1.5 rounded-xl bg-[#5a0000] text-white text-xs font-black uppercase tracking-wider hover:bg-[#7a0000]"
+                  className="px-2.5 py-1 rounded-lg bg-[#5a0000] text-white text-[10px] sm:text-xs font-black uppercase tracking-wider hover:bg-[#7a0000]"
                 >
                   Add Member
                 </button>
@@ -870,21 +870,21 @@ export default function AdminSeasonManager({
             )}
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 sm:gap-2.5">
             {mandalMembers.map((member) => {
               const isExpanded = expandedMemberId === member.id;
               const memberExempt: string[] = member.exemptMonths || [];
               return (
-                <div key={member.id} className="rounded-2xl border border-gray-200 bg-gray-50/70 p-3 flex flex-col justify-between">
+                <div key={member.id} className="rounded-xl border border-gray-200 bg-gray-50/70 p-2.5 flex flex-col justify-between">
                   <div className="flex items-center justify-between">
                     <div>
                       <span className="text-xs font-black text-gray-900 block">{member.name}</span>
                       <div className="flex items-center gap-1.5 mt-0.5">
                         {member.isHonorary && (
-                          <span className="text-[9px] font-bold uppercase text-yellow-700 bg-yellow-100 px-1.5 rounded">Honorary</span>
+                          <span className="text-[8px] font-bold uppercase text-yellow-700 bg-yellow-100 px-1.5 rounded">Honorary</span>
                         )}
                         {memberExempt.length > 0 && (
-                          <span className="text-[9px] font-bold text-blue-700">{memberExempt.length} mo exempt</span>
+                          <span className="text-[8px] font-bold text-blue-700">{memberExempt.length} mo exempt</span>
                         )}
                       </div>
                     </div>
@@ -893,7 +893,7 @@ export default function AdminSeasonManager({
                       <button
                         type="button"
                         onClick={() => setExpandedMemberId(isExpanded ? null : member.id)}
-                        className="px-2 py-1 rounded-lg bg-white border border-gray-200 text-[10px] font-black uppercase text-gray-700 hover:bg-gray-100"
+                        className="px-2 py-0.5 rounded-md bg-white border border-gray-200 text-[9px] font-bold uppercase text-gray-700 hover:bg-gray-100"
                       >
                         {isExpanded ? 'Close' : 'Months'}
                       </button>

@@ -839,13 +839,13 @@ export default function Dashboard({ userData }: { userData: any }) {
         </div>
       )}
 
-      {/* Header Banner */}
-      <div className="bg-gradient-to-br from-[#5A0000] to-[#3A0000] px-4 pt-8 pb-20 text-white text-center rounded-b-[2rem] shadow-lg relative">
-        <div className="max-w-4xl mx-auto flex items-center justify-between gap-4">
+      {/* Header Banner - Compact on Mobile */}
+      <div className="bg-gradient-to-br from-[#5A0000] to-[#3A0000] px-3 sm:px-4 pt-6 pb-16 sm:pt-8 sm:pb-20 text-white text-center rounded-b-[1.5rem] sm:rounded-b-[2rem] shadow-md relative">
+        <div className="max-w-4xl mx-auto flex items-center justify-between gap-3">
           {/* Small Logo / Admin Indicator */}
           <div
-            className={`relative flex items-center justify-center h-10 w-10 overflow-hidden rounded-full border shadow-sm transition-all duration-300 shrink-0 ${isAdmin
-              ? "border-yellow-400 bg-yellow-50 shadow-[0_0_10px_rgba(250,204,21,0.6)] text-[8px] font-black text-yellow-700 text-center leading-none uppercase"
+            className={`relative flex items-center justify-center h-8 w-8 sm:h-10 sm:w-10 overflow-hidden rounded-full border shadow-sm transition-all duration-300 shrink-0 ${isAdmin
+              ? "border-yellow-400 bg-yellow-50 shadow-[0_0_10px_rgba(250,204,21,0.6)] text-[7px] sm:text-[8px] font-black text-yellow-700 text-center leading-none uppercase"
               : "border-white/20 bg-white/10"
               }`}
             title={isAdmin ? "Admin Access Enabled" : "Viewer Access"}
@@ -856,12 +856,12 @@ export default function Dashboard({ userData }: { userData: any }) {
           {/* Title */}
           <div className="flex-1 text-center">
             <h1
-              className="text-xl sm:text-2xl font-black uppercase tracking-widest text-yellow-400 leading-tight font-cinzel"
+              className="text-lg sm:text-2xl font-black uppercase tracking-widest text-yellow-400 leading-tight font-cinzel"
             >
               Siyaram Mitra Mandal
             </h1>
             <p
-              className="text-[10px] text-red-200 mt-0.5 uppercase tracking-widest font-black font-cinzel"
+              className="text-[9px] sm:text-[10px] text-red-200 mt-0.5 uppercase tracking-widest font-black font-cinzel"
             >
               Ledger Dashboard
             </p>
@@ -871,7 +871,7 @@ export default function Dashboard({ userData }: { userData: any }) {
                 <select
                   value={selectedDashboardSeasonId || ''}
                   onChange={(e) => setSelectedDashboardSeasonId(e.target.value)}
-                  className="bg-black/40 text-yellow-300 text-[9px] sm:text-[10px] font-black uppercase tracking-wider px-3 py-0.5 rounded-full border border-yellow-500/30 outline-none backdrop-blur-md cursor-pointer hover:bg-black/60 transition-colors"
+                  className="bg-black/40 text-yellow-300 text-[8px] sm:text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full border border-yellow-500/30 outline-none backdrop-blur-md cursor-pointer hover:bg-black/60 transition-colors"
                 >
                   {dynSeasons.map(s => (
                     <option key={s.id} value={s.id} className="bg-gray-900 text-white">
@@ -883,27 +883,27 @@ export default function Dashboard({ userData }: { userData: any }) {
             )}
           </div>
 
-          {/* Grand Total Micro Card */}
-          <div className="bg-white/10 backdrop-blur-md border border-white/15 px-3 py-1.5 rounded-xl text-right shrink-0">
-            <span className="block text-[8px] text-red-200 uppercase tracking-wider font-bold">Grand Total</span>
-            <span className="text-sm font-black text-green-300">₹{grandTotal.toLocaleString()}</span>
+          {/* Grand Total Micro Card - Compact */}
+          <div className="bg-white/10 backdrop-blur-md border border-white/15 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg sm:rounded-xl text-right shrink-0">
+            <span className="block text-[7px] sm:text-[8px] text-red-200 uppercase tracking-wider font-bold">Total</span>
+            <span className="text-xs sm:text-sm font-black text-green-300">₹{grandTotal.toLocaleString()}</span>
           </div>
         </div>
       </div>
 
       {/* 🔥 THE MASTER RESPONSIVE WRAPPER */}
-      <main className="max-w-4xl mx-auto px-3 sm:px-4 -mt-12 relative z-10 space-y-4">
+      <main className="max-w-4xl mx-auto px-3 sm:px-4 -mt-12 relative z-10 space-y-3 sm:space-y-4">
 
 
         {sysSettings?.announcement && (
-          <div className="mb-6 rounded-r-2xl border-l-4 border-yellow-500 bg-gradient-to-r from-yellow-50 to-orange-50 p-4 shadow-sm animate-fade-in">
-            <div className="flex items-center gap-3">
-              <div className="rounded-full bg-yellow-500 p-1.5 animate-pulse">
-                <Bell className="w-4 h-4 text-white" />
+          <div className="mb-4 sm:mb-6 rounded-r-2xl border-l-4 border-yellow-500 bg-gradient-to-r from-yellow-50 to-orange-50 p-3 sm:p-4 shadow-sm animate-fade-in">
+            <div className="flex items-center gap-2.5 sm:gap-3">
+              <div className="rounded-full bg-yellow-500 p-1.5 animate-pulse shrink-0">
+                <Bell className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
               </div>
               <div>
-                <p className="text-[10px] font-black uppercase tracking-tighter text-yellow-800">Mandal Announcement</p>
-                <p className="mt-0.5 text-sm font-bold leading-tight text-gray-800">
+                <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-tighter text-yellow-800">Mandal Announcement</p>
+                <p className="mt-0.5 text-xs sm:text-sm font-bold leading-tight text-gray-800">
                   {sysSettings.announcement}
                 </p>
               </div>
@@ -912,49 +912,51 @@ export default function Dashboard({ userData }: { userData: any }) {
         )}
 
         {/* 4-WAY SUB-TAB NAVIGATION (Optimized for Mobile) */}
-        <div className="bg-white p-1 rounded-xl shadow-sm border border-gray-100 flex gap-1 mb-4 overflow-x-auto custom-scrollbar scroll-smooth snap-x sm:overflow-visible">
+        <div className="bg-white p-1 rounded-xl shadow-sm border border-gray-100 flex gap-1 mb-3 sm:mb-4 overflow-x-auto custom-scrollbar scroll-smooth">
           <button
             onClick={() => setActiveSubTab('members')}
-            className={`snap-center shrink-0 min-w-[100px] sm:min-w-0 sm:flex-1 py-2.5 px-3 rounded-lg font-black text-[10px] sm:text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer ${activeSubTab === 'members' ? 'bg-[#5A0000] text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}
+            className={`shrink-0 min-w-[85px] sm:min-w-0 sm:flex-1 py-2 px-2 sm:px-3 rounded-lg font-black text-[9px] sm:text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer ${activeSubTab === 'members' ? 'bg-[#5A0000] text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}
           >
             <Users className="w-3.5 h-3.5" /> Members
           </button>
           
           <button
             onClick={() => setActiveSubTab('buildings')}
-            className={`snap-center shrink-0 min-w-[100px] sm:min-w-0 sm:flex-1 py-2.5 px-3 rounded-lg font-black text-[10px] sm:text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer ${activeSubTab === 'buildings' ? 'bg-[#5A0000] text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}
+            className={`shrink-0 min-w-[85px] sm:min-w-0 sm:flex-1 py-2 px-2 sm:px-3 rounded-lg font-black text-[9px] sm:text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer ${activeSubTab === 'buildings' ? 'bg-[#5A0000] text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}
           >
             <Building2 className="w-3.5 h-3.5" /> Buildings
           </button>
           
           <button
             onClick={() => setActiveSubTab('others')}
-            className={`snap-center shrink-0 min-w-[120px] sm:min-w-0 sm:flex-1 py-2.5 px-3 rounded-lg font-black text-[10px] sm:text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer ${activeSubTab === 'others' ? 'bg-[#5A0000] text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}
+            className={`shrink-0 min-w-[95px] sm:min-w-0 sm:flex-1 py-2 px-2 sm:px-3 rounded-lg font-black text-[9px] sm:text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer ${activeSubTab === 'others' ? 'bg-[#5A0000] text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}
           >
             <Store className="w-3.5 h-3.5" /> Dost/Dukan
           </button>
           
           <button
             onClick={() => setActiveSubTab('expenses')}
-            className={`snap-center shrink-0 min-w-[100px] sm:min-w-0 sm:flex-1 py-2.5 px-3 rounded-lg font-black text-[10px] sm:text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer ${activeSubTab === 'expenses' ? 'bg-[#5A0000] text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}
+            className={`shrink-0 min-w-[85px] sm:min-w-0 sm:flex-1 py-2 px-2 sm:px-3 rounded-lg font-black text-[9px] sm:text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer ${activeSubTab === 'expenses' ? 'bg-[#5A0000] text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}
           >
             <IndianRupee className="w-3.5 h-3.5" /> Kharcha
           </button>
         </div>
 
         {/* Master Tab Content Card */}
-        <div className="bg-white p-3 sm:p-5 rounded-3xl border border-gray-100 shadow-sm min-h-[500px]">
+        <div className="bg-white p-3 sm:p-5 rounded-2xl sm:rounded-3xl border border-gray-100 shadow-sm min-h-[500px]">
           {activeSubTab === 'members' ? (
             <>
-              {/* SUMMARY CARDS */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <SummaryCard label="Total Collected (YTD)" value={`₹${totalCollected.toLocaleString()}`} />
-                <SummaryCard label={`Total Dues (Up to ${currentTrackingMonth})`} value={`₹${totalDeficit.toLocaleString()}`} accentClassName="text-orange-600" badge={`₹${expectedTotalPerMember} Target`} />
-                <SummaryCard label="Previous Year Balance" value={`₹${previousYearBalance.toLocaleString()}`} muted />
+              {/* SUMMARY CARDS - Responsive Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3">
+                <SummaryCard label="Collected (YTD)" value={`₹${totalCollected.toLocaleString()}`} />
+                <SummaryCard label="Total Dues" value={`₹${totalDeficit.toLocaleString()}`} accentClassName="text-orange-600" badge={`₹${expectedTotalPerMember}`} />
+                <div className="col-span-2 sm:col-span-1">
+                  <SummaryCard label="Previous Balance" value={`₹${previousYearBalance.toLocaleString()}`} muted />
+                </div>
               </div>
 
               {/* 🔥 UNIFIED SORT TOOLBAR (Mobile + Desktop dono ke liye) */}
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-3 rounded-xl border border-gray-100 bg-gray-50/50 mt-3">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-2 sm:gap-3 p-2.5 sm:p-3 rounded-xl border border-gray-100 bg-gray-50/50 mt-2.5 sm:mt-3">
                 <div className="flex items-center justify-between w-full sm:w-auto gap-2">
                   <h2 className="text-xs font-black text-gray-800 uppercase tracking-widest flex items-center gap-1.5">
                     👥 Member Records
@@ -977,52 +979,64 @@ export default function Dashboard({ userData }: { userData: any }) {
                     onChange={setSortBy}
                     options={SORT_OPTIONS}
                     theme="light"
-                    className="w-40 sm:w-48"
+                    className="w-36 sm:w-48"
                   />
                 </div>
               </div>
 
-              {/* MOBILE VIEW LIST */}
-              <div className="block space-y-3 md:hidden">
-                {sortedMembers.length === 0 && <p className="text-center text-gray-400 py-4 font-bold">No members yet. Admins can add or restore them above!</p>}
+              {/* MOBILE VIEW LIST - Sleek Rows */}
+              <div className="block space-y-2 md:hidden mt-2.5">
+                {sortedMembers.length === 0 && <p className="text-center text-[10px] text-gray-400 py-4 font-bold uppercase tracking-wider">No members yet.</p>}
                 {sortedMembers.map((member) => {
                   const totalPaid = getMemberTotal(member.payments);
                   const remaining = getMemberExpectedTotal(member) - totalPaid;
                   const isExpanded = expandedMemberId === member.id;
 
                   return (
-                    <div key={member.id} className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
-                      <button type="button" onClick={() => toggleExpandedMember(member.id)} className="flex w-full items-center justify-between gap-3 p-4 text-left">
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2 truncate text-sm font-bold text-gray-900">
-                            <span>{member.name}</span>
-                            {member.isHonorary ? <span className="rounded-full border border-purple-200 bg-purple-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-purple-700">Honorary</span> : null}
+                    <div key={member.id} className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-xs">
+                      <button type="button" onClick={() => toggleExpandedMember(member.id)} className="flex w-full items-center justify-between p-3 text-left">
+                        <div className="flex-1 min-w-0 pr-2">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs font-black text-gray-900 truncate">{member.name}</span>
+                            {member.isHonorary && (
+                              <span className="rounded border border-purple-200 bg-purple-50 px-1 py-[1px] text-[7px] font-black uppercase tracking-wider text-purple-700">Honorary</span>
+                            )}
                           </div>
-                          <div className="mt-1 text-xs text-gray-500">Total Paid: <span className="font-semibold text-gray-800">₹{totalPaid}</span></div>
+                          <div className="text-[10px] text-gray-500 mt-0.5">
+                            Paid: <span className="font-black text-gray-800">₹{totalPaid}</span>
+                          </div>
                         </div>
 
-                        <div className="flex items-center gap-2">
-                          {member.isHonorary ? <span className="rounded-md border border-purple-200 bg-purple-50 px-2 py-1 text-[10px] font-bold text-purple-700">Honorary</span> : remaining > 0 ? <span className="rounded-md bg-red-50 px-2 py-1 text-xs font-bold text-red-600">₹{remaining} Due</span> : remaining < 0 ? <span className="rounded-md bg-green-50 px-2 py-1 text-[10px] font-bold text-green-700">Adv ₹{Math.abs(remaining)}</span> : <span className="rounded-md bg-gray-100 px-2 py-1 text-xs font-bold text-gray-600">Clear</span>}
-                          <span className="text-xs text-gray-400">{isExpanded ? "▲" : "▼"}</span>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {member.isHonorary ? (
+                            <span className="text-[9px] font-bold text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200">Honorary</span>
+                          ) : remaining > 0 ? (
+                            <span className="text-[10px] font-black text-red-600 bg-red-50 px-2 py-0.5 rounded border border-red-100">₹{remaining} Due</span>
+                          ) : remaining < 0 ? (
+                            <span className="text-[10px] font-black text-green-700 bg-green-50 px-2 py-0.5 rounded border border-green-100">Adv ₹{Math.abs(remaining)}</span>
+                          ) : (
+                            <span className="text-[10px] font-black text-gray-500 bg-gray-100 px-2 py-0.5 rounded">Clear</span>
+                          )}
+                          <span className="text-[9px] text-gray-400 ml-0.5">{isExpanded ? "▲" : "▼"}</span>
                         </div>
                       </button>
 
                       {isExpanded && (
-                        <div className="border-t border-gray-50 bg-gray-50/60 px-4 pb-4 pt-3">
-                          <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                        <div className="border-t border-gray-50 bg-gray-50/60 p-2.5">
+                          <div className="grid grid-cols-3 gap-1.5">
                             {MONTHS.map((month) => {
                               const isBlocked = blockedMonths.includes(month) || (member.exemptMonths || []).includes(month);
                               const isEditing = editCell.id === member.id && editCell.month === month;
 
                               return (
-                                <div key={month} onClick={() => handleCellClick(member.id, month, member.payments[month])} className={`relative rounded-lg border p-2 text-center shadow-sm ${isBlocked ? "border-red-200 bg-gray-100" : isAdmin ? "border-yellow-300 cursor-pointer bg-white hover:bg-yellow-50" : "border-gray-100 bg-white"}`}>
-                                  <div className="text-[10px] font-bold uppercase text-gray-400">{month} {isBlocked ? "🚫" : ""}</div>
+                                <div key={month} onClick={() => handleCellClick(member.id, month, member.payments[month])} className={`relative rounded-lg border p-1.5 text-center shadow-2xs ${isBlocked ? "border-red-200 bg-gray-100" : isAdmin ? "border-yellow-300 cursor-pointer bg-white hover:bg-yellow-50" : "border-gray-100 bg-white"}`}>
+                                  <div className="text-[9px] font-bold uppercase text-gray-400">{month} {isBlocked ? "🚫" : ""}</div>
                                   {isEditing ? (
-                                    <input type="number" autoFocus className="w-full border-b-2 border-[#5a0000] bg-transparent text-center text-sm font-bold outline-none" value={editValue} onChange={(e) => setEditValue(e.target.value)} onBlur={saveInlineEdit} onKeyDown={handleInlineKeyDown} />
+                                    <input type="number" autoFocus className="w-full border-b-2 border-[#5a0000] bg-transparent text-center text-xs font-bold outline-none" value={editValue} onChange={(e) => setEditValue(e.target.value)} onBlur={saveInlineEdit} onKeyDown={handleInlineKeyDown} />
                                   ) : (
-                                    <div className={`text-sm font-semibold ${isBlocked ? "line-through text-gray-400" : "text-gray-800"}`}>{member.payments[month] ? `₹${member.payments[month]}` : "-"}</div>
+                                    <div className={`text-xs font-semibold ${isBlocked ? "line-through text-gray-400" : "text-gray-800"}`}>{member.payments[month] ? `₹${member.payments[month]}` : "-"}</div>
                                   )}
-                                  {isAdmin && !isBlocked && !isEditing && <span className="absolute right-1 top-1 text-[8px] text-yellow-500 opacity-50">✎</span>}
+                                  {isAdmin && !isBlocked && !isEditing && <span className="absolute right-1 top-1 text-[7px] text-yellow-500 opacity-50">✎</span>}
                                 </div>
                               );
                             })}
@@ -1312,44 +1326,44 @@ export default function Dashboard({ userData }: { userData: any }) {
             </div>
           ) : activeSubTab === 'others' ? (
             /* OTHERS (Dost & Dukan) TAB - COMPACT */
-            <div className="space-y-4 animate-in fade-in duration-300">
+            <div className="space-y-3 animate-in fade-in duration-300">
               <div className="grid grid-cols-2 gap-2">
-                <div className="bg-white border border-gray-100 p-3 rounded-xl text-center shadow-sm">
+                <div className="bg-white border border-gray-100 p-2.5 sm:p-3 rounded-xl text-center shadow-xs">
                   <span className="text-[8px] font-black uppercase tracking-wider text-gray-400 block mb-0.5">Total Extra</span>
-                  <span className="text-sm font-black text-green-700">₹{otherMetrics.totalCollected.toLocaleString('en-IN')}</span>
+                  <span className="text-xs sm:text-sm font-black text-green-700">₹{otherMetrics.totalCollected.toLocaleString('en-IN')}</span>
                 </div>
-                <div className="bg-white border border-gray-100 p-3 rounded-xl text-center shadow-sm">
+                <div className="bg-white border border-gray-100 p-2.5 sm:p-3 rounded-xl text-center shadow-xs">
                   <span className="text-[8px] font-black uppercase tracking-wider text-gray-400 block mb-0.5">Total Entries</span>
-                  <span className="text-sm font-black text-gray-800">{otherMetrics.entryCount} Logs</span>
+                  <span className="text-xs sm:text-sm font-black text-gray-800">{otherMetrics.entryCount} Logs</span>
                 </div>
               </div>
 
-              <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
-                <h3 className="text-[10px] font-black text-gray-800 uppercase tracking-widest mb-3 flex items-center gap-1.5 border-b border-gray-100 pb-2"><UserPlus className="w-3 h-3 text-[#5A0000]" /> New Entry</h3>
-                <form onSubmit={handleAddOtherChanda} className="space-y-3">
+              <div className="bg-white border border-gray-100 rounded-xl sm:rounded-2xl p-3 sm:p-4 shadow-xs">
+                <h3 className="text-[10px] font-black text-gray-800 uppercase tracking-widest mb-2.5 flex items-center gap-1.5 border-b border-gray-100 pb-2"><UserPlus className="w-3 h-3 text-[#5A0000]" /> New Entry</h3>
+                <form onSubmit={handleAddOtherChanda} className="space-y-2.5">
                   <div>
                     <label className="text-[8px] font-black uppercase tracking-wider text-gray-400 block mb-0.5">Name / Shop</label>
-                    <input type="text" required placeholder="E.g., Raju Store" className="w-full px-3 py-2 border border-gray-200 rounded-lg font-bold text-[10px] bg-gray-50 outline-none focus:bg-white focus:border-[#5A0000]" value={otherName} onChange={(e) => setOtherName(e.target.value)} />
+                    <input type="text" required placeholder="E.g., Raju Store" className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg font-bold text-xs bg-gray-50 outline-none focus:bg-white focus:border-[#5A0000]" value={otherName} onChange={(e) => setOtherName(e.target.value)} />
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <label className="text-[8px] font-black uppercase tracking-wider text-gray-400 block mb-0.5">Amount (₹)</label>
-                      <input type="number" required placeholder="101" className="w-full px-3 py-2 border border-gray-200 rounded-lg font-bold text-[10px] bg-gray-50 outline-none focus:bg-white focus:border-[#5A0000]" value={otherAmount} onChange={(e) => setOtherAmount(e.target.value)} />
+                      <input type="number" required placeholder="101" className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg font-bold text-xs bg-gray-50 outline-none focus:bg-white focus:border-[#5A0000]" value={otherAmount} onChange={(e) => setOtherAmount(e.target.value)} />
                     </div>
                     <div>
                       <label className="text-[8px] font-black uppercase tracking-wider text-gray-400 block mb-0.5">Status</label>
                       <CustomSelect value={otherStatus} onChange={(val: 'Pending' | 'Collected') => setOtherStatus(val)} options={[{ value: 'Pending', label: '❌ Pend' }, { value: 'Collected', label: '✅ Done' }]} />
                     </div>
                   </div>
-                  <button type="submit" disabled={isAddingOther} className="w-full bg-[#5A0000] text-white font-black uppercase text-[10px] py-2.5 rounded-lg shadow-sm mt-1 cursor-pointer">{isAddingOther ? "Adding..." : "Add to Ledger"}</button>
+                  <button type="submit" disabled={isAddingOther} className="w-full bg-[#5A0000] text-white font-black uppercase text-[10px] py-2 rounded-lg shadow-xs mt-1 cursor-pointer">{isAddingOther ? "Adding..." : "Add to Ledger"}</button>
                 </form>
               </div>
 
-              <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
-                <h3 className="text-[10px] font-black text-gray-800 uppercase tracking-widest mb-3 border-b border-gray-100 pb-2">Recent Logs</h3>
-                <div className="space-y-2 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
+              <div className="bg-white border border-gray-100 rounded-xl sm:rounded-2xl p-3 sm:p-4 shadow-xs">
+                <h3 className="text-[10px] font-black text-gray-800 uppercase tracking-widest mb-2.5 border-b border-gray-100 pb-1.5">Recent Logs</h3>
+                <div className="space-y-1.5 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
                   {otherPayments.length === 0 ? (
-                    <p className="text-center text-[9px] font-bold uppercase tracking-widest text-gray-400 py-4">No entries yet.</p>
+                    <p className="text-center text-[9px] font-bold uppercase tracking-widest text-gray-400 py-3">No entries yet.</p>
                   ) : (
                     otherPayments.map((entry) => (
                       <div key={entry.id} className="flex items-center justify-between p-2 border border-gray-100 rounded-lg bg-gray-50/50 group transition-all">
@@ -1363,7 +1377,7 @@ export default function Dashboard({ userData }: { userData: any }) {
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-2.5 shrink-0 pl-2">
+                        <div className="flex items-center gap-2 shrink-0 pl-2">
                           <span className={`font-black text-xs ${entry.status === 'Collected' ? 'text-green-700' : 'text-gray-400'}`}>₹{entry.amount}</span>
 
                           {/* 🔥 DELETE ACTION BUTTON */}
@@ -1382,36 +1396,36 @@ export default function Dashboard({ userData }: { userData: any }) {
               </div>
             </div>
           ) : activeSubTab === 'expenses' ? (
-            /* 🔥 NEW EXPENSES 4TH TAB - UPDATED BULLETPROOF UI */
-            <div className="space-y-4 animate-in fade-in duration-300">
-              <div className="bg-white border border-gray-100 p-4 rounded-xl text-center shadow-sm">
-                <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 block mb-1">Total Kharcha (Expenses)</span>
-                <span className="text-2xl font-black text-red-600">
+            /* 🔥 EXPENSES TAB - COMPACT MOBILE */
+            <div className="space-y-3 animate-in fade-in duration-300">
+              <div className="bg-white border border-gray-100 p-3 sm:p-4 rounded-xl text-center shadow-xs">
+                <span className="text-[9px] font-black uppercase tracking-wider text-gray-400 block mb-0.5">Total Kharcha (Expenses)</span>
+                <span className="text-xl sm:text-2xl font-black text-red-600">
                   ₹{expenseLogs.reduce((sum, exp) => sum + Number(exp.amount), 0).toLocaleString('en-IN')}
                 </span>
               </div>
 
-              <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
-                <h3 className="text-[10px] font-black text-gray-800 uppercase tracking-widest mb-3 border-b border-gray-100 pb-2">
+              <div className="bg-white border border-gray-100 rounded-xl sm:rounded-2xl p-3 sm:p-4 shadow-xs">
+                <h3 className="text-[10px] font-black text-gray-800 uppercase tracking-widest mb-2.5 border-b border-gray-100 pb-1.5">
                   Expense Logs
                 </h3>
-                <div className="space-y-2 max-h-[400px] overflow-y-auto custom-scrollbar pr-1">
+                <div className="space-y-1.5 max-h-[360px] overflow-y-auto custom-scrollbar pr-1">
                   {expenseLogs.length === 0 ? (
-                     <p className="text-center text-[9px] font-bold uppercase tracking-widest text-gray-400 py-4">No expenses recorded yet.</p>
+                     <p className="text-center text-[9px] font-bold uppercase tracking-widest text-gray-400 py-3">No expenses recorded yet.</p>
                   ) : (
                     expenseLogs.map((exp, index) => (
-                      <div key={exp.id || index} className="flex items-center justify-between p-2.5 border border-red-100 rounded-lg bg-red-50/20 group transition-all">
-                        <div className="flex items-center gap-3 flex-1 min-w-0">
-                          <div className="w-7 h-7 rounded-full bg-red-100 text-red-600 flex items-center justify-center font-black text-xs shrink-0">
-                            <IndianRupee className="w-3.5 h-3.5" />
+                      <div key={exp.id || index} className="flex items-center justify-between p-2 border border-red-100 rounded-lg bg-red-50/20 group transition-all">
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          <div className="w-6 h-6 rounded-full bg-red-100 text-red-600 flex items-center justify-center font-black text-xs shrink-0">
+                            <IndianRupee className="w-3 h-3" />
                           </div>
                           <div className="truncate">
-                            <p className="text-xs font-black text-gray-800 uppercase leading-none truncate">{exp.name}</p>
-                            <p className="text-[9px] font-bold text-gray-400 mt-1">{exp.date} • {exp.time}</p>
+                            <p className="text-[11px] font-black text-gray-800 uppercase leading-none truncate">{exp.name}</p>
+                            <p className="text-[8px] font-bold text-gray-400 mt-0.5">{exp.date} • {exp.time}</p>
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-3 shrink-0 pl-2">
+                        <div className="flex items-center gap-2 shrink-0 pl-2">
                           <span className="font-black text-xs text-red-600">-₹{exp.amount}</span>
                           
                           {/* 🔥 UPDATED ACTION BUTTON WITH EVENT PASSING */}
@@ -1419,14 +1433,11 @@ export default function Dashboard({ userData }: { userData: any }) {
                             <button
                               type="button"
                               onClick={(e) => {
-                                // 🚀 EVENT CHAIN CORRECTION: Propagation aur default behavior ko strictly pehle block karo
                                 e.preventDefault();
                                 e.stopPropagation();
-                                
-                                // Keval ek single clean reference call pass hogi
                                 handleDeleteExpenseLog(exp.id, exp.name, exp.amount);
                               }}
-                              className="text-gray-400 hover:text-red-600 p-1.5 rounded-md hover:bg-red-50 opacity-100 md:opacity-0 group-hover:opacity-100 transition-all cursor-pointer relative z-50 block"
+                              className="text-gray-400 hover:text-red-600 p-1 rounded-md hover:bg-red-50 opacity-100 md:opacity-0 group-hover:opacity-100 transition-all cursor-pointer relative z-50 block"
                               title="Delete Log Entry"
                             >
                               <Trash2 className="w-3.5 h-3.5 pointer-events-none" />

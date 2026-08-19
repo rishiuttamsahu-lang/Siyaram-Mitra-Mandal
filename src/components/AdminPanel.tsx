@@ -507,11 +507,11 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
       prev.map((m) =>
         m.id === member.id
           ? {
-              ...m,
-              exemptMonths: isCurrentlyBlocked
-                ? (m.exemptMonths || []).filter((mo: Month) => mo !== month)
-                : [...(m.exemptMonths || []), month],
-            }
+            ...m,
+            exemptMonths: isCurrentlyBlocked
+              ? (m.exemptMonths || []).filter((mo: Month) => mo !== month)
+              : [...(m.exemptMonths || []), month],
+          }
           : m
       )
     );
@@ -532,11 +532,11 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
         prev.map((m) =>
           m.id === member.id
             ? {
-                ...m,
-                exemptMonths: isCurrentlyBlocked
-                  ? [...(m.exemptMonths || []), month]
-                  : (m.exemptMonths || []).filter((mo: Month) => mo !== month),
-              }
+              ...m,
+              exemptMonths: isCurrentlyBlocked
+                ? [...(m.exemptMonths || []), month]
+                : (m.exemptMonths || []).filter((mo: Month) => mo !== month),
+            }
             : m
         )
       );
@@ -1285,18 +1285,18 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
       {/* ============================== */}
       {/* TAB: CHANDA MANAGEMENT */}
       {activeTab === 'chanda' && (
-        <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-3 animate-in fade-in zoom-in duration-300 mt-4">
+        <div className="grid grid-cols-1 gap-3 sm:gap-5 lg:grid-cols-3 animate-in fade-in zoom-in duration-300 mt-2">
 
-          {/* Add / Update Form Section (Appears above table on Mobile, left on Desktop) */}
-          <div className="rounded-2xl sm:rounded-3xl border border-gray-200 bg-white p-4 sm:p-5 shadow-sm lg:col-span-1 h-fit">
-            <div className="mb-3 sm:mb-4 flex items-center gap-1.5 sm:gap-2 border-b border-gray-100 pb-2 sm:pb-3">
-              <PlusCircle className="h-4 w-4 sm:h-5 sm:w-5 text-[#5a0000]" />
-              <h3 className="text-xs sm:text-sm font-black uppercase tracking-wide text-gray-800">Add Entry</h3>
+          {/* Add / Update Form Section */}
+          <div className="rounded-xl border border-gray-200 bg-white p-3.5 sm:p-4 shadow-sm lg:col-span-1 h-fit">
+            <div className="mb-2.5 flex items-center gap-1.5 border-b border-gray-100 pb-2">
+              <PlusCircle className="h-4 w-4 text-[#5a0000]" />
+              <h3 className="text-xs font-black uppercase tracking-wide text-gray-800">Add Entry</h3>
             </div>
 
-            <form onSubmit={handleAddChanda} className="space-y-3 sm:space-y-4">
+            <form onSubmit={handleAddChanda} className="space-y-2.5">
               <div>
-                <label className="mb-1 ml-1 block text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-gray-400">Registered User</label>
+                <label className="mb-0.5 ml-1 block text-[9px] font-black uppercase tracking-widest text-gray-400">Registered User</label>
                 <SearchableSelect
                   value={selectedUserUid}
                   onChange={setSelectedUserUid}
@@ -1305,9 +1305,9 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
                 />
               </div>
 
-              <div className="flex flex-row gap-3 sm:flex-col sm:gap-4">
-                <div className="flex-[1]">
-                  <label className="mb-1 ml-1 block text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-gray-400">Amount (₹)</label>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="mb-0.5 ml-1 block text-[9px] font-black uppercase tracking-widest text-gray-400">Amount (₹)</label>
                   <input
                     type="number"
                     required
@@ -1315,29 +1315,29 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
                     value={chandaAmount}
                     onChange={(e) => setChandaAmount(e.target.value)}
                     placeholder="101"
-                    className="w-full rounded-lg sm:rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 sm:px-4 sm:py-3 text-[11px] sm:text-xs font-bold text-black outline-none transition-all focus:border-[#5a0000] focus:bg-white"
+                    className="w-full rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-xs font-bold text-black outline-none transition-all focus:border-[#5a0000] focus:bg-white"
                   />
                 </div>
 
-                <div className="flex-[1.5]">
-                  <label className="mb-1 ml-1 block text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-gray-400">Remark</label>
+                <div>
+                  <label className="mb-0.5 ml-1 block text-[9px] font-black uppercase tracking-widest text-gray-400">Remark</label>
                   <input
                     type="text"
                     value={chandaMessage}
                     onChange={(e) => setChandaMessage(e.target.value)}
                     placeholder="Note..."
-                    className="w-full rounded-lg sm:rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 sm:px-4 sm:py-3 text-[11px] sm:text-xs font-bold text-black outline-none transition-all focus:border-[#5a0000] focus:bg-white"
+                    className="w-full rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-xs font-bold text-black outline-none transition-all focus:border-[#5a0000] focus:bg-white"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="mb-1 ml-1 block text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-gray-400">Date & Time</label>
+                <label className="mb-0.5 ml-1 block text-[9px] font-black uppercase tracking-widest text-gray-400">Date & Time</label>
                 <input
                   type="datetime-local"
                   value={chandaDate}
                   onChange={(e) => setChandaDate(e.target.value)}
-                  className="w-full rounded-lg sm:rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 sm:px-4 sm:py-3 text-[11px] sm:text-xs font-bold text-black outline-none transition-all focus:border-[#5a0000] focus:bg-white"
+                  className="w-full rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-xs font-bold text-black outline-none transition-all focus:border-[#5a0000] focus:bg-white"
                   required
                 />
               </div>
@@ -1345,47 +1345,47 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
               <button
                 type="submit"
                 disabled={isChandaSubmitting}
-                className="mt-1 sm:mt-2 flex w-full items-center justify-center gap-1.5 sm:gap-2 rounded-xl bg-[#5a0000] px-4 py-3 sm:py-3.5 text-[10px] sm:text-xs font-black uppercase tracking-widest text-white shadow-sm transition-colors hover:bg-[#7b0000] disabled:opacity-50 active:scale-95"
+                className="mt-1 flex w-full items-center justify-center gap-1.5 rounded-lg bg-[#5a0000] px-3 py-2 text-[10px] sm:text-xs font-black uppercase tracking-widest text-white shadow-sm transition-colors hover:bg-[#7b0000] disabled:opacity-50 active:scale-95"
               >
-                <ArrowUpRight className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                <ArrowUpRight className="h-3.5 w-3.5" />
                 {isChandaSubmitting ? 'Saving...' : 'Save Contribution'}
               </button>
             </form>
           </div>
 
           {/* ===== DANVEERS LEADERBOARD CONTROL ===== */}
-          <div className="rounded-2xl sm:rounded-3xl border border-yellow-200 bg-gradient-to-br from-yellow-50 to-orange-50 shadow-sm col-span-full overflow-hidden flex flex-col mt-4">
-            <div className="flex flex-row items-center justify-between gap-2 border-b border-yellow-100 bg-yellow-100/60 px-3 py-3 sm:px-4">
-              <div className="flex items-center gap-1.5 sm:gap-2">
-                <Coins className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-yellow-600" />
+          <div className="rounded-xl border border-yellow-200 bg-gradient-to-br from-yellow-50 to-orange-50 shadow-sm col-span-full overflow-hidden flex flex-col mt-2">
+            <div className="flex flex-row items-center justify-between gap-2 border-b border-yellow-100 bg-yellow-100/60 px-3 py-2">
+              <div className="flex items-center gap-1.5">
+                <Coins className="h-3.5 w-3.5 text-yellow-600" />
                 <h3 className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-yellow-800">Danveers Board Control</h3>
               </div>
-              <span className="text-[9px] sm:text-[10px] font-bold text-yellow-600">{mergedChandaList.length} donors</span>
+              <span className="text-[9px] font-bold text-yellow-600">{mergedChandaList.length} donors</span>
             </div>
 
-            <div className="max-h-[400px] flex-1 overflow-y-auto custom-scrollbar p-3 sm:p-4 space-y-2">
+            <div className="max-h-[320px] flex-1 overflow-y-auto custom-scrollbar p-2 sm:p-3 space-y-1.5">
               {mergedChandaList.length === 0 ? (
-                <div className="py-10 text-center text-[10px] sm:text-xs font-bold uppercase tracking-widest text-yellow-500/60">No donors yet.</div>
+                <div className="py-8 text-center text-[10px] sm:text-xs font-bold uppercase tracking-widest text-yellow-500/60">No donors yet.</div>
               ) : (
                 mergedChandaList.map((donor: any, idx: number) => (
-                  <div key={donor.email || idx} className="flex items-center justify-between gap-3 rounded-xl border border-yellow-100 bg-white px-3 py-2.5 shadow-sm hover:shadow-md transition-shadow">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <span className={`shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-black text-white ${idx === 0 ? 'bg-yellow-500' : idx === 1 ? 'bg-gray-400' : idx === 2 ? 'bg-amber-700' : 'bg-gray-300'}`}>
+                  <div key={donor.email || idx} className="flex items-center justify-between gap-2 rounded-lg border border-yellow-100 bg-white px-2.5 py-1.5 shadow-sm hover:shadow-md transition-shadow">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className={`shrink-0 w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-black text-white ${idx === 0 ? 'bg-yellow-500' : idx === 1 ? 'bg-gray-400' : idx === 2 ? 'bg-amber-700' : 'bg-gray-300'}`}>
                         {idx + 1}
                       </span>
                       <div className="min-w-0">
-                        <p className="text-[11px] sm:text-xs font-black text-gray-900 truncate">{donor.name || 'Anonymous'}</p>
-                        <p className="text-[9px] text-gray-400 font-bold truncate">{donor.email}</p>
+                        <p className="text-[10px] sm:text-xs font-black text-gray-900 truncate">{donor.name || 'Anonymous'}</p>
+                        <p className="text-[8px] text-gray-400 font-bold truncate">{donor.email}</p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-xs sm:text-sm font-black text-green-700">₹{Number(donor.totalAmount || 0).toLocaleString('en-IN')}</span>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className="text-xs font-black text-green-700">₹{Number(donor.totalAmount || 0).toLocaleString('en-IN')}</span>
                       <button
                         onClick={() => setLedgerModalUser(donor)}
-                        className="p-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
+                        className="p-1 rounded-md bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
                         title="View / Edit / Adjust"
                       >
-                        <Edit3 className="w-3.5 h-3.5" />
+                        <Edit3 className="w-3 h-3" />
                       </button>
                       <button
                         onClick={() => {
@@ -1412,10 +1412,10 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
                             }
                           });
                         }}
-                        className="p-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
+                        className="p-1 rounded-md bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
                         title="Delete from Danveers board"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <Trash2 className="w-3 h-3" />
                       </button>
                     </div>
                   </div>
@@ -1425,105 +1425,99 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
           </div>
 
           {/* Chanda Payments Live Feed (Raw Transactions) */}
-          <div className="rounded-2xl sm:rounded-3xl border border-gray-200 bg-white shadow-sm col-span-full overflow-hidden flex flex-col mt-4">
-            <div className="flex flex-row items-center justify-between gap-2 border-b border-gray-100 bg-gray-50/50 px-3 py-3 sm:px-4">
-              <div className="flex items-center gap-1.5 sm:gap-2">
-                <ArrowUpRight className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-gray-500" />
+          <div className="rounded-xl border border-gray-200 bg-white shadow-sm col-span-full overflow-hidden flex flex-col mt-2">
+            <div className="flex flex-row items-center justify-between gap-2 border-b border-gray-100 bg-gray-50/50 px-3 py-2">
+              <div className="flex items-center gap-1.5">
+                <ArrowUpRight className="h-3.5 w-3.5 text-gray-500" />
                 <h3 className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-gray-700">Payments Feed (Real-Time)</h3>
               </div>
-              <span className="text-[9px] sm:text-[10px] font-bold text-gray-400">Total: {chandaPayments.filter(p => p.status === 'Approved').length} approved</span>
+              <span className="text-[9px] font-bold text-gray-400">Total: {chandaPayments.filter(p => p.status === 'Approved').length} approved</span>
             </div>
 
-            <div className="max-h-[350px] sm:max-h-[400px] flex-1 overflow-x-auto custom-scrollbar">
+            <div className="max-h-[300px] flex-1 overflow-x-auto custom-scrollbar">
               {chandaPayments.filter(p => p.status === 'Approved').length === 0 ? (
-                <div className="py-10 sm:py-14 text-center text-[10px] sm:text-xs font-bold uppercase tracking-widest text-gray-400">No payments yet.</div>
+                <div className="py-8 text-center text-[10px] font-bold uppercase tracking-widest text-gray-400">No payments yet.</div>
               ) : (
                 <table className="w-full border-collapse text-left text-xs">
                   <thead>
                     <tr className="border-b border-gray-200 bg-gray-50 text-[8px] sm:text-[9px] font-black uppercase tracking-wider text-gray-400">
-                      <th className="p-2 sm:p-3 w-6 sm:w-8">#</th>
-                      <th className="p-2 sm:p-3">User</th>
-                      <th className="p-2 sm:p-3">Email</th>
-                      <th className="p-2 sm:p-3 text-right">Amount</th>
-                      <th className="p-2 sm:p-3 text-right">Date & Time</th>
-                      <th className="p-2 sm:p-3 text-right">Actions</th>
+                      <th className="p-2 w-6 sm:w-8">#</th>
+                      <th className="p-2">User</th>
+                      <th className="p-2">Email</th>
+                      <th className="p-2 text-right">Amount</th>
+                      <th className="p-2 text-right">Date & Time</th>
+                      <th className="p-2 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {chandaPayments.filter(p => p.status === 'Approved').map((payment, idx) => {
-                      // 🔥 DEBUG LOG: show what fields are in the payment document
-                      if (idx === 0) {
-                        console.log('[AdminPanel Payments Feed] Sample payment doc:', payment);
-                      }
-                      return (
-                        <tr key={payment.id} className="hover:bg-gray-50 transition-colors">
-                          <td className="p-2 sm:p-3 text-[8px] sm:text-[10px] font-mono text-gray-400 truncate max-w-[60px]">{idx + 1}</td>
-                          <td className="p-2 sm:p-3 text-[10px] sm:text-xs font-bold text-gray-900 truncate">{payment.userName || payment.userId || 'N/A'}</td>
-                          <td className="p-2 sm:p-3 text-[10px] text-gray-500 truncate">{payment.userEmail || payment.email || 'Email missing'}</td>
-                          <td className="p-2 sm:p-3 text-right">
-                            {editingPaymentId === payment.id ? (
-                              <div className="flex items-center justify-end gap-1.5">
-                                <input
-                                  type="number"
-                                  value={tempPaymentAmount}
-                                  onChange={(e) => setTempPaymentAmount(Number(e.target.value))}
-                                  className="w-16 sm:w-20 px-2 py-1 bg-white border border-gray-300 rounded text-[10px] font-bold text-gray-900 outline-none focus:border-[#5a0000]"
-                                />
-                                <button
-                                  onClick={() => handleEditPayment(payment.id, tempPaymentAmount)}
-                                  disabled={isEditingPayment}
-                                  className="p-1 bg-green-100 text-green-700 rounded hover:bg-green-200 disabled:opacity-50"
-                                  aria-label="Confirm"
-                                >
-                                  <CheckCircle2 className="w-3.5 h-3.5" />
-                                </button>
-                                <button
-                                  onClick={() => setEditingPaymentId(null)}
-                                  className="p-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
-                                  aria-label="Cancel"
-                                >
-                                  <X className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
-                            ) : (
-                              <span className="font-black text-gray-900">₹{Number(payment.amount || 0).toLocaleString('en-IN')}</span>
-                            )}
-                          </td>
-                          <td className="p-2 sm:p-3 text-right">
-                            <div className="text-[10px] font-bold text-gray-700">
-                              {payment.timestamp?.toDate ? (
-                                <>
-                                  {payment.timestamp.toDate().toLocaleDateString('en-IN')}<br />
-                                  <span className="text-[9px] text-gray-400 font-medium">
-                                    {payment.timestamp.toDate().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
-                                  </span>
-                                </>
-                              ) : (
-                                'N/A'
-                              )}
+                    {chandaPayments.filter(p => p.status === 'Approved').map((payment, idx) => (
+                      <tr key={payment.id} className="hover:bg-gray-50 transition-colors">
+                        <td className="p-2 text-[8px] sm:text-[9px] font-mono text-gray-400 truncate max-w-[60px]">{idx + 1}</td>
+                        <td className="p-2 text-[10px] sm:text-xs font-bold text-gray-900 truncate">{payment.userName || payment.userId || 'N/A'}</td>
+                        <td className="p-2 text-[9px] sm:text-[10px] text-gray-500 truncate">{payment.userEmail || payment.email || 'Email missing'}</td>
+                        <td className="p-2 text-right">
+                          {editingPaymentId === payment.id ? (
+                            <div className="flex items-center justify-end gap-1">
+                              <input
+                                type="number"
+                                value={tempPaymentAmount}
+                                onChange={(e) => setTempPaymentAmount(Number(e.target.value))}
+                                className="w-16 px-1.5 py-0.5 bg-white border border-gray-300 rounded text-[10px] font-bold text-gray-900 outline-none focus:border-[#5a0000]"
+                              />
+                              <button
+                                onClick={() => handleEditPayment(payment.id, tempPaymentAmount)}
+                                disabled={isEditingPayment}
+                                className="p-1 bg-green-100 text-green-700 rounded hover:bg-green-200 disabled:opacity-50"
+                                aria-label="Confirm"
+                              >
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => setEditingPaymentId(null)}
+                                className="p-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+                                aria-label="Cancel"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
                             </div>
-                          </td>
-                          <td className="p-2 sm:p-3 text-right space-x-1.5">
-                            {editingPaymentId !== payment.id && (
+                          ) : (
+                            <span className="font-black text-gray-900 text-xs">₹{Number(payment.amount || 0).toLocaleString('en-IN')}</span>
+                          )}
+                        </td>
+                        <td className="p-2 text-right">
+                          <div className="text-[9px] sm:text-[10px] font-bold text-gray-700">
+                            {payment.timestamp?.toDate ? (
                               <>
-                                <button
-                                  onClick={() => { setEditingPaymentId(payment.id); setTempPaymentAmount(Number(payment.amount || 0)); }}
-                                  className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 rounded text-[9px] font-bold hover:bg-blue-200 transition-colors"
-                                >
-                                  <Edit3 className="w-3 h-3" /> Edit
-                                </button>
-                                <button
-                                  onClick={() => handleDeletePayment(payment.id)}
-                                  className="inline-flex items-center gap-1 px-2 py-1 bg-red-100 text-red-700 rounded text-[9px] font-bold hover:bg-red-200 transition-colors"
-                                >
-                                  <Trash2 className="w-3 h-3" /> Delete
-                                </button>
+                                {payment.timestamp.toDate().toLocaleDateString('en-IN')}<br />
+                                <span className="text-[8px] text-gray-400 font-medium">
+                                  {payment.timestamp.toDate().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                                </span>
                               </>
+                            ) : (
+                              'N/A'
                             )}
-                          </td>
-                        </tr>
-                      )
-                    })}
+                          </div>
+                        </td>
+                        <td className="p-2 text-right space-x-1">
+                          {editingPaymentId !== payment.id && (
+                            <>
+                              <button
+                                onClick={() => { setEditingPaymentId(payment.id); setTempPaymentAmount(Number(payment.amount || 0)); }}
+                                className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded text-[8px] sm:text-[9px] font-bold hover:bg-blue-200 transition-colors"
+                              >
+                                <Edit3 className="w-2.5 h-2.5" /> Edit
+                              </button>
+                              <button
+                                onClick={() => handleDeletePayment(payment.id)}
+                                className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-red-100 text-red-700 rounded text-[8px] sm:text-[9px] font-bold hover:bg-red-200 transition-colors"
+                              >
+                                <Trash2 className="w-2.5 h-2.5" /> Delete
+                              </button>
+                            </>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               )}
@@ -1535,64 +1529,64 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
       {/* ============================== */}
       {/* TAB 3: MEDIA / VAULT */}
       {activeTab === 'media' && (
-        <div className="animate-in fade-in zoom-in duration-300 space-y-6">
-          <div className="relative z-50 bg-[#1a0505]/80 backdrop-blur-xl border border-yellow-500/30 p-4 rounded-2xl shadow-lg">
-            <div className="flex flex-col md:flex-row gap-4">
-              <div className="flex-1 relative">
+        <div className="animate-in fade-in zoom-in duration-300 space-y-4">
+          <div className="relative z-50 bg-[#1a0505]/80 backdrop-blur-xl border border-yellow-500/30 p-3 rounded-xl shadow-lg">
+            <div className="flex flex-col gap-2.5">
+              <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-yellow-500/50" />
-                <input type="text" placeholder="Search by email or caption..." value={vaultSearch} onChange={(e) => setVaultSearch(e.target.value)} className="w-full bg-black/40 border border-yellow-500/20 rounded-xl py-2.5 pl-10 pr-4 text-sm text-yellow-100 placeholder-yellow-100/30 outline-none focus:border-yellow-400 transition-all shadow-inner" />
+                <input type="text" placeholder="Search by email or caption..." value={vaultSearch} onChange={(e) => setVaultSearch(e.target.value)} className="w-full bg-black/40 border border-yellow-500/20 rounded-lg py-2 pl-9 pr-3 text-xs text-yellow-100 placeholder-yellow-100/30 outline-none focus:border-yellow-400 transition-all shadow-inner" />
               </div>
 
-              {/* 🔥 VAULT PREMIUM SELECTS (DARK MODE) */}
-              <div className="flex flex-wrap gap-2 md:gap-3">
-                <div className="flex-1 sm:flex-none min-w-[120px]">
-                  <CustomSelect value={vaultType} onChange={setVaultType} options={[{ value: 'all', label: 'All Media' }, { value: 'image', label: 'Images Only' }, { value: 'video', label: 'Videos Only' }]} theme="dark" />
+              {/* VAULT FILTERS (Responsive Grid on Mobile) */}
+              <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-1.5 sm:gap-2">
+                <div className="min-w-0">
+                  <CustomSelect value={vaultType} onChange={setVaultType} options={[{ value: 'all', label: 'All Media' }, { value: 'image', label: 'Images' }, { value: 'video', label: 'Videos' }]} theme="dark" />
                 </div>
-                <div className="flex-1 sm:flex-none min-w-[120px]">
+                <div className="min-w-0">
                   <CustomSelect value={vaultPrivacy} onChange={setVaultPrivacy} options={[{ value: 'all', label: 'All Privacy' }, { value: 'public', label: 'Public' }, { value: 'private', label: 'Private' }]} theme="dark" />
                 </div>
-                <div className="flex-1 sm:flex-none min-w-[120px]">
+                <div className="min-w-0">
                   <CustomSelect value={vaultSort} onChange={setVaultSort} options={[{ value: 'newest', label: 'Newest' }, { value: 'oldest', label: 'Oldest' }]} theme="dark" />
                 </div>
-                <div className="flex-1 sm:flex-none min-w-[130px]">
+                <div className="min-w-0">
                   <CustomSelect value={vaultUploader} onChange={setVaultUploader} options={[{ value: 'all', label: 'All Uploaders' }, ...uniqueUploaders.map(email => ({ value: email, label: email?.split('@')[0] }))]} theme="dark" />
                 </div>
-                <div className="flex-1 sm:flex-none min-w-[130px]">
-                  <CustomSelect value={vaultDate} onChange={setVaultDate} options={[{ value: 'all', label: 'All Time' }, { value: '7days', label: 'Last 7 Days' }, { value: '30days', label: 'Last 30 Days' }]} theme="dark" />
+                <div className="col-span-2 sm:col-span-1 min-w-0">
+                  <CustomSelect value={vaultDate} onChange={setVaultDate} options={[{ value: 'all', label: 'All Time' }, { value: '7days', label: '7 Days' }, { value: '30days', label: '30 Days' }]} theme="dark" />
                 </div>
               </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 sm:gap-4">
+          <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-1.5 sm:gap-3">
             {filteredVaultMedia.length === 0 ? (
-              <div className="col-span-full py-12 text-center border border-white/5 rounded-2xl bg-white/5 backdrop-blur-sm">
-                <p className="text-yellow-100/50 text-sm font-bold uppercase tracking-widest">No media matches your filters</p>
-                <button onClick={() => { setVaultSearch(''); setVaultType('all'); setVaultPrivacy('all'); setVaultSort('newest'); setVaultUploader('all'); setVaultDate('all'); setVaultCaption('all'); }} className="mt-4 text-xs text-yellow-500 hover:text-yellow-400 underline underline-offset-4">
+              <div className="col-span-full py-10 text-center border border-white/5 rounded-xl bg-white/5 backdrop-blur-sm">
+                <p className="text-yellow-100/50 text-xs font-bold uppercase tracking-widest">No media matches your filters</p>
+                <button onClick={() => { setVaultSearch(''); setVaultType('all'); setVaultPrivacy('all'); setVaultSort('newest'); setVaultUploader('all'); setVaultDate('all'); setVaultCaption('all'); }} className="mt-3 text-xs text-yellow-500 hover:text-yellow-400 underline underline-offset-4">
                   Clear All Filters
                 </button>
               </div>
             ) : (
               filteredVaultMedia.slice(0, visibleCount).map((item: any, index: number) => (
-                <div key={item.id} onClick={() => setSelectedIndex(index)} className="relative group rounded-xl overflow-hidden border border-yellow-500/20 aspect-square bg-black shadow-lg hover:shadow-[0_0_15px_rgba(202,138,4,0.3)] transition-all cursor-pointer">
+                <div key={item.id} onClick={() => setSelectedIndex(index)} className="relative group rounded-lg overflow-hidden border border-yellow-500/20 aspect-square bg-black shadow-md hover:shadow-[0_0_15px_rgba(202,138,4,0.3)] transition-all cursor-pointer">
                   {item.type?.startsWith('video') ? (
                     <>
                       <img src={getOptimizedMediaUrl(item.url, item.type)} className="w-full h-full object-cover" alt="video" loading="lazy" />
-                      <div className="absolute inset-0 flex items-center justify-center bg-black/20"><div className="rounded-full bg-black/40 backdrop-blur-md p-2"><Play className="w-4 h-4 sm:w-6 sm:h-6 fill-white text-white" /></div></div>
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/20"><div className="rounded-full bg-black/40 backdrop-blur-md p-1.5"><Play className="w-3.5 h-3.5 sm:w-5 sm:h-5 fill-white text-white" /></div></div>
                     </>
                   ) : (
                     <img src={getOptimizedMediaUrl(item.url, item.type)} alt="Vault Media" className="w-full h-full object-cover" loading="lazy" />
                   )}
 
-                  <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-between p-2 sm:p-3 backdrop-blur-[2px]">
-                    <div className="flex justify-between items-start gap-2 w-full">
-                      <div className="flex flex-col gap-1">
-                        <span className="text-[8px] sm:text-[10px] bg-black/60 text-yellow-400 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded backdrop-blur-md border border-yellow-500/30 truncate max-w-[80px] sm:max-w-[100px]" title={item.uploaderEmail}>{item.uploaderEmail?.split('@')[0]}</span>
-                        {item.caption && <span className="text-[8px] text-white/70 truncate max-w-[100px] italic">&quot;{item.caption}&quot;</span>}
+                  <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-between p-1.5 sm:p-2 backdrop-blur-[2px]">
+                    <div className="flex justify-between items-start gap-1 w-full">
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-[7px] sm:text-[9px] bg-black/60 text-yellow-400 px-1 py-0.5 rounded backdrop-blur-md border border-yellow-500/30 truncate max-w-[70px] sm:max-w-[90px]" title={item.uploaderEmail}>{item.uploaderEmail?.split('@')[0]}</span>
+                        {item.caption && <span className="text-[7px] text-white/70 truncate max-w-[80px] italic">&quot;{item.caption}&quot;</span>}
                       </div>
-                      <button onClick={(e) => deleteMedia(item.id, e)} className="bg-red-500/80 hover:bg-red-600 text-white p-1.5 rounded border border-red-400/50 transition-colors shadow-sm"><Trash2 className="w-4 h-4" /></button>
+                      <button onClick={(e) => deleteMedia(item.id, e)} className="bg-red-500/80 hover:bg-red-600 text-white p-1 rounded border border-red-400/50 transition-colors shadow-sm"><Trash2 className="w-3 h-3" /></button>
                     </div>
-                    {item.isPrivate && <div className="self-end bg-gradient-to-r from-yellow-600 to-yellow-400 text-black text-[8px] sm:text-[10px] font-black px-1.5 sm:px-2 py-0.5 sm:py-1 rounded flex items-center gap-1 shadow-md"><Lock className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Private</div>}
+                    {item.isPrivate && <div className="self-end bg-gradient-to-r from-yellow-600 to-yellow-400 text-black text-[7px] sm:text-[8px] font-black px-1 py-0.5 rounded flex items-center gap-0.5 shadow-md"><Lock className="w-2 h-2" /> Private</div>}
                   </div>
                 </div>
               ))
@@ -1830,12 +1824,9 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
         <div className="space-y-3 animate-fade-in">
           <div className="bg-white p-3 sm:p-4 rounded-xl border border-gray-100 shadow-sm space-y-3">
             <h3 className="font-black text-gray-800 flex items-center gap-2 border-b border-gray-100 pb-2 text-sm"><Lock className="w-4 h-4 text-[#5A0000]" /> Access Rules</h3>
-            <div>
-              <label className="text-[10px] font-bold text-gray-500 uppercase">Secret Mandal Passcode</label>
-              <div className="flex mt-1 gap-2">
-                <input type="text" value={localPasscode} onChange={(e) => setLocalPasscode(e.target.value)} className="flex-1 bg-gray-50 border border-gray-200 text-gray-900 rounded-lg px-2 py-1.5 text-xs font-bold outline-none focus:border-[#5A0000]" />
-                <button onClick={() => saveSettings('secretPasscode', localPasscode)} className="px-3 py-1.5 bg-[#5A0000] text-white font-bold text-[10px] rounded-lg shadow-md hover:bg-red-900">Update</button>
-              </div>
+            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
+              <p className="text-xs font-bold text-emerald-800">🌐 Open Access Enabled</p>
+              <p className="text-[10px] text-emerald-700 mt-1">Visitors and members from all mandals can sign in seamlessly with their Google account. New sign-ins default to Viewer access.</p>
             </div>
           </div>
           <div className="bg-white p-3 sm:p-4 rounded-xl border border-gray-100 shadow-sm space-y-4">

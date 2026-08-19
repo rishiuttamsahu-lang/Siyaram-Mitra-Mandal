@@ -398,104 +398,104 @@ export default function AdminBuildingManager({ onShowToast, askConfirm }: AdminB
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       {/* ─── Top Control Bar & Stats ──────────────────────── */}
-      <div className="bg-white rounded-2xl sm:rounded-3xl border border-gray-200 p-4 sm:p-6 shadow-sm">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-100 pb-5">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center text-[#5a0000]">
-              <Building2 className="w-5 h-5" />
+      <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-5 shadow-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border-b border-gray-100 pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center text-[#5a0000] shrink-0">
+              <Building2 className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-base sm:text-lg font-black text-gray-900 uppercase tracking-tight">
-                Building & Wing Master
+              <h2 className="text-sm sm:text-base font-black text-gray-900 uppercase tracking-tight">
+                Buildings & Wings
               </h2>
-              <p className="text-xs font-semibold text-gray-500">
-                Manage buildings, dynamic wings, room matrix, and chanda ledgers
+              <p className="text-[10px] sm:text-xs font-semibold text-gray-500">
+                Buildings, dynamic wings, room matrix, and chanda ledgers
               </p>
             </div>
           </div>
 
           {/* Quick Actions */}
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <button
               onClick={() => handleOpenBuildingModal()}
-              className="px-3.5 py-2 rounded-xl bg-[#5a0000] text-white font-black text-xs uppercase tracking-wider hover:bg-[#7a0000] transition-colors flex items-center gap-1.5 shadow-sm active:scale-95"
+              className="px-3 py-1.5 rounded-lg bg-[#5a0000] text-white font-black text-[10px] sm:text-xs uppercase tracking-wider hover:bg-[#7a0000] transition-colors flex items-center gap-1 shadow-sm active:scale-95"
             >
-              <Plus className="w-4 h-4" /> Add Building
+              <Plus className="w-3.5 h-3.5" /> Add Building
             </button>
 
             <button
               onClick={handleRunMigration}
               disabled={isMigrating}
-              className="px-3.5 py-2 rounded-xl bg-amber-100 text-[#5a0000] font-black text-xs uppercase tracking-wider hover:bg-amber-200 transition-colors flex items-center gap-1.5 active:scale-95 disabled:opacity-50"
+              className="px-2.5 py-1.5 rounded-lg bg-amber-100 text-[#5a0000] font-black text-[10px] sm:text-xs uppercase tracking-wider hover:bg-amber-200 transition-colors flex items-center gap-1 active:scale-95 disabled:opacity-50"
               title="Import legacy building_chanda documents"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${isMigrating ? 'animate-spin' : ''}`} />
-              {isMigrating ? 'Migrating...' : 'Migrate Legacy Data'}
+              <RefreshCw className={`w-3 h-3 ${isMigrating ? 'animate-spin' : ''}`} />
+              {isMigrating ? 'Migrating...' : 'Migrate'}
             </button>
           </div>
         </div>
 
         {/* Live Metrics Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-5">
-          <div className="bg-gray-50 border border-gray-100 rounded-2xl p-3.5">
-            <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 block mb-1">Total Flats</span>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 mt-3">
+          <div className="bg-gray-50 border border-gray-100 rounded-xl p-2.5 sm:p-3">
+            <span className="text-[9px] font-black uppercase tracking-wider text-gray-400 block mb-0.5">Total Flats</span>
             <div className="flex items-center justify-between">
-              <span className="text-lg font-black text-gray-900">{stats.totalFlats}</span>
-              <Home className="w-4 h-4 text-gray-400" />
+              <span className="text-sm sm:text-base font-black text-gray-900">{stats.totalFlats}</span>
+              <Home className="w-3.5 h-3.5 text-gray-400 shrink-0" />
             </div>
           </div>
 
-          <div className="bg-emerald-50/60 border border-emerald-100 rounded-2xl p-3.5">
-            <span className="text-[10px] font-black uppercase tracking-wider text-emerald-600 block mb-1">Collected Chanda</span>
+          <div className="bg-emerald-50/60 border border-emerald-100 rounded-xl p-2.5 sm:p-3">
+            <span className="text-[9px] font-black uppercase tracking-wider text-emerald-600 block mb-0.5">Collected Chanda</span>
             <div className="flex items-center justify-between">
-              <span className="text-lg font-black text-emerald-700">₹{stats.totalCollected.toLocaleString('en-IN')}</span>
-              <IndianRupee className="w-4 h-4 text-emerald-600" />
+              <span className="text-sm sm:text-base font-black text-emerald-700">₹{stats.totalCollected.toLocaleString('en-IN')}</span>
+              <IndianRupee className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
             </div>
           </div>
 
-          <div className="bg-amber-50/60 border border-amber-100 rounded-2xl p-3.5">
-            <span className="text-[10px] font-black uppercase tracking-wider text-amber-600 block mb-1">Pending Amount</span>
+          <div className="bg-amber-50/60 border border-amber-100 rounded-xl p-2.5 sm:p-3">
+            <span className="text-[9px] font-black uppercase tracking-wider text-amber-600 block mb-0.5">Pending Amount</span>
             <div className="flex items-center justify-between">
-              <span className="text-lg font-black text-amber-700">₹{stats.totalPending.toLocaleString('en-IN')}</span>
-              <AlertCircle className="w-4 h-4 text-amber-600" />
+              <span className="text-sm sm:text-base font-black text-amber-700">₹{stats.totalPending.toLocaleString('en-IN')}</span>
+              <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
             </div>
           </div>
 
-          <div className="bg-blue-50/60 border border-blue-100 rounded-2xl p-3.5">
-            <span className="text-[10px] font-black uppercase tracking-wider text-blue-600 block mb-1">Paid / Pending</span>
+          <div className="bg-blue-50/60 border border-blue-100 rounded-xl p-2.5 sm:p-3">
+            <span className="text-[9px] font-black uppercase tracking-wider text-blue-600 block mb-0.5">Paid / Pending</span>
             <div className="flex items-center justify-between">
-              <span className="text-lg font-black text-blue-800">{stats.paidCount} / {stats.pendingCount}</span>
-              <CheckCircle2 className="w-4 h-4 text-blue-600" />
+              <span className="text-sm sm:text-base font-black text-blue-800">{stats.paidCount} / {stats.pendingCount}</span>
+              <CheckCircle2 className="w-3.5 h-3.5 text-blue-600 shrink-0" />
             </div>
           </div>
         </div>
       </div>
 
       {/* ─── Building Selector & Wing Navigation ────────────── */}
-      <div className="bg-white rounded-2xl sm:rounded-3xl border border-gray-200 p-4 sm:p-6 shadow-sm space-y-4">
+      <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4 shadow-sm space-y-3">
         {/* Building List Header */}
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Layers className="w-4 h-4 text-[#5a0000]" />
-            <h3 className="text-xs sm:text-sm font-black uppercase tracking-wider text-gray-800">
+          <div className="flex items-center gap-1.5">
+            <Layers className="w-3.5 h-3.5 text-[#5a0000]" />
+            <h3 className="text-xs font-black uppercase tracking-wider text-gray-800">
               Select Building
             </h3>
           </div>
           {currentBuilding && (
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1">
               <button
                 onClick={() => handleOpenBuildingModal(currentBuilding)}
-                className="p-1.5 text-gray-500 hover:text-gray-900 rounded-lg hover:bg-gray-100"
+                className="p-1 text-gray-500 hover:text-gray-900 rounded-md hover:bg-gray-100"
                 title="Edit Building Details"
               >
-                <Edit3 className="w-3.5 h-3.5" />
+                <Edit3 className="w-3 h-3" />
               </button>
               <button
                 onClick={() => handleDeleteBuilding(currentBuilding)}
-                className="p-1.5 text-red-500 hover:text-red-700 rounded-lg hover:bg-red-50"
+                className="p-1 text-red-500 hover:text-red-700 rounded-md hover:bg-red-50"
                 title="Delete Building"
               >
-                <Trash2 className="w-3.5 h-3.5" />
+                <Trash2 className="w-3 h-3" />
               </button>
             </div>
           )}
@@ -503,30 +503,30 @@ export default function AdminBuildingManager({ onShowToast, askConfirm }: AdminB
 
         {/* Building Chips */}
         {buildings.length === 0 ? (
-          <div className="py-8 text-center border-2 border-dashed border-gray-200 rounded-2xl">
+          <div className="py-6 text-center border-2 border-dashed border-gray-200 rounded-xl">
             <p className="text-xs font-bold text-gray-400 uppercase">No buildings added yet</p>
             <button
               onClick={() => handleOpenBuildingModal()}
-              className="mt-3 px-4 py-2 bg-[#5a0000] text-white rounded-xl text-xs font-black uppercase tracking-wider hover:bg-[#7a0000]"
+              className="mt-2 px-3 py-1.5 bg-[#5a0000] text-white rounded-lg text-xs font-black uppercase tracking-wider hover:bg-[#7a0000]"
             >
               Add First Building
             </button>
           </div>
         ) : (
-          <div className="flex items-center gap-2 overflow-x-auto pb-1 custom-scrollbar">
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 custom-scrollbar">
             {buildings.map((b) => {
               const isSelected = b.id === selectedBuildingId;
               return (
                 <button
                   key={b.id}
                   onClick={() => setSelectedBuildingId(b.id)}
-                  className={`px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all shrink-0 flex items-center gap-2 ${
+                  className={`px-3 py-1.5 rounded-lg font-bold text-[11px] uppercase tracking-wider transition-all shrink-0 flex items-center gap-1.5 ${
                     isSelected
-                      ? 'bg-[#5a0000] text-white shadow-md'
+                      ? 'bg-[#5a0000] text-white shadow-sm'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   }`}
                 >
-                  <Building2 className="w-3.5 h-3.5" />
+                  <Building2 className="w-3 h-3" />
                   <span>{b.name} ({b.code})</span>
                 </button>
               );
@@ -536,33 +536,31 @@ export default function AdminBuildingManager({ onShowToast, askConfirm }: AdminB
 
         {/* Wings inside selected building */}
         {selectedBuildingId && (
-          <div className="border-t border-gray-100 pt-4 mt-2">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-black text-gray-500 uppercase tracking-widest">Wings in Building:</span>
-              </div>
-              <div className="flex items-center gap-2">
+          <div className="border-t border-gray-100 pt-2.5 mt-1">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <span className="text-[10px] font-black text-gray-500 uppercase tracking-wider">Wings:</span>
+              <div className="flex items-center gap-1">
                 <button
                   onClick={() => handleOpenWingModal()}
-                  className="px-3 py-1.5 rounded-lg bg-gray-100 text-gray-800 font-black text-[11px] uppercase tracking-wider hover:bg-gray-200 flex items-center gap-1"
+                  className="px-2 py-1 rounded-md bg-gray-100 text-gray-800 font-bold text-[10px] uppercase tracking-wider hover:bg-gray-200 flex items-center gap-1"
                 >
-                  <Plus className="w-3.5 h-3.5" /> Add Wing
+                  <Plus className="w-3 h-3" /> Add Wing
                 </button>
                 {currentWing && (
                   <>
                     <button
                       onClick={() => handleOpenWingModal(currentWing)}
-                      className="p-1.5 text-gray-500 hover:text-gray-900 rounded-lg hover:bg-gray-100"
+                      className="p-1 text-gray-500 hover:text-gray-900 rounded-md hover:bg-gray-100"
                       title="Edit Wing"
                     >
-                      <Edit3 className="w-3.5 h-3.5" />
+                      <Edit3 className="w-3 h-3" />
                     </button>
                     <button
                       onClick={() => handleDeleteWing(currentWing)}
-                      className="p-1.5 text-red-500 hover:text-red-700 rounded-lg hover:bg-red-50"
+                      className="p-1 text-red-500 hover:text-red-700 rounded-md hover:bg-red-50"
                       title="Delete Wing"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <Trash2 className="w-3 h-3" />
                     </button>
                   </>
                 )}
@@ -570,26 +568,26 @@ export default function AdminBuildingManager({ onShowToast, askConfirm }: AdminB
             </div>
 
             {wings.length === 0 ? (
-              <div className="py-6 text-center border border-dashed border-gray-200 rounded-xl">
-                <p className="text-xs font-bold text-gray-400">No wings configured in this building.</p>
+              <div className="py-4 text-center border border-dashed border-gray-200 rounded-lg">
+                <p className="text-xs font-bold text-gray-400">No wings configured.</p>
                 <button
                   onClick={() => handleOpenWingModal()}
-                  className="mt-2 px-3 py-1.5 bg-[#5a0000] text-white rounded-lg text-[10px] font-black uppercase tracking-wider"
+                  className="mt-1 px-2.5 py-1 bg-[#5a0000] text-white rounded-md text-[9px] font-black uppercase tracking-wider"
                 >
                   Add Wing (e.g. A Wing)
                 </button>
               </div>
             ) : (
-              <div className="flex items-center gap-2 overflow-x-auto pb-1 custom-scrollbar">
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 custom-scrollbar">
                 {wings.map((w) => {
                   const isSelected = w.id === selectedWingId;
                   return (
                     <button
                       key={w.id}
                       onClick={() => setSelectedWingId(w.id)}
-                      className={`px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition-all shrink-0 ${
+                      className={`px-3 py-1.5 rounded-lg font-bold text-[11px] uppercase tracking-wider transition-all shrink-0 ${
                         isSelected
-                          ? 'bg-amber-500 text-white shadow-sm ring-2 ring-amber-500/20'
+                          ? 'bg-amber-500 text-white shadow-sm ring-1 ring-amber-500/30'
                           : 'bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-200'
                       }`}
                     >
@@ -605,26 +603,26 @@ export default function AdminBuildingManager({ onShowToast, askConfirm }: AdminB
 
       {/* ─── Flats Matrix & Management ──────────────────────── */}
       {selectedBuildingId && selectedWingId && (
-        <div className="bg-white rounded-2xl sm:rounded-3xl border border-gray-200 p-4 sm:p-6 shadow-sm space-y-5">
+        <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4 shadow-sm space-y-3">
           {/* Flats Header & Filter Bar */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-4">
-            <div className="flex items-center gap-2">
-              <Grid className="w-4 h-4 text-[#5a0000]" />
-              <h3 className="text-xs sm:text-sm font-black uppercase tracking-wider text-gray-800">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-2.5">
+            <div className="flex items-center gap-1.5">
+              <Grid className="w-3.5 h-3.5 text-[#5a0000]" />
+              <h3 className="text-xs font-black uppercase tracking-wider text-gray-800">
                 Flats in {currentWing?.name} ({filteredFlats.length})
               </h3>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-1.5">
               {/* Search */}
               <div className="relative">
-                <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <Search className="w-3 h-3 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
                   type="text"
-                  placeholder="Search flat/resident..."
+                  placeholder="Search flat..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-8 pr-3 py-1.5 rounded-xl border border-gray-200 text-xs font-bold bg-gray-50 outline-none focus:border-[#5a0000] focus:bg-white w-36 sm:w-48"
+                  className="pl-7 pr-2.5 py-1 rounded-lg border border-gray-200 text-xs font-bold bg-gray-50 outline-none focus:border-[#5a0000] focus:bg-white w-28 sm:w-36"
                 />
               </div>
 
@@ -632,63 +630,63 @@ export default function AdminBuildingManager({ onShowToast, askConfirm }: AdminB
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value as any)}
-                className="px-2.5 py-1.5 rounded-xl border border-gray-200 text-xs font-bold bg-gray-50 outline-none text-gray-700"
+                className="px-2 py-1 rounded-lg border border-gray-200 text-[10px] sm:text-xs font-bold bg-gray-50 outline-none text-gray-700"
               >
-                <option value="all">All Status</option>
+                <option value="all">All</option>
                 <option value="Paid">Paid</option>
-                <option value="Due">Due / Pending</option>
+                <option value="Due">Due</option>
                 <option value="No Record">No Record</option>
               </select>
 
               {/* Flat Actions */}
               <button
                 onClick={() => handleOpenFlatModal()}
-                className="px-3 py-1.5 rounded-xl bg-[#5a0000] text-white font-black text-xs uppercase tracking-wider hover:bg-[#7a0000] flex items-center gap-1"
+                className="px-2.5 py-1 rounded-lg bg-[#5a0000] text-white font-bold text-[10px] sm:text-xs uppercase tracking-wider hover:bg-[#7a0000] flex items-center gap-1"
               >
-                <Plus className="w-3.5 h-3.5" /> Single Flat
+                <Plus className="w-3 h-3" /> Flat
               </button>
 
               <button
                 onClick={() => setShowBulkModal(true)}
-                className="px-3 py-1.5 rounded-xl bg-amber-500 text-white font-black text-xs uppercase tracking-wider hover:bg-amber-600 flex items-center gap-1 shadow-sm"
+                className="px-2.5 py-1 rounded-lg bg-amber-500 text-white font-bold text-[10px] sm:text-xs uppercase tracking-wider hover:bg-amber-600 flex items-center gap-1 shadow-sm"
               >
-                <FolderPlus className="w-3.5 h-3.5" /> Bulk Generate
+                <FolderPlus className="w-3 h-3" /> Bulk
               </button>
             </div>
           </div>
 
           {/* Flats Grid Grouped By Floors */}
           {flats.length === 0 ? (
-            <div className="py-12 text-center border-2 border-dashed border-gray-200 rounded-2xl">
-              <Home className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+            <div className="py-8 text-center border-2 border-dashed border-gray-200 rounded-xl">
+              <Home className="w-6 h-6 text-gray-300 mx-auto mb-1.5" />
               <p className="text-xs font-bold text-gray-500 uppercase">No flats in this wing yet</p>
-              <div className="flex justify-center gap-2 mt-3">
+              <div className="flex justify-center gap-2 mt-2">
                 <button
                   onClick={() => setShowBulkModal(true)}
-                  className="px-4 py-2 bg-amber-500 text-white rounded-xl text-xs font-black uppercase tracking-wider hover:bg-amber-600 shadow-sm"
+                  className="px-3 py-1.5 bg-amber-500 text-white rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-amber-600 shadow-sm"
                 >
-                  Bulk Generate (e.g. 101–116)
+                  Bulk Generate
                 </button>
                 <button
                   onClick={() => handleOpenFlatModal()}
-                  className="px-4 py-2 bg-gray-100 text-gray-800 rounded-xl text-xs font-black uppercase tracking-wider hover:bg-gray-200"
+                  className="px-3 py-1.5 bg-gray-100 text-gray-800 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-gray-200"
                 >
-                  Add Manually
+                  Add Flat
                 </button>
               </div>
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-2.5">
               {flatsByFloor.map(({ floor, items }) => (
-                <div key={floor} className="bg-gray-50/70 border border-gray-100 rounded-2xl p-3 sm:p-4">
-                  <div className="flex items-center gap-2 mb-3">
-                    <span className="px-2 py-0.5 rounded-md bg-[#5a0000] text-white text-[9px] font-black uppercase tracking-wider">
+                <div key={floor} className="bg-gray-50/70 border border-gray-100 rounded-xl p-2 sm:p-3">
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <span className="px-1.5 py-0.2 rounded bg-[#5a0000] text-white text-[8px] sm:text-[9px] font-black uppercase tracking-wider">
                       {floor === '0' ? 'Ground Floor' : `Floor ${floor}`}
                     </span>
-                    <span className="text-[10px] font-bold text-gray-400">{items.length} Flats</span>
+                    <span className="text-[9px] font-bold text-gray-400">{items.length} Flats</span>
                   </div>
 
-                  <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-1.5 sm:gap-2">
                     {items.map((flat) => {
                       const isPaid = flat.paymentStatus === 'Paid' || (Number(flat.paidChanda) > 0 && Number(flat.paidChanda) >= Number(flat.expectedChanda));
                       const isPartial = flat.paymentStatus === 'Partially Paid' || (!isPaid && Number(flat.paidChanda) > 0);
@@ -701,34 +699,34 @@ export default function AdminBuildingManager({ onShowToast, askConfirm }: AdminB
                       return (
                         <div
                           key={flat.id}
-                          className="bg-white border border-gray-200 rounded-xl p-2.5 flex flex-col justify-between hover:border-amber-400 hover:shadow-md transition-all group relative"
+                          className="bg-white border border-gray-200 rounded-lg p-2 flex flex-col justify-between hover:border-amber-400 hover:shadow-sm transition-all group relative"
                         >
                           <div className="flex items-start justify-between">
                             <span className="text-xs font-black text-gray-900">{flat.flatNumber}</span>
-                            <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+                            <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5">
                               <button
                                 onClick={() => handleOpenFlatModal(flat)}
-                                className="p-1 text-gray-400 hover:text-gray-700"
+                                className="p-0.5 text-gray-400 hover:text-gray-700"
                                 title="Edit"
                               >
-                                <Edit3 className="w-3 h-3" />
+                                <Edit3 className="w-2.5 h-2.5" />
                               </button>
                               <button
                                 onClick={() => handleDeleteFlat(flat)}
-                                className="p-1 text-red-400 hover:text-red-600"
+                                className="p-0.5 text-red-400 hover:text-red-600"
                                 title="Delete"
                               >
-                                <Trash2 className="w-3 h-3" />
+                                <Trash2 className="w-2.5 h-2.5" />
                               </button>
                             </div>
                           </div>
 
-                          <p className="text-[10px] font-semibold text-gray-600 truncate my-1">
+                          <p className="text-[9px] font-semibold text-gray-600 truncate my-0.5">
                             {flat.residentName || '—'}
                           </p>
 
-                          <div className="flex items-center justify-between text-[9px] font-bold mt-1">
-                            <span className={`px-1.5 py-0.5 rounded border ${badgeColor}`}>
+                          <div className="flex items-center justify-between text-[8px] font-bold mt-0.5">
+                            <span className={`px-1 py-0.2 rounded border ${badgeColor}`}>
                               {isPaid ? `₹${flat.paidChanda}` : isPartial ? `₹${flat.paidChanda} P` : 'Due'}
                             </span>
                             <span className="text-gray-400">/ ₹{flat.expectedChanda || 500}</span>
