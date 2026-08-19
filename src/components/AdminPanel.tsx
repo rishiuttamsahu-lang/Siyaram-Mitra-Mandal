@@ -5,10 +5,12 @@ import { db } from '@/lib/firebase';
 import { getTimestampMillis, commitChunkedBatches } from '@/lib/utils';
 import { collection, onSnapshot, doc, updateDoc, deleteDoc, query, orderBy, setDoc, getDoc, where, getDocs, writeBatch, addDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
 import UserProfile from '@/components/UserProfile';
+import AdminBuildingManager from '@/components/AdminBuildingManager';
+import AdminSeasonManager from '@/components/AdminSeasonManager';
 import {
   Shield, ShieldAlert, Ban, RefreshCcw, Key, Mail, User, Image as ImageIcon,
   BarChart2, Settings, Lock, Activity, Database, AlertTriangle, Trash2, Search, Bell, UserCircle, CheckCircle2,
-  Play, ChevronLeft, ChevronRight, X, Download, Smartphone, Unlock, ChevronDown, Coins, PlusCircle, ArrowUpRight, History, Edit3
+  Play, ChevronLeft, ChevronRight, X, Download, Smartphone, Unlock, ChevronDown, Coins, PlusCircle, ArrowUpRight, History, Edit3, Building2, Calendar
 } from 'lucide-react';
 
 // ✅ React-based confirm dialog — replaces window.confirm which is blocked in PWAs/Next.js
@@ -168,9 +170,10 @@ const SearchableSelect = ({ value, onChange, options, placeholder }: { value: st
 
 const adminTabs = [
   { id: "analytics", label: "Stats", icon: <BarChart2 size={14} /> },
+  { id: "seasons", label: "Chanda & Finance", icon: <Coins size={14} /> },
   { id: "users", label: "Users", icon: <User size={14} /> },
-  { id: "finance", label: "Finance", icon: <Database size={14} /> },
-  { id: "chanda", label: "Chanda Management", icon: <Coins size={14} /> },
+  { id: "buildings", label: "Buildings", icon: <Building2 size={14} /> },
+  { id: "chanda", label: "Manual Ledger", icon: <Database size={14} /> },
   { id: "media", label: "Vault", icon: <ImageIcon size={14} /> },
   { id: "security", label: "Security", icon: <Shield size={14} /> },
   { id: "settings", label: "Website", icon: <Settings size={14} /> },
@@ -248,6 +251,15 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
   const [vaultDate, setVaultDate] = useState('all');
   const [vaultCaption, setVaultCaption] = useState('all');
   const [toastMsg, setToastMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+
+  // Auto-dismiss toast after 3 seconds
+  useEffect(() => {
+    if (!toastMsg) return;
+    const timer = setTimeout(() => {
+      setToastMsg(null);
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [toastMsg]);
 
   const [localPasscode, setLocalPasscode] = useState("");
 
@@ -1128,8 +1140,15 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
       )}
 
       {toastMsg && (
-        <div className={`fixed top-24 left-1/2 transform -translate-x-1/2 z-[100] px-4 py-2 rounded-full shadow-2xl text-xs font-bold text-white flex items-center gap-2 transition-all ${toastMsg.type === 'error' ? 'bg-red-600' : 'bg-green-600'}`}>
-          {toastMsg.text}
+        <div className={`fixed top-20 left-1/2 transform -translate-x-1/2 z-[100] px-4 py-2 rounded-full shadow-2xl text-xs font-bold text-white flex items-center gap-2.5 transition-all animate-in fade-in slide-in-from-top-4 duration-200 ${toastMsg.type === 'error' ? 'bg-red-600' : 'bg-green-600'}`}>
+          <span>{toastMsg.text}</span>
+          <button
+            type="button"
+            onClick={() => setToastMsg(null)}
+            className="w-4 h-4 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center text-[10px] font-black"
+          >
+            ✕
+          </button>
         </div>
       )}
 
@@ -1236,196 +1255,31 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
       )}
 
       {/* ============================== */}
-      {/* TAB: FINANCE */}
-      {activeTab === 'finance' && (
-        <div className="space-y-6 rounded-2xl border border-red-200 bg-red-50 p-4 shadow-sm md:p-6 animate-in fade-in zoom-in duration-300 mt-4">
+      {/* TAB: CHANDA SEASONS & FINANCE */}
+      {(activeTab === 'seasons' || activeTab === 'finance') && (
+        <AdminSeasonManager
+          currentUserData={adminUser}
+          onShowToast={setToastMsg}
+          askConfirm={askConfirm}
+          pendingChandaPayments={pendingChandaPayments}
+          onApproveChanda={handleApproveChanda}
+          onRejectChanda={handleRejectChanda}
+          mandalMembers={mandalMembers}
+          onAddMember={handleAddMember}
+          newMemberName={newMemberName}
+          setNewMemberName={setNewMemberName}
+          isNewMemberHonorary={isNewMemberHonorary}
+          setIsNewMemberHonorary={setIsNewMemberHonorary}
+          onRemoveMember={handleRemoveMember}
+          onRestoreMember={handleRestoreMember}
+          onToggleMemberExemptMonth={toggleMemberExemptMonth}
+        />
+      )}
 
-          <div className="mb-6 rounded-xl border border-yellow-400/50 bg-gradient-to-br from-yellow-50 to-orange-50 p-4 shadow-sm">
-            <h3 className="mb-4 flex items-center gap-2 text-sm font-black uppercase tracking-wide text-yellow-800">
-              <CheckCircle2 className="h-5 w-5 text-yellow-600" /> Pending Chanda Approvals
-            </h3>
-
-            <div className="custom-scrollbar max-h-[300px] space-y-3 overflow-y-auto pr-2">
-              {pendingChandaPayments.length === 0 ? (
-                <div className="rounded-lg border border-yellow-200/50 bg-white/50 py-6 text-center">
-                  <p className="text-xs font-bold uppercase tracking-widest text-yellow-700/60">No pending approvals</p>
-                </div>
-              ) : (
-                pendingChandaPayments.map((payment) => (
-                  <div key={payment.id} className="flex flex-col justify-between gap-4 rounded-xl border border-yellow-200 bg-white p-4 shadow-sm transition-shadow hover:shadow-md md:flex-row md:items-center">
-
-                    <div>
-                      <div className="mb-1 flex items-center gap-2">
-                        <span className="text-sm font-black text-gray-800">{payment.userName || 'Unknown User'}</span>
-                        <span className="rounded-full bg-gradient-to-r from-yellow-500 to-yellow-600 px-2 py-0.5 text-[10px] font-black text-white shadow-sm">₹{payment.amount || 0}</span>
-                      </div>
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500">
-                        UTR: <span className="rounded bg-gray-100 px-1 py-0.5 text-gray-900">{payment.utr_number || 'N/A'}</span>
-                      </p>
-                      {payment.message && (
-                        <p className="mt-2 rounded-lg border border-yellow-100/50 bg-yellow-50/50 p-2 text-[10px] italic text-gray-600">&quot;{payment.message}&quot;</p>
-                      )}
-                    </div>
-
-                    <div className="flex shrink-0 gap-2">
-                      <button onClick={() => handleApproveChanda(payment.id)} className="flex-1 rounded-lg bg-green-600 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-white shadow-md transition-all hover:bg-green-700 active:scale-95 md:flex-none">Approve</button>
-                      <button onClick={() => handleRejectChanda(payment.id)} className="flex-1 rounded-lg border border-red-100 bg-red-50 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-red-600 transition-all hover:bg-red-100 active:scale-95 md:flex-none">Reject</button>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-4 border-b border-red-100 pb-4 md:flex-row md:items-center">
-            <span className="text-xs font-bold uppercase tracking-wider text-red-700">Manage Active Months:</span>
-            <div className="flex flex-wrap gap-2">
-              {MONTHS.map((month) => {
-                const isBlocked = blockedMonths.includes(month);
-                return (
-                  <button key={month} type="button" onClick={() => toggleBlockMonth(month)} className={`rounded-full px-3 py-1 text-[10px] font-bold transition-colors md:text-xs ${isBlocked ? "bg-red-600 text-white shadow-inner" : "border border-red-200 bg-white text-red-600 hover:bg-red-100"}`}>
-                    {month} {isBlocked ? "🚫" : ""}
-                  </button>
-                );
-              })}
-            </div>
-
-            {mandalMembers.length === 0 && (
-              <button onClick={handleRestoreOldData} disabled={isRestoring} className="ml-auto flex items-center gap-2 rounded-xl bg-yellow-500 px-4 py-2 text-xs font-bold text-yellow-900 shadow-sm hover:bg-yellow-400 disabled:opacity-50">
-                {isRestoring ? 'Restoring...' : '📥 Restore Data'}
-              </button>
-            )}
-            <p className="ml-auto hidden text-xs font-bold text-red-800 md:block">Paying Members: {payingMembersCount}</p>
-          </div>
-
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-            <div className="relative z-50 rounded-xl border border-red-100 bg-white p-4 shadow-sm">
-              <h3 className="mb-3 text-sm font-bold uppercase tracking-wide text-red-800">Add / Update Payment</h3>
-              <form onSubmit={handleLogPayment} className="flex flex-col gap-3">
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  {/* 🔥 FINANCE SELECTS */}
-                  <CustomSelect
-                    value={paymentMemberId}
-                    onChange={setPaymentMemberId}
-                    options={activeMandalMembers.map(m => ({ value: m.id, label: m.name }))}
-                    placeholder="Select Member"
-                    theme="light"
-                  />
-                  <CustomSelect
-                    value={paymentMonth}
-                    onChange={setPaymentMonth}
-                    options={MONTHS.map(month => ({ value: month, label: month }))}
-                    theme="light"
-                  />
-                </div>
-                <div className="flex gap-2 mt-1">
-                  <input min="1" className="w-full rounded-xl border border-gray-200 bg-gray-50 text-gray-900 p-2 text-sm outline-none focus:ring-1 focus:ring-[#5A0000] shadow-sm" placeholder="Amount" required type="number" value={paymentAmount} onChange={(e) => setPaymentAmount(e.target.value)} />
-                  <button type="submit" className="w-full rounded-xl bg-[#5a0000] px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-[#7b0000] shadow-sm">Log Payment</button>
-                </div>
-              </form>
-            </div>
-
-            <div className="rounded-xl border border-red-100 bg-white p-4 shadow-sm">
-              <h3 className="mb-3 text-sm font-bold uppercase tracking-wide text-red-800">Add New Member</h3>
-              <form onSubmit={handleAddMember} className="flex flex-col gap-3">
-                <input className="w-full rounded-xl border border-gray-200 bg-gray-50 text-gray-900 p-2.5 text-sm outline-none focus:ring-1 focus:ring-[#5A0000] shadow-sm" placeholder="Enter Name (e.g. RAHUL)" required type="text" value={newMemberName} onChange={(e) => setNewMemberName(e.target.value)} />
-                <label className="flex items-center gap-2 text-xs font-semibold text-gray-600 mt-1">
-                  <input className="h-4 w-4 rounded border-gray-300 text-[#5A0000] focus:ring-[#5A0000]" type="checkbox" checked={isNewMemberHonorary} onChange={(e) => setIsNewMemberHonorary(e.target.checked)} />
-                  Mark as Honorary member
-                </label>
-                <button type="submit" className="mt-auto rounded-xl bg-green-700 px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-green-800 shadow-sm">Add to Mandal</button>
-              </form>
-              <p className="mt-3 text-[10px] font-semibold leading-relaxed text-gray-500">
-                💡 Naye member ne pehle se hi kuch paisa diya hai? Pehle usse yahan add karein, phir left side wale &quot;Add / Update Payment&quot; form se uska pehle se diya hua amount uske naam par jis mahine ka hai us mahine me log kar dein.
-              </p>
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-red-100 bg-white p-4 shadow-sm">
-            <h3 className="mb-3 flex items-center justify-between text-sm font-bold uppercase tracking-wide text-red-800">
-              <span>All Members</span>
-              <span className="text-[10px] font-semibold text-gray-400">{activeMandalMembers.length} active</span>
-            </h3>
-            <p className="mb-3 text-[10px] font-semibold leading-relaxed text-gray-500">
-              💡 Naam par click karke uske individual mahine block/unblock karein — jaise agar member baad me (mid-year) join hua ho, to uske pichle mahino ko block kar dein taaki usse un mahino ka paisa na maanga jaye.
-            </p>
-            <div className="custom-scrollbar max-h-[420px] space-y-2 overflow-y-auto pr-1">
-              {activeMandalMembers.length === 0 ? (
-                <p className="py-4 text-center text-xs font-bold uppercase tracking-widest text-gray-400">No members yet</p>
-              ) : (
-                activeMandalMembers.map((member) => {
-                  const isExpanded = expandedMemberForMonths === member.id;
-                  const memberExempt: Month[] = member.exemptMonths || [];
-                  return (
-                    <div key={member.id} className="rounded-lg border border-gray-100 bg-gray-50 overflow-hidden">
-                      <div className="flex items-center justify-between gap-3 px-3 py-2">
-                        <button type="button" onClick={() => setExpandedMemberForMonths(isExpanded ? null : member.id)} className="flex min-w-0 flex-1 items-center gap-2 text-left">
-                          <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
-                          <div className="min-w-0">
-                            <p className="truncate text-xs font-bold text-gray-800">{member.name}</p>
-                            <div className="flex items-center gap-1.5">
-                              {member.isHonorary && <span className="text-[9px] font-bold uppercase tracking-wider text-yellow-600">Honorary</span>}
-                              {memberExempt.length > 0 && <span className="text-[9px] font-bold uppercase tracking-wider text-blue-600">{memberExempt.length} month(s) blocked</span>}
-                            </div>
-                          </div>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveMember(member.id, member.name)}
-                          title="Remove member"
-                          className="shrink-0 rounded-lg border border-red-100 bg-red-50 p-2 text-red-600 transition-colors hover:bg-red-100"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                      {isExpanded && (
-                        <div className="border-t border-gray-200 bg-white px-3 py-2.5">
-                          <p className="mb-2 text-[9px] font-bold uppercase tracking-wider text-gray-400">Is member ke liye mahine block karein:</p>
-                          <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap sm:gap-1.5">
-                            {MONTHS.map((month) => {
-                              const isMemberBlocked = memberExempt.includes(month);
-                              return (
-                                <button
-                                  key={month}
-                                  type="button"
-                                  onClick={(e) => { e.stopPropagation(); toggleMemberExemptMonth(member, month); }}
-                                  className={`min-h-[38px] rounded-full px-3 py-2 text-[11px] font-bold transition-colors active:scale-95 ${isMemberBlocked ? "bg-blue-600 text-white shadow-inner" : "border border-gray-300 bg-gray-50 text-gray-700 hover:bg-gray-100"}`}
-                                >
-                                  {month} {isMemberBlocked ? "🚫" : ""}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })
-              )}
-            </div>
-
-            {removedMandalMembers.length > 0 && (
-              <div className="mt-4 border-t border-red-100 pt-3">
-                <h4 className="mb-2 text-[10px] font-bold uppercase tracking-widest text-gray-400">Removed Members ({removedMandalMembers.length})</h4>
-                <div className="custom-scrollbar max-h-[200px] space-y-2 overflow-y-auto pr-1">
-                  {removedMandalMembers.map((member) => (
-                    <div key={member.id} className="flex items-center justify-between gap-3 rounded-lg border border-gray-100 bg-gray-100 px-3 py-2 opacity-70">
-                      <p className="truncate text-xs font-bold text-gray-600">{member.name}</p>
-                      <button
-                        type="button"
-                        onClick={() => handleRestoreMember(member.id, member.name)}
-                        title="Restore member"
-                        className="shrink-0 flex items-center gap-1 rounded-lg border border-green-200 bg-green-50 px-2 py-1.5 text-[9px] font-bold uppercase tracking-wider text-green-700 transition-colors hover:bg-green-100"
-                      >
-                        <RefreshCcw className="h-3 w-3" /> Restore
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
+      {/* ============================== */}
+      {/* TAB: BUILDING MANAGEMENT */}
+      {activeTab === 'buildings' && (
+        <AdminBuildingManager onShowToast={setToastMsg} askConfirm={askConfirm} />
       )}
 
       {/* ============================== */}

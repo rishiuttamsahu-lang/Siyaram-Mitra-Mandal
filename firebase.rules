@@ -1,0 +1,134 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 🛡️ isAdmin() — safe, case-insensitive role check
+    // .get('role', '') returns empty string if field missing (never crashes)
+    // .lower() normalises 'Admin' / 'admin' / 'ADMIN' — all pass
+    function isAdmin() {
+      return request.auth != null &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid))
+          .data.get('role', '').lower() == 'admin';
+    }
+
+    // 1. Users Collection
+    match /users/{userId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth.uid == userId;
+      allow update: if isAdmin() || (
+        request.auth.uid == userId &&
+        !request.resource.data.diff(resource.data).affectedKeys()
+          .hasAny(['role', 'email', 'isBanned'])
+      );
+      allow delete: if isAdmin();
+    }
+
+    // 2. Mandal Gallery
+    match /mandal_gallery/{mediaId} {
+      allow create: if request.auth != null;
+      allow read: if request.auth != null && (
+        resource == null ||
+        resource.data.isPrivate == false ||
+        resource.data.uploaderEmail == request.auth.token.email ||
+        isAdmin()
+      );
+      allow update, delete: if isAdmin() ||
+        resource.data.uploaderEmail == request.auth.token.email;
+    }
+
+    // 3. Mandal Settings
+    match /mandal_settings/{document=**} {
+      allow read: if request.auth != null;
+      allow write: if isAdmin();
+    }
+
+    // 4. Mandal Members
+    match /mandal_members/{memberId} {
+      allow read: if request.auth != null;
+      allow write: if isAdmin();
+    }
+
+    // 5. Mandal Media
+    match /mandal_media/{mediaId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update, delete: if isAdmin() ||
+        resource.data.uploadedById == request.auth.uid;
+    }
+
+    // 6. Chanda Payments
+    // All logged-in users can read (leaderboard) and create (submit contribution).
+    // Only admin can update/delete (approve, reject, hard-delete).
+    match /chanda_payments/{paymentId} {
+      allow read:           if request.auth != null;
+      allow create:         if request.auth != null;
+      allow update, delete: if isAdmin();
+    }
+
+    // 7. Manual Chanda Consolidated Ledger
+    // All logged-in users need read for the Danveers leaderboard.
+    // Only admin can write/update/delete.
+    match /mandal_chanda/{emailId} {
+      allow read:                  if request.auth != null;
+      allow write, update, delete: if isAdmin();
+    }
+
+    // 8. Chanda Audit Trail Logs
+    // All logged-in users need read so the ledger modal history loads.
+    // Only admin can write.
+    match /mandal_chanda_logs/{logId} {
+      allow read:  if request.auth != null;
+      allow write: if isAdmin();
+    }
+
+    // 9. Building Matrix Chanda (Legacy bridge)
+    match /building_chanda/{flatId} {
+      allow read: if request.auth != null;
+      allow write, update, delete: if isAdmin();
+    }
+
+    // 10. Dynamic Buildings, Wings & Flats Hierarchy (NEW)
+    match /buildings/{buildingId} {
+      allow read: if request.auth != null;
+      allow write: if isAdmin();
+
+      match /{allSubcollections=**} {
+        allow read: if request.auth != null;
+        allow write: if isAdmin();
+      }
+    }
+
+    // 11. Dost & Dukan (Other Contributions)
+    match /other_chanda/{docId} {
+      allow read: if request.auth != null;
+      allow write, update, delete: if isAdmin();
+    }
+
+    // 12. Expenses Log (Kharcha Tab)
+    match /expenses_log/{expenseId} {
+      allow read: if request.auth != null;
+      allow write, update, delete: if isAdmin();
+    }
+
+    // 13. Multi-Year Chanda Seasons, Monthly Dues & Overrides
+    match /chanda_seasons/{seasonId} {
+      allow read: if request.auth != null;
+      allow write: if isAdmin();
+
+      match /{allSubcollections=**} {
+        allow read: if request.auth != null;
+        allow write: if isAdmin();
+      }
+    }
+
+    match /season_audit_logs/{logId} {
+      allow read: if request.auth != null;
+      allow write: if isAdmin();
+    }
+
+    // 🛑 14. Default Block — MUST always be last
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

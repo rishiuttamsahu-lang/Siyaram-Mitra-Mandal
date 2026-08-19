@@ -5,6 +5,10 @@ import type { FormEvent } from "react";
 import { db } from "@/lib/firebase";
 import { collection, onSnapshot, doc, setDoc, updateDoc, deleteDoc, query, addDoc, orderBy, serverTimestamp } from "firebase/firestore";
 import { Bell, ChevronDown, CheckCircle2, Building2, Users, IndianRupee, Layers, Search, Save, Store, UserPlus, Home, X, Trash2, AlertCircle } from "lucide-react";
+import { Building, Wing, Flat } from "@/lib/types/building";
+import { subscribeBuildings, subscribeWings, subscribeFlats, createOrUpdateFlat } from "@/lib/buildingService";
+import { ChandaSeason, MonthlyDue } from "@/lib/types/season";
+import { subscribeSeasons, subscribeMonthlyDues } from "@/lib/seasonService";
 
 type BuildingPayment = {
   id: string;
@@ -144,7 +148,18 @@ export default function Dashboard({ userData }: { userData: any }) {
 
   const [activeSubTab, setActiveSubTab] = useState<'members' | 'buildings' | 'others' | 'expenses'>('buildings'); // Default to buildings
   const [expenseLogs, setExpenseLogs] = useState<ExpenseLog[]>([]);
-  const [activeWing, setActiveWing] = useState<'A' | 'B'>('A');
+  const [activeWing, setActiveWing] = useState<string>('A');
+
+  // Dynamic Building Hierarchy States
+  const [dynBuildings, setDynBuildings] = useState<Building[]>([]);
+  const [activeBuildingId, setActiveBuildingId] = useState<string | null>(null);
+  const [dynWings, setDynWings] = useState<Wing[]>([]);
+  const [dynFlats, setDynFlats] = useState<Flat[]>([]);
+
+  // Dynamic Seasons & Monthly Schedules
+  const [dynSeasons, setDynSeasons] = useState<ChandaSeason[]>([]);
+  const [selectedDashboardSeasonId, setSelectedDashboardSeasonId] = useState<string | null>(null);
+  const [seasonMonthlyDues, setSeasonMonthlyDues] = useState<MonthlyDue[]>([]);
 
   // Building management states
   const [buildingPayments, setBuildingPayments] = useState<BuildingPayment[]>([]);
@@ -305,10 +320,10 @@ export default function Dashboard({ userData }: { userData: any }) {
 
   useEffect(() => {
     setPaymentMonth(currentTrackingMonth);
-    setPaymentAmount(String(getTargetForMonth(currentTrackingMonth)));
-  }, [currentTrackingMonth]);
+    setPaymentAmount(String(getDynamicTargetForMonth(currentTrackingMonth)));
+  }, [currentTrackingMonth, seasonMonthlyDues]);
 
-  // Fetch Building Data Streams from Firestore
+  // Fetch Building Data Streams from Firestore (Legacy + Dynamic bridge)
   useEffect(() => {
     const q = query(collection(db, "building_chanda"));
     const unsub = onSnapshot(q, (snap) => {
@@ -317,6 +332,92 @@ export default function Dashboard({ userData }: { userData: any }) {
     });
     return () => unsub();
   }, []);
+
+  // Dynamic Buildings Listener
+  useEffect(() => {
+    const unsub = subscribeBuildings((bList) => {
+      setDynBuildings(bList);
+      if (bList.length > 0 && !activeBuildingId) {
+        setActiveBuildingId(bList[0].id);
+      }
+    });
+    return () => unsub();
+  }, [activeBuildingId]);
+
+  // Dynamic Wings Listener
+  useEffect(() => {
+    if (!activeBuildingId) {
+      setDynWings([]);
+      return;
+    }
+    const unsub = subscribeWings(activeBuildingId, (wList) => {
+      setDynWings(wList);
+      if (wList.length > 0 && !wList.some(w => w.code === activeWing)) {
+        setActiveWing(wList[0].code);
+      }
+    });
+    return () => unsub();
+  }, [activeBuildingId, activeWing]);
+
+  // Dynamic Flats Listener
+  useEffect(() => {
+    if (!activeBuildingId) return;
+    const currentWingObj = dynWings.find(w => w.code === activeWing);
+    if (!currentWingObj) {
+      setDynFlats([]);
+      return;
+    }
+    const unsub = subscribeFlats(activeBuildingId, currentWingObj.id, (fList) => {
+      setDynFlats(fList);
+    });
+    return () => unsub();
+  }, [activeBuildingId, dynWings, activeWing]);
+
+  // Dynamic Seasons Listener
+  useEffect(() => {
+    const unsub = subscribeSeasons((sList) => {
+      setDynSeasons(sList);
+      if (sList.length > 0 && !selectedDashboardSeasonId) {
+        const active = sList.find(s => s.status === 'active') || sList[0];
+        setSelectedDashboardSeasonId(active.id);
+      }
+    });
+    return () => unsub();
+  }, [selectedDashboardSeasonId]);
+
+  // Dynamic Monthly Dues Listener
+  useEffect(() => {
+    if (!selectedDashboardSeasonId) {
+      setSeasonMonthlyDues([]);
+      return;
+    }
+    const unsub = subscribeMonthlyDues(selectedDashboardSeasonId, (dList) => {
+      setSeasonMonthlyDues(dList);
+    });
+    return () => unsub();
+  }, [selectedDashboardSeasonId]);
+
+  // Dynamic Monthly Target Resolver
+  const getDynamicTargetForMonth = (month: string): number => {
+    const match = seasonMonthlyDues.find(d => d.monthKey === month);
+    if (match && typeof match.dueAmount === 'number') {
+      return match.dueAmount;
+    }
+    return ["JUN", "JUL", "AUG"].includes(month) ? 200 : 100;
+  };
+
+  // Group dynamic flats by floor
+  const dynamicFlatsByFloor = useMemo(() => {
+    if (dynFlats.length === 0) return null;
+    const map: Record<string, Flat[]> = {};
+    dynFlats.forEach(flat => {
+      const floorKey = flat.floor !== undefined && flat.floor !== '' ? String(flat.floor) : '0';
+      if (!map[floorKey]) map[floorKey] = [];
+      map[floorKey].push(flat);
+    });
+    const sortedKeys = Object.keys(map).sort((a, b) => Number(b) - Number(a));
+    return sortedKeys.map(k => ({ floor: k, items: map[k] }));
+  }, [dynFlats]);
 
   // Fetch Others Data
   useEffect(() => {
@@ -400,6 +501,18 @@ export default function Dashboard({ userData }: { userData: any }) {
         status: inputStatus,
         lastUpdated: serverTimestamp()
       }, { merge: true });
+
+      if (activeBuildingId) {
+        const currentWingObj = dynWings.find(w => w.code === wing);
+        if (currentWingObj) {
+          await createOrUpdateFlat(activeBuildingId, currentWingObj.id, {
+            flatNumber: room,
+            residentName: inputName.trim(),
+            paidChanda: Number(inputAmount) || 0,
+            paymentStatus: inputStatus === 'Collected' ? 'Paid' : 'Due'
+          });
+        }
+      }
 
       setSelectedFlat(null);
       triggerToast("Success ✅", `Flat ${room} data updated successfully!`, "success");
@@ -523,17 +636,17 @@ export default function Dashboard({ userData }: { userData: any }) {
   const currentMonthIndex = MONTHS.indexOf(currentTrackingMonth);
   const monthsPassed = MONTHS.slice(0, currentMonthIndex + 1);
   const chargeableMonths = monthsPassed.filter((month) => !blockedMonths.includes(month));
-  const expectedTotalPerMember = chargeableMonths.reduce((sum, month) => sum + getTargetForMonth(month), 0);
+  const expectedTotalPerMember = chargeableMonths.reduce((sum, month) => sum + getDynamicTargetForMonth(month), 0);
   // ✅ Per-member expected total — subtracts months this specific member has been
   // individually exempted from (e.g. months before they joined the mandal).
   const getMemberExpectedTotal = (member: Member) => {
     const memberExempt: Month[] = member.exemptMonths || [];
     if (member.isRemoved) {
       const paidTotal = getMemberTotal(member.payments);
-      const normalExpected = chargeableMonths.filter((month) => !memberExempt.includes(month)).reduce((sum, month) => sum + getTargetForMonth(month), 0);
+      const normalExpected = chargeableMonths.filter((month) => !memberExempt.includes(month)).reduce((sum, month) => sum + getDynamicTargetForMonth(month), 0);
       return Math.min(paidTotal, normalExpected);
     }
-    return chargeableMonths.filter((month) => !memberExempt.includes(month)).reduce((sum, month) => sum + getTargetForMonth(month), 0);
+    return chargeableMonths.filter((month) => !memberExempt.includes(month)).reduce((sum, month) => sum + getDynamicTargetForMonth(month), 0);
   };
   const payingMembersCount = members.filter((member) => !member.isHonorary && !member.isRemoved).length;
   const totalExpectedMandal = members.filter((member) => !member.isHonorary && !member.isRemoved).reduce((sum, member) => sum + getMemberExpectedTotal(member), 0);
@@ -592,7 +705,7 @@ export default function Dashboard({ userData }: { userData: any }) {
       [`payments.${paymentMonth}`]: currentAmount + amount
     });
 
-    setPaymentAmount(String(getTargetForMonth(paymentMonth)));
+    setPaymentAmount(String(getDynamicTargetForMonth(paymentMonth)));
     setPaymentMemberId("");
   };
 
@@ -752,6 +865,22 @@ export default function Dashboard({ userData }: { userData: any }) {
             >
               Ledger Dashboard
             </p>
+
+            {dynSeasons.length > 0 && (
+              <div className="flex items-center justify-center gap-1.5 mt-1.5">
+                <select
+                  value={selectedDashboardSeasonId || ''}
+                  onChange={(e) => setSelectedDashboardSeasonId(e.target.value)}
+                  className="bg-black/40 text-yellow-300 text-[9px] sm:text-[10px] font-black uppercase tracking-wider px-3 py-0.5 rounded-full border border-yellow-500/30 outline-none backdrop-blur-md cursor-pointer hover:bg-black/60 transition-colors"
+                >
+                  {dynSeasons.map(s => (
+                    <option key={s.id} value={s.id} className="bg-gray-900 text-white">
+                      Season {s.name} ({s.status})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
 
           {/* Grand Total Micro Card */}
@@ -1014,9 +1143,25 @@ export default function Dashboard({ userData }: { userData: any }) {
 
                 {/* Wing Switcher - Compact */}
                 <div className="flex justify-center border-b border-gray-100 pb-3">
-                  <div className="flex gap-1 p-1 bg-gray-100 rounded-lg">
-                    <button onClick={() => setActiveWing('A')} className={`px-4 py-1.5 rounded-md text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${activeWing === 'A' ? 'bg-[#5A0000] text-white shadow-sm' : 'text-gray-500'}`}>A WING</button>
-                    <button onClick={() => setActiveWing('B')} className={`px-4 py-1.5 rounded-md text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${activeWing === 'B' ? 'bg-[#5A0000] text-white shadow-sm' : 'text-gray-500'}`}>B WING</button>
+                  <div className="flex gap-1 p-1 bg-gray-100 rounded-lg overflow-x-auto max-w-full custom-scrollbar">
+                    {dynWings.length > 0 ? (
+                      dynWings.map((w) => (
+                        <button
+                          key={w.id}
+                          onClick={() => setActiveWing(w.code)}
+                          className={`px-4 py-1.5 rounded-md text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer shrink-0 ${
+                            activeWing === w.code ? 'bg-[#5A0000] text-white shadow-sm' : 'text-gray-500 hover:text-gray-900'
+                          }`}
+                        >
+                          {w.name}
+                        </button>
+                      ))
+                    ) : (
+                      <>
+                        <button onClick={() => setActiveWing('A')} className={`px-4 py-1.5 rounded-md text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${activeWing === 'A' ? 'bg-[#5A0000] text-white shadow-sm' : 'text-gray-500'}`}>A WING</button>
+                        <button onClick={() => setActiveWing('B')} className={`px-4 py-1.5 rounded-md text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${activeWing === 'B' ? 'bg-[#5A0000] text-white shadow-sm' : 'text-gray-500'}`}>B WING</button>
+                      </>
+                    )}
                   </div>
                 </div>
 
@@ -1057,56 +1202,107 @@ export default function Dashboard({ userData }: { userData: any }) {
                   {/* Building Body (Little Dark Skin Texture Palette: #6E3C1A) */}
                   <div className="bg-[#6E3C1A] p-2 sm:p-2.5 shadow-xl relative border-x-[3px] border-[#4A2711] rounded-b-sm">
                     <div className="space-y-2">
-                      {FLOORS.map((floor) => (
-                        <div key={floor} className="flex flex-row items-stretch gap-1.5 bg-[#593014]/95 p-1.5 rounded-lg border-b-2 border-[#4A2711] shadow-inner">
+                      {dynamicFlatsByFloor && dynamicFlatsByFloor.length > 0 ? (
+                        dynamicFlatsByFloor.map(({ floor, items }) => (
+                          <div key={floor} className="flex flex-row items-stretch gap-1.5 bg-[#593014]/95 p-1.5 rounded-lg border-b-2 border-[#4A2711] shadow-inner">
+                            {/* Floor Indicator Elevator Box */}
+                            <div className="flex items-center justify-center bg-[#2D170A] rounded-md w-6 sm:w-8 text-yellow-400 font-black text-[8px] uppercase tracking-tighter border border-[#1F0F06] shadow-inner shrink-0">
+                              {floor === '0' ? 'GR' : `${floor}F`}
+                            </div>
 
-                          {/* Floor Indicator Elevator Box */}
-                          <div className="flex items-center justify-center bg-[#2D170A] rounded-md w-6 sm:w-8 text-yellow-400 font-black text-[8px] uppercase tracking-tighter border border-[#1F0F06] shadow-inner shrink-0">
-                            {floor === '0' ? 'GR' : `${floor}F`}
-                          </div>
+                            {/* Flat Windows Matrix */}
+                            <div className="grid grid-cols-4 gap-1.5 flex-1">
+                              {items.map((flat) => {
+                                const isCollected = flat.paymentStatus === 'Paid' || (Number(flat.paidChanda) > 0 && Number(flat.paidChanda) >= Number(flat.expectedChanda));
+                                const isPartial = flat.paymentStatus === 'Partially Paid' || (!isCollected && Number(flat.paidChanda) > 0);
+                                const isSelected = selectedFlat === flat.id || selectedFlat === `${activeWing}_${flat.flatNumber}`;
 
-                          {/* Flat Windows Matrix */}
-                          <div className="grid grid-cols-4 gap-1.5 flex-1">
-                            {ROOM_SUFFIXES.map((suffix) => {
-                              const roomNum = getRoomNumber(floor, suffix);
-                              const flatId = `${activeWing}_${roomNum}`;
-                              const paymentMatch = buildingPayments.find(p => p.id === flatId);
-                              const isCollected = paymentMatch?.status === 'Collected' && (Number(paymentMatch.amount) > 0);
-                              const isSelected = selectedFlat === flatId;
+                                return (
+                                  <div
+                                    key={flat.id}
+                                    onClick={() => handleSelectFlatTile(activeWing, flat.flatNumber)}
+                                    className={`cursor-pointer p-1.5 rounded-md flex flex-col items-center justify-center relative overflow-hidden transition-all border-b-[2px] active:scale-95 select-none
+                                    ${isCollected
+                                        ? 'bg-green-50/95 border-green-500 shadow-[0_0_10px_rgba(34,197,94,0.4)]'
+                                        : isPartial
+                                        ? 'bg-amber-50/95 border-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.3)]'
+                                        : 'bg-[#FFFBF5]/95 border-[#C4A484] hover:bg-white'} 
+                                    ${isSelected ? 'ring-[1.5px] ring-red-500 border-transparent' : ''}`}
+                                  >
+                                    {/* Window Glass Reflection Effect */}
+                                    <div className="absolute top-0 right-0 w-6 h-10 bg-white/20 rotate-45 transform translate-x-3 -translate-y-3 pointer-events-none"></div>
 
-                              return (
-                                <div
-                                  key={roomNum}
-                                  onClick={() => handleSelectFlatTile(activeWing, roomNum)}
-                                  className={`cursor-pointer p-1.5 rounded-md flex flex-col items-center justify-center relative overflow-hidden transition-all border-b-[2px] active:scale-95 select-none
-                                  ${isCollected
-                                      ? 'bg-green-50/95 border-green-500 shadow-[0_0_10px_rgba(34,197,94,0.4)]'
-                                      : 'bg-[#FFFBF5]/95 border-[#C4A484] hover:bg-white'} 
-                                  ${isSelected ? 'ring-[1.5px] ring-red-500 border-transparent' : ''}`}
-                                >
-                                  {/* Window Glass Reflection Effect */}
-                                  <div className="absolute top-0 right-0 w-6 h-10 bg-white/20 rotate-45 transform translate-x-3 -translate-y-3 pointer-events-none"></div>
+                                    {/* Window Number */}
+                                    <span className={`font-black text-[10px] leading-none z-10 ${isCollected ? 'text-green-900' : 'text-[#4A2711]'}`}>
+                                      {flat.flatNumber}
+                                    </span>
 
-                                  {/* Window Number */}
-                                  <span className={`font-black text-[10px] leading-none z-10 ${isCollected ? 'text-green-900' : 'text-[#4A2711]'}`}>
-                                    {roomNum}
-                                  </span>
+                                    {/* Name (Tiny) */}
+                                    <span className={`text-[6px] font-bold truncate w-full text-center leading-tight mt-0.5 z-10 ${isCollected ? 'text-green-700' : 'text-[#6E3C1A]'}`}>
+                                      {flat.residentName || '-'}
+                                    </span>
 
-                                  {/* Name (Tiny) */}
-                                  <span className={`text-[6px] font-bold truncate w-full text-center leading-tight mt-0.5 z-10 ${isCollected ? 'text-green-700' : 'text-[#6E3C1A]'}`}>
-                                    {paymentMatch?.name ? paymentMatch.name : '-'}
-                                  </span>
-
-                                  {/* Amount/Status Badge */}
-                                  <div className={`mt-0.5 px-1 py-[1px] rounded-[3px] text-[6px] sm:text-[7px] font-black w-full text-center z-10 ${isCollected ? 'bg-green-200/50 text-green-800' : 'bg-[#DFD3C3] text-[#4A2711]'}`}>
-                                    {isCollected ? `₹${paymentMatch.amount}` : 'PENDING'}
+                                    {/* Amount/Status Badge */}
+                                    <div className={`mt-0.5 px-1 py-[1px] rounded-[3px] text-[6px] sm:text-[7px] font-black w-full text-center z-10 ${isCollected ? 'bg-green-200/50 text-green-800' : isPartial ? 'bg-amber-200/50 text-amber-900' : 'bg-[#DFD3C3] text-[#4A2711]'}`}>
+                                      {isCollected ? `₹${flat.paidChanda}` : isPartial ? `₹${flat.paidChanda} P` : 'PENDING'}
+                                    </div>
                                   </div>
-                                </div>
-                              );
-                            })}
+                                );
+                              })}
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        ))
+                      ) : (
+                        FLOORS.map((floor) => (
+                          <div key={floor} className="flex flex-row items-stretch gap-1.5 bg-[#593014]/95 p-1.5 rounded-lg border-b-2 border-[#4A2711] shadow-inner">
+                            {/* Floor Indicator Elevator Box */}
+                            <div className="flex items-center justify-center bg-[#2D170A] rounded-md w-6 sm:w-8 text-yellow-400 font-black text-[8px] uppercase tracking-tighter border border-[#1F0F06] shadow-inner shrink-0">
+                              {floor === '0' ? 'GR' : `${floor}F`}
+                            </div>
+
+                            {/* Flat Windows Matrix */}
+                            <div className="grid grid-cols-4 gap-1.5 flex-1">
+                              {ROOM_SUFFIXES.map((suffix) => {
+                                const roomNum = getRoomNumber(floor, suffix);
+                                const flatId = `${activeWing}_${roomNum}`;
+                                const paymentMatch = buildingPayments.find(p => p.id === flatId);
+                                const isCollected = paymentMatch?.status === 'Collected' && (Number(paymentMatch.amount) > 0);
+                                const isSelected = selectedFlat === flatId;
+
+                                return (
+                                  <div
+                                    key={roomNum}
+                                    onClick={() => handleSelectFlatTile(activeWing, roomNum)}
+                                    className={`cursor-pointer p-1.5 rounded-md flex flex-col items-center justify-center relative overflow-hidden transition-all border-b-[2px] active:scale-95 select-none
+                                    ${isCollected
+                                        ? 'bg-green-50/95 border-green-500 shadow-[0_0_10px_rgba(34,197,94,0.4)]'
+                                        : 'bg-[#FFFBF5]/95 border-[#C4A484] hover:bg-white'} 
+                                    ${isSelected ? 'ring-[1.5px] ring-red-500 border-transparent' : ''}`}
+                                  >
+                                    {/* Window Glass Reflection Effect */}
+                                    <div className="absolute top-0 right-0 w-6 h-10 bg-white/20 rotate-45 transform translate-x-3 -translate-y-3 pointer-events-none"></div>
+
+                                    {/* Window Number */}
+                                    <span className={`font-black text-[10px] leading-none z-10 ${isCollected ? 'text-green-900' : 'text-[#4A2711]'}`}>
+                                      {roomNum}
+                                    </span>
+
+                                    {/* Name (Tiny) */}
+                                    <span className={`text-[6px] font-bold truncate w-full text-center leading-tight mt-0.5 z-10 ${isCollected ? 'text-green-700' : 'text-[#6E3C1A]'}`}>
+                                      {paymentMatch?.name ? paymentMatch.name : '-'}
+                                    </span>
+
+                                    {/* Amount/Status Badge */}
+                                    <div className={`mt-0.5 px-1 py-[1px] rounded-[3px] text-[6px] sm:text-[7px] font-black w-full text-center z-10 ${isCollected ? 'bg-green-200/50 text-green-800' : 'bg-[#DFD3C3] text-[#4A2711]'}`}>
+                                      {isCollected ? `₹${paymentMatch.amount}` : 'PENDING'}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))
+                      )}
                     </div>
                   </div>
                   {/* Foundation */}
