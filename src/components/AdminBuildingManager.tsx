@@ -4,8 +4,10 @@ import React, { useState, useEffect, useMemo } from 'react';
 import {
   Building2, Plus, Edit3, Trash2, Layers, Home, Users, IndianRupee,
   CheckCircle2, AlertCircle, RefreshCw, ChevronRight, X, ArrowRight,
-  ShieldAlert, Sparkles, FolderPlus, Grid, Filter, Search, Download
+  ShieldAlert, Sparkles, FolderPlus, Grid, Filter, Search, Download, ChevronDown
 } from 'lucide-react';
+import { StatCard } from '@/components/ui/StatCard';
+import { Select } from '@/components/ui/Select';
 import { Building, Wing, Flat } from '@/lib/types/building';
 import {
   subscribeBuildings,
@@ -38,6 +40,7 @@ export default function AdminBuildingManager({ onShowToast, askConfirm }: AdminB
   const [flats, setFlats] = useState<Flat[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'Paid' | 'Due' | 'No Record'>('all');
+  const [isSelectorExpanded, setIsSelectorExpanded] = useState<boolean>(false);
 
   // Modals
   const [showBuildingModal, setShowBuildingModal] = useState(false);
@@ -64,7 +67,7 @@ export default function AdminBuildingManager({ onShowToast, askConfirm }: AdminB
 
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [bulkRanges, setBulkRanges] = useState<Array<{ start: number; end: number; prefix?: string }>>([
-    { start: 101, end: 116 }
+    { start: 101, end: 104 }
   ]);
   const [bulkExpected, setBulkExpected] = useState('500');
   const [isBulkGenerating, setIsBulkGenerating] = useState(false);
@@ -396,20 +399,20 @@ export default function AdminBuildingManager({ onShowToast, askConfirm }: AdminB
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-300">
+    <div className="space-y-4 animate-in fade-in duration-300">
       {/* ─── Top Control Bar & Stats ──────────────────────── */}
-      <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-5 shadow-sm">
+      <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-5 shadow-xs space-y-3">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border-b border-gray-100 pb-3">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center text-[#5a0000] shrink-0">
               <Building2 className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-sm sm:text-base font-black text-gray-900 uppercase tracking-tight">
+              <h2 className="text-sm sm:text-base font-bold text-gray-900 uppercase tracking-tight">
                 Buildings & Wings
               </h2>
-              <p className="text-[10px] sm:text-xs font-semibold text-gray-500">
-                Buildings, dynamic wings, room matrix, and chanda ledgers
+              <p className="text-[10px] sm:text-xs font-medium text-gray-500">
+                Manage residential premises, wings, flats matrix, and chanda collection
               </p>
             </div>
           </div>
@@ -418,7 +421,7 @@ export default function AdminBuildingManager({ onShowToast, askConfirm }: AdminB
           <div className="flex items-center gap-1.5">
             <button
               onClick={() => handleOpenBuildingModal()}
-              className="px-3 py-1.5 rounded-lg bg-[#5a0000] text-white font-black text-[10px] sm:text-xs uppercase tracking-wider hover:bg-[#7a0000] transition-colors flex items-center gap-1 shadow-sm active:scale-95"
+              className="px-3 py-1.5 rounded-lg bg-[#5a0000] text-white font-bold text-[10px] sm:text-xs uppercase tracking-wider hover:bg-[#7a0000] transition-colors flex items-center gap-1 shadow-2xs active:scale-95 cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5" /> Add Building
             </button>
@@ -426,7 +429,7 @@ export default function AdminBuildingManager({ onShowToast, askConfirm }: AdminB
             <button
               onClick={handleRunMigration}
               disabled={isMigrating}
-              className="px-2.5 py-1.5 rounded-lg bg-amber-100 text-[#5a0000] font-black text-[10px] sm:text-xs uppercase tracking-wider hover:bg-amber-200 transition-colors flex items-center gap-1 active:scale-95 disabled:opacity-50"
+              className="px-2.5 py-1.5 rounded-lg bg-amber-100 text-[#5a0000] font-bold text-[10px] sm:text-xs uppercase tracking-wider hover:bg-amber-200 transition-colors flex items-center gap-1 active:scale-95 disabled:opacity-50 cursor-pointer"
               title="Import legacy building_chanda documents"
             >
               <RefreshCw className={`w-3 h-3 ${isMigrating ? 'animate-spin' : ''}`} />
@@ -435,175 +438,205 @@ export default function AdminBuildingManager({ onShowToast, askConfirm }: AdminB
           </div>
         </div>
 
-        {/* Live Metrics Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 mt-3">
-          <div className="bg-gray-50 border border-gray-100 rounded-xl p-2.5 sm:p-3">
-            <span className="text-[9px] font-black uppercase tracking-wider text-gray-400 block mb-0.5">Total Flats</span>
-            <div className="flex items-center justify-between">
-              <span className="text-sm sm:text-base font-black text-gray-900">{stats.totalFlats}</span>
-              <Home className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-            </div>
-          </div>
-
-          <div className="bg-emerald-50/60 border border-emerald-100 rounded-xl p-2.5 sm:p-3">
-            <span className="text-[9px] font-black uppercase tracking-wider text-emerald-600 block mb-0.5">Collected Chanda</span>
-            <div className="flex items-center justify-between">
-              <span className="text-sm sm:text-base font-black text-emerald-700">₹{stats.totalCollected.toLocaleString('en-IN')}</span>
-              <IndianRupee className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-            </div>
-          </div>
-
-          <div className="bg-amber-50/60 border border-amber-100 rounded-xl p-2.5 sm:p-3">
-            <span className="text-[9px] font-black uppercase tracking-wider text-amber-600 block mb-0.5">Pending Amount</span>
-            <div className="flex items-center justify-between">
-              <span className="text-sm sm:text-base font-black text-amber-700">₹{stats.totalPending.toLocaleString('en-IN')}</span>
-              <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-            </div>
-          </div>
-
-          <div className="bg-blue-50/60 border border-blue-100 rounded-xl p-2.5 sm:p-3">
-            <span className="text-[9px] font-black uppercase tracking-wider text-blue-600 block mb-0.5">Paid / Pending</span>
-            <div className="flex items-center justify-between">
-              <span className="text-sm sm:text-base font-black text-blue-800">{stats.paidCount} / {stats.pendingCount}</span>
-              <CheckCircle2 className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-            </div>
-          </div>
+        {/* Live Metrics Grid using shared StatCard */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+          <StatCard
+            label="Total Flats"
+            value={stats.totalFlats}
+            icon={<Home className="w-3.5 h-3.5" />}
+            colorTheme="neutral"
+          />
+          <StatCard
+            label="Collected Chanda"
+            value={`₹${stats.totalCollected.toLocaleString('en-IN')}`}
+            icon={<IndianRupee className="w-3.5 h-3.5" />}
+            colorTheme="success"
+          />
+          <StatCard
+            label="Pending Amount"
+            value={`₹${stats.totalPending.toLocaleString('en-IN')}`}
+            icon={<AlertCircle className="w-3.5 h-3.5" />}
+            colorTheme="warning"
+          />
+          <StatCard
+            label="Paid / Pending"
+            value={`${stats.paidCount} / ${stats.pendingCount}`}
+            icon={<CheckCircle2 className="w-3.5 h-3.5" />}
+            colorTheme="info"
+          />
         </div>
       </div>
 
-      {/* ─── Building Selector & Wing Navigation ────────────── */}
-      <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4 shadow-sm space-y-3">
-        {/* Building List Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5">
-            <Layers className="w-3.5 h-3.5 text-[#5a0000]" />
-            <h3 className="text-xs font-black uppercase tracking-wider text-gray-800">
-              Select Building
-            </h3>
+      {/* ─── Building Selector & Wing Navigation (Breadcrumb Collapse) ──────── */}
+      {selectedBuildingId && selectedWingId && !isSelectorExpanded ? (
+        /* Collapsed Breadcrumb Summary Bar */
+        <div className="bg-white rounded-xl border border-gray-200 p-3 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2 animate-in fade-in duration-150">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="px-2 py-0.5 rounded-md bg-amber-50 text-[#5a0000] border border-amber-200 text-[10px] font-bold uppercase tracking-wider shrink-0">
+              Active Wing
+            </span>
+            <div className="flex items-center gap-1.5 truncate text-xs sm:text-sm font-bold text-gray-900">
+              <Building2 className="w-4 h-4 text-[#5a0000] shrink-0" />
+              <span className="truncate">{currentBuilding?.name} ({currentBuilding?.code})</span>
+              <ChevronRight className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+              <span className="text-amber-600 font-bold truncate">{currentWing?.name}</span>
+            </div>
           </div>
-          {currentBuilding && (
+
+          <div className="flex items-center gap-1.5 self-end sm:self-auto shrink-0">
+            <button
+              onClick={() => setIsSelectorExpanded(true)}
+              className="px-2.5 py-1 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-800 text-[10px] sm:text-xs font-bold uppercase tracking-wider transition-colors flex items-center gap-1 cursor-pointer"
+            >
+              Change Building / Wing <ChevronDown className="w-3 h-3" />
+            </button>
+          </div>
+        </div>
+      ) : (
+        /* Expanded Full Building & Wing Selector */
+        <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4 shadow-xs space-y-3 animate-in fade-in duration-150">
+          {/* Building List Header */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <Layers className="w-3.5 h-3.5 text-[#5a0000]" />
+              <h3 className="text-xs font-bold uppercase tracking-wider text-gray-800">
+                Select Building
+              </h3>
+            </div>
             <div className="flex items-center gap-1">
+              {currentBuilding && (
+                <>
+                  <button
+                    onClick={() => handleOpenBuildingModal(currentBuilding)}
+                    className="p-1 text-gray-500 hover:text-gray-900 rounded-md hover:bg-gray-100 cursor-pointer"
+                    title="Edit Building Details"
+                  >
+                    <Edit3 className="w-3 h-3" />
+                  </button>
+                  <button
+                    onClick={() => handleDeleteBuilding(currentBuilding)}
+                    className="p-1 text-red-500 hover:text-red-700 rounded-md hover:bg-red-50 cursor-pointer"
+                    title="Delete Building"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                </>
+              )}
+              {selectedBuildingId && selectedWingId && (
+                <button
+                  onClick={() => setIsSelectorExpanded(false)}
+                  className="px-2 py-0.5 rounded-md bg-gray-100 hover:bg-gray-200 text-gray-600 text-[10px] font-bold uppercase tracking-wider ml-1 cursor-pointer"
+                >
+                  Done
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Building Chips */}
+          {buildings.length === 0 ? (
+            <div className="py-6 text-center border-2 border-dashed border-gray-200 rounded-xl">
+              <p className="text-xs font-bold text-gray-400 uppercase">No buildings added yet</p>
               <button
-                onClick={() => handleOpenBuildingModal(currentBuilding)}
-                className="p-1 text-gray-500 hover:text-gray-900 rounded-md hover:bg-gray-100"
-                title="Edit Building Details"
+                onClick={() => handleOpenBuildingModal()}
+                className="mt-2 px-3 py-1.5 bg-[#5a0000] text-white rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-[#7a0000] cursor-pointer"
               >
-                <Edit3 className="w-3 h-3" />
+                Add First Building
               </button>
-              <button
-                onClick={() => handleDeleteBuilding(currentBuilding)}
-                className="p-1 text-red-500 hover:text-red-700 rounded-md hover:bg-red-50"
-                title="Delete Building"
-              >
-                <Trash2 className="w-3 h-3" />
-              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 custom-scrollbar">
+              {buildings.map((b) => {
+                const isSelected = b.id === selectedBuildingId;
+                return (
+                  <button
+                    key={b.id}
+                    onClick={() => setSelectedBuildingId(b.id)}
+                    className={`px-3 py-1.5 rounded-lg font-bold text-[11px] uppercase tracking-wider transition-all shrink-0 flex items-center gap-1.5 cursor-pointer ${
+                      isSelected
+                        ? 'bg-[#5a0000] text-white shadow-xs'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    <Building2 className="w-3 h-3" />
+                    <span>{b.name} ({b.code})</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Wings inside selected building */}
+          {selectedBuildingId && (
+            <div className="border-t border-gray-100 pt-2.5 mt-1">
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Wings:</span>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => handleOpenWingModal()}
+                    className="px-2 py-1 rounded-md bg-gray-100 text-gray-800 font-bold text-[10px] uppercase tracking-wider hover:bg-gray-200 flex items-center gap-1 cursor-pointer"
+                  >
+                    <Plus className="w-3 h-3" /> Add Wing
+                  </button>
+                  {currentWing && (
+                    <>
+                      <button
+                        onClick={() => handleOpenWingModal(currentWing)}
+                        className="p-1 text-gray-500 hover:text-gray-900 rounded-md hover:bg-gray-100 cursor-pointer"
+                        title="Edit Wing"
+                      >
+                        <Edit3 className="w-3 h-3" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteWing(currentWing)}
+                        className="p-1 text-red-500 hover:text-red-700 rounded-md hover:bg-red-50 cursor-pointer"
+                        title="Delete Wing"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {wings.length === 0 ? (
+                <div className="py-4 text-center border border-dashed border-gray-200 rounded-lg">
+                  <p className="text-xs font-bold text-gray-400">No wings configured.</p>
+                  <button
+                    onClick={() => handleOpenWingModal()}
+                    className="mt-1 px-2.5 py-1 bg-[#5a0000] text-white rounded-md text-[10px] font-black uppercase tracking-wider cursor-pointer"
+                  >
+                    Add Wing (e.g. A Wing)
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 custom-scrollbar">
+                  {wings.map((w) => {
+                    const isSelected = w.id === selectedWingId;
+                    return (
+                      <button
+                        key={w.id}
+                        onClick={() => setSelectedWingId(w.id)}
+                        className={`px-3 py-1.5 rounded-lg font-bold text-[11px] uppercase tracking-wider transition-all shrink-0 cursor-pointer ${
+                          isSelected
+                            ? 'bg-amber-500 text-white shadow-xs ring-1 ring-amber-500/30'
+                            : 'bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-200'
+                        }`}
+                      >
+                        {w.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
         </div>
-
-        {/* Building Chips */}
-        {buildings.length === 0 ? (
-          <div className="py-6 text-center border-2 border-dashed border-gray-200 rounded-xl">
-            <p className="text-xs font-bold text-gray-400 uppercase">No buildings added yet</p>
-            <button
-              onClick={() => handleOpenBuildingModal()}
-              className="mt-2 px-3 py-1.5 bg-[#5a0000] text-white rounded-lg text-xs font-black uppercase tracking-wider hover:bg-[#7a0000]"
-            >
-              Add First Building
-            </button>
-          </div>
-        ) : (
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 custom-scrollbar">
-            {buildings.map((b) => {
-              const isSelected = b.id === selectedBuildingId;
-              return (
-                <button
-                  key={b.id}
-                  onClick={() => setSelectedBuildingId(b.id)}
-                  className={`px-3 py-1.5 rounded-lg font-bold text-[11px] uppercase tracking-wider transition-all shrink-0 flex items-center gap-1.5 ${
-                    isSelected
-                      ? 'bg-[#5a0000] text-white shadow-sm'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  <Building2 className="w-3 h-3" />
-                  <span>{b.name} ({b.code})</span>
-                </button>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Wings inside selected building */}
-        {selectedBuildingId && (
-          <div className="border-t border-gray-100 pt-2.5 mt-1">
-            <div className="flex items-center justify-between gap-2 mb-2">
-              <span className="text-[10px] font-black text-gray-500 uppercase tracking-wider">Wings:</span>
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => handleOpenWingModal()}
-                  className="px-2 py-1 rounded-md bg-gray-100 text-gray-800 font-bold text-[10px] uppercase tracking-wider hover:bg-gray-200 flex items-center gap-1"
-                >
-                  <Plus className="w-3 h-3" /> Add Wing
-                </button>
-                {currentWing && (
-                  <>
-                    <button
-                      onClick={() => handleOpenWingModal(currentWing)}
-                      className="p-1 text-gray-500 hover:text-gray-900 rounded-md hover:bg-gray-100"
-                      title="Edit Wing"
-                    >
-                      <Edit3 className="w-3 h-3" />
-                    </button>
-                    <button
-                      onClick={() => handleDeleteWing(currentWing)}
-                      className="p-1 text-red-500 hover:text-red-700 rounded-md hover:bg-red-50"
-                      title="Delete Wing"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
-                  </>
-                )}
-              </div>
-            </div>
-
-            {wings.length === 0 ? (
-              <div className="py-4 text-center border border-dashed border-gray-200 rounded-lg">
-                <p className="text-xs font-bold text-gray-400">No wings configured.</p>
-                <button
-                  onClick={() => handleOpenWingModal()}
-                  className="mt-1 px-2.5 py-1 bg-[#5a0000] text-white rounded-md text-[9px] font-black uppercase tracking-wider"
-                >
-                  Add Wing (e.g. A Wing)
-                </button>
-              </div>
-            ) : (
-              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 custom-scrollbar">
-                {wings.map((w) => {
-                  const isSelected = w.id === selectedWingId;
-                  return (
-                    <button
-                      key={w.id}
-                      onClick={() => setSelectedWingId(w.id)}
-                      className={`px-3 py-1.5 rounded-lg font-bold text-[11px] uppercase tracking-wider transition-all shrink-0 ${
-                        isSelected
-                          ? 'bg-amber-500 text-white shadow-sm ring-1 ring-amber-500/30'
-                          : 'bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-200'
-                      }`}
-                    >
-                      {w.name}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
+      )}
 
       {/* ─── Flats Matrix & Management ──────────────────────── */}
       {selectedBuildingId && selectedWingId && (
-        <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4 shadow-sm space-y-3">
+        <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4 shadow-xs space-y-3">
           {/* Flats Header & Filter Bar */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-2.5">
             <div className="flex items-center gap-1.5">
@@ -626,29 +659,32 @@ export default function AdminBuildingManager({ onShowToast, askConfirm }: AdminB
                 />
               </div>
 
-              {/* Status Filter */}
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value as any)}
-                className="px-2 py-1 rounded-lg border border-gray-200 text-[10px] sm:text-xs font-bold bg-gray-50 outline-none text-gray-700"
-              >
-                <option value="all">All</option>
-                <option value="Paid">Paid</option>
-                <option value="Due">Due</option>
-                <option value="No Record">No Record</option>
-              </select>
+              {/* Accessible Select Status Filter */}
+              <div className="w-[105px] sm:w-[120px]">
+                <Select
+                  value={statusFilter}
+                  onChange={(val) => setStatusFilter(val)}
+                  options={[
+                    { value: 'all', label: 'All Status' },
+                    { value: 'Paid', label: 'Paid' },
+                    { value: 'Due', label: 'Due' },
+                    { value: 'No Record', label: 'No Record' }
+                  ]}
+                  theme="light"
+                />
+              </div>
 
               {/* Flat Actions */}
               <button
                 onClick={() => handleOpenFlatModal()}
-                className="px-2.5 py-1 rounded-lg bg-[#5a0000] text-white font-bold text-[10px] sm:text-xs uppercase tracking-wider hover:bg-[#7a0000] flex items-center gap-1"
+                className="px-2.5 py-1 rounded-lg bg-[#5a0000] text-white font-bold text-[10px] sm:text-xs uppercase tracking-wider hover:bg-[#7a0000] flex items-center gap-1 cursor-pointer"
               >
                 <Plus className="w-3 h-3" /> Flat
               </button>
 
               <button
                 onClick={() => setShowBulkModal(true)}
-                className="px-2.5 py-1 rounded-lg bg-amber-500 text-white font-bold text-[10px] sm:text-xs uppercase tracking-wider hover:bg-amber-600 flex items-center gap-1 shadow-sm"
+                className="px-2.5 py-1 rounded-lg bg-amber-500 text-white font-bold text-[10px] sm:text-xs uppercase tracking-wider hover:bg-amber-600 flex items-center gap-1 shadow-xs cursor-pointer"
               >
                 <FolderPlus className="w-3 h-3" /> Bulk
               </button>
@@ -663,13 +699,13 @@ export default function AdminBuildingManager({ onShowToast, askConfirm }: AdminB
               <div className="flex justify-center gap-2 mt-2">
                 <button
                   onClick={() => setShowBulkModal(true)}
-                  className="px-3 py-1.5 bg-amber-500 text-white rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-amber-600 shadow-sm"
+                  className="px-3 py-1.5 bg-amber-500 text-white rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-amber-600 shadow-xs cursor-pointer"
                 >
                   Bulk Generate
                 </button>
                 <button
                   onClick={() => handleOpenFlatModal()}
-                  className="px-3 py-1.5 bg-gray-100 text-gray-800 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-gray-200"
+                  className="px-3 py-1.5 bg-gray-100 text-gray-800 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-gray-200 cursor-pointer"
                 >
                   Add Flat
                 </button>
@@ -680,10 +716,10 @@ export default function AdminBuildingManager({ onShowToast, askConfirm }: AdminB
               {flatsByFloor.map(({ floor, items }) => (
                 <div key={floor} className="bg-gray-50/70 border border-gray-100 rounded-xl p-2 sm:p-3">
                   <div className="flex items-center gap-1.5 mb-2">
-                    <span className="px-1.5 py-0.2 rounded bg-[#5a0000] text-white text-[8px] sm:text-[9px] font-black uppercase tracking-wider">
+                    <span className="px-2 py-0.5 rounded-md bg-[#5a0000] text-white text-[9px] sm:text-[10px] font-bold uppercase tracking-wider">
                       {floor === '0' ? 'Ground Floor' : `Floor ${floor}`}
                     </span>
-                    <span className="text-[9px] font-bold text-gray-400">{items.length} Flats</span>
+                    <span className="text-[10px] font-medium text-gray-400">{items.length} Flats</span>
                   </div>
 
                   <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-1.5 sm:gap-2">
@@ -691,45 +727,56 @@ export default function AdminBuildingManager({ onShowToast, askConfirm }: AdminB
                       const isPaid = flat.paymentStatus === 'Paid' || (Number(flat.paidChanda) > 0 && Number(flat.paidChanda) >= Number(flat.expectedChanda));
                       const isPartial = flat.paymentStatus === 'Partially Paid' || (!isPaid && Number(flat.paidChanda) > 0);
 
-                      let badgeColor = 'bg-gray-200 text-gray-700';
-                      if (isPaid) badgeColor = 'bg-green-100 text-green-800 border-green-300';
+                      let badgeColor = 'bg-gray-100 text-gray-700 border-gray-200';
+                      if (isPaid) badgeColor = 'bg-emerald-100 text-emerald-800 border-emerald-300';
                       else if (isPartial) badgeColor = 'bg-amber-100 text-amber-800 border-amber-300';
                       else if (flat.paymentStatus === 'Due') badgeColor = 'bg-red-100 text-red-700 border-red-200';
 
                       return (
                         <div
                           key={flat.id}
-                          className="bg-white border border-gray-200 rounded-lg p-2 flex flex-col justify-between hover:border-amber-400 hover:shadow-sm transition-all group relative"
+                          onClick={() => handleOpenFlatModal(flat)}
+                          className="bg-white border border-gray-200 rounded-xl p-2.5 flex flex-col justify-between hover:border-amber-400 hover:shadow-xs transition-all group relative cursor-pointer active:scale-98 shadow-2xs"
                         >
                           <div className="flex items-start justify-between">
-                            <span className="text-xs font-black text-gray-900">{flat.flatNumber}</span>
-                            <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5">
+                            <span className="text-xs font-bold text-gray-900">{flat.flatNumber}</span>
+                            <div className="flex items-center gap-0.5 opacity-60 sm:opacity-0 group-hover:opacity-100 transition-opacity">
                               <button
-                                onClick={() => handleOpenFlatModal(flat)}
-                                className="p-0.5 text-gray-400 hover:text-gray-700"
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleOpenFlatModal(flat);
+                                }}
+                                className="p-1 text-gray-400 hover:text-gray-700 rounded cursor-pointer"
                                 title="Edit"
+                                aria-label="Edit flat"
                               >
-                                <Edit3 className="w-2.5 h-2.5" />
+                                <Edit3 className="w-3 h-3" />
                               </button>
                               <button
-                                onClick={() => handleDeleteFlat(flat)}
-                                className="p-0.5 text-red-400 hover:text-red-600"
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteFlat(flat);
+                                }}
+                                className="p-1 text-red-400 hover:text-red-600 rounded cursor-pointer"
                                 title="Delete"
+                                aria-label="Delete flat"
                               >
-                                <Trash2 className="w-2.5 h-2.5" />
+                                <Trash2 className="w-3 h-3" />
                               </button>
                             </div>
                           </div>
 
-                          <p className="text-[9px] font-semibold text-gray-600 truncate my-0.5">
+                          <p className="text-[10px] font-medium text-gray-500 truncate my-0.5">
                             {flat.residentName || '—'}
                           </p>
 
-                          <div className="flex items-center justify-between text-[8px] font-bold mt-0.5">
-                            <span className={`px-1 py-0.2 rounded border ${badgeColor}`}>
+                          <div className="flex items-center justify-between text-[10px] font-bold mt-1 pt-1 border-t border-gray-100">
+                            <span className={`px-1.5 py-0.2 rounded border text-[9px] font-bold ${badgeColor}`}>
                               {isPaid ? `₹${flat.paidChanda}` : isPartial ? `₹${flat.paidChanda} P` : 'Due'}
                             </span>
-                            <span className="text-gray-400">/ ₹{flat.expectedChanda || 500}</span>
+                            <span className="text-gray-400 text-[9px] font-medium">/ ₹{flat.expectedChanda || 500}</span>
                           </div>
                         </div>
                       );
@@ -745,19 +792,19 @@ export default function AdminBuildingManager({ onShowToast, askConfirm }: AdminB
       {/* ─── MODAL: ADD / EDIT BUILDING ──────────────────────── */}
       {showBuildingModal && (
         <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-150">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 space-y-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-5 sm:p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-              <h3 className="text-sm font-black uppercase tracking-wider text-gray-900">
+              <h3 className="text-sm font-bold uppercase tracking-wider text-gray-900">
                 {editingBuilding ? 'Edit Building' : 'Add New Building'}
               </h3>
-              <button onClick={() => setShowBuildingModal(false)} className="p-1 text-gray-400 hover:text-gray-600">
+              <button onClick={() => setShowBuildingModal(false)} className="p-1 text-gray-400 hover:text-gray-600 cursor-pointer">
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             <form onSubmit={handleSaveBuilding} className="space-y-3">
               <div>
-                <label className="text-[10px] font-black uppercase text-gray-400 block mb-1">Building Name *</label>
+                <label className="text-[10px] font-bold uppercase text-gray-400 block mb-1">Building Name *</label>
                 <input
                   type="text"
                   required
@@ -769,7 +816,7 @@ export default function AdminBuildingManager({ onShowToast, askConfirm }: AdminB
               </div>
 
               <div>
-                <label className="text-[10px] font-black uppercase text-gray-400 block mb-1">Building Code *</label>
+                <label className="text-[10px] font-bold uppercase text-gray-400 block mb-1">Building Code *</label>
                 <input
                   type="text"
                   required
@@ -781,27 +828,27 @@ export default function AdminBuildingManager({ onShowToast, askConfirm }: AdminB
               </div>
 
               <div>
-                <label className="text-[10px] font-black uppercase text-gray-400 block mb-1">Description (Optional)</label>
+                <label className="text-[10px] font-bold uppercase text-gray-400 block mb-1">Description (Optional)</label>
                 <textarea
                   rows={2}
                   placeholder="Premises details..."
                   value={bDesc}
                   onChange={(e) => setBDesc(e.target.value)}
-                  className="w-full px-3.5 py-2 rounded-xl border border-gray-200 text-xs font-bold bg-gray-50 outline-none focus:bg-white focus:border-[#5a0000]"
+                  className="w-full px-3.5 py-2 rounded-xl border border-gray-200 text-xs font-medium bg-gray-50 outline-none focus:bg-white focus:border-[#5a0000]"
                 />
               </div>
 
-              <div className="flex justify-end gap-2 pt-2">
+              <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
                 <button
                   type="button"
                   onClick={() => setShowBuildingModal(false)}
-                  className="px-4 py-2.5 rounded-xl text-xs font-black uppercase bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  className="px-4 py-2.5 rounded-xl text-xs font-bold uppercase bg-gray-100 text-gray-700 hover:bg-gray-200 cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2.5 rounded-xl text-xs font-black uppercase bg-[#5a0000] text-white hover:bg-[#7a0000] shadow-sm"
+                  className="px-5 py-2.5 rounded-xl text-xs font-bold uppercase bg-[#5a0000] text-white hover:bg-[#7a0000] shadow-xs cursor-pointer"
                 >
                   Save Building
                 </button>
@@ -814,19 +861,19 @@ export default function AdminBuildingManager({ onShowToast, askConfirm }: AdminB
       {/* ─── MODAL: ADD / EDIT WING ──────────────────────────── */}
       {showWingModal && (
         <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-150">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-5 sm:p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-              <h3 className="text-sm font-black uppercase tracking-wider text-gray-900">
+              <h3 className="text-sm font-bold uppercase tracking-wider text-gray-900">
                 {editingWing ? 'Edit Wing' : 'Add Wing'}
               </h3>
-              <button onClick={() => setShowWingModal(false)} className="p-1 text-gray-400 hover:text-gray-600">
+              <button onClick={() => setShowWingModal(false)} className="p-1 text-gray-400 hover:text-gray-600 cursor-pointer">
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             <form onSubmit={handleSaveWing} className="space-y-3">
               <div>
-                <label className="text-[10px] font-black uppercase text-gray-400 block mb-1">Wing Name *</label>
+                <label className="text-[10px] font-bold uppercase text-gray-400 block mb-1">Wing Name *</label>
                 <input
                   type="text"
                   required
@@ -838,7 +885,7 @@ export default function AdminBuildingManager({ onShowToast, askConfirm }: AdminB
               </div>
 
               <div>
-                <label className="text-[10px] font-black uppercase text-gray-400 block mb-1">Wing Code (e.g. A, B, C) *</label>
+                <label className="text-[10px] font-bold uppercase text-gray-400 block mb-1">Wing Code (e.g. A, B, C) *</label>
                 <input
                   type="text"
                   required
@@ -850,17 +897,17 @@ export default function AdminBuildingManager({ onShowToast, askConfirm }: AdminB
                 />
               </div>
 
-              <div className="flex justify-end gap-2 pt-2">
+              <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
                 <button
                   type="button"
                   onClick={() => setShowWingModal(false)}
-                  className="px-4 py-2.5 rounded-xl text-xs font-black uppercase bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  className="px-4 py-2.5 rounded-xl text-xs font-bold uppercase bg-gray-100 text-gray-700 hover:bg-gray-200 cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2.5 rounded-xl text-xs font-black uppercase bg-[#5a0000] text-white hover:bg-[#7a0000] shadow-sm"
+                  className="px-5 py-2.5 rounded-xl text-xs font-bold uppercase bg-[#5a0000] text-white hover:bg-[#7a0000] shadow-xs cursor-pointer"
                 >
                   Save Wing
                 </button>
@@ -873,12 +920,12 @@ export default function AdminBuildingManager({ onShowToast, askConfirm }: AdminB
       {/* ─── MODAL: ADD / EDIT SINGLE FLAT ───────────────────── */}
       {showFlatModal && (
         <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-150">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 space-y-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-5 sm:p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-              <h3 className="text-sm font-black uppercase tracking-wider text-gray-900">
+              <h3 className="text-sm font-bold uppercase tracking-wider text-gray-900">
                 {editingFlat ? `Edit Flat ${editingFlat.displayNumber}` : 'Add Flat'}
               </h3>
-              <button onClick={() => setShowFlatModal(false)} className="p-1 text-gray-400 hover:text-gray-600">
+              <button onClick={() => setShowFlatModal(false)} className="p-1 text-gray-400 hover:text-gray-600 cursor-pointer">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -886,7 +933,7 @@ export default function AdminBuildingManager({ onShowToast, askConfirm }: AdminB
             <form onSubmit={handleSaveFlat} className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-[10px] font-black uppercase text-gray-400 block mb-1">Flat Number *</label>
+                  <label className="text-[10px] font-bold uppercase text-gray-400 block mb-1">Flat Number *</label>
                   <input
                     type="text"
                     required
@@ -898,7 +945,7 @@ export default function AdminBuildingManager({ onShowToast, askConfirm }: AdminB
                 </div>
 
                 <div>
-                  <label className="text-[10px] font-black uppercase text-gray-400 block mb-1">Floor (0 = Ground)</label>
+                  <label className="text-[10px] font-bold uppercase text-gray-400 block mb-1">Floor (0 = Ground)</label>
                   <input
                     type="number"
                     placeholder="1"
@@ -910,7 +957,7 @@ export default function AdminBuildingManager({ onShowToast, askConfirm }: AdminB
               </div>
 
               <div>
-                <label className="text-[10px] font-black uppercase text-gray-400 block mb-1">Resident Name</label>
+                <label className="text-[10px] font-bold uppercase text-gray-400 block mb-1">Resident Name</label>
                 <input
                   type="text"
                   placeholder="Rishi Sahu"
@@ -921,19 +968,19 @@ export default function AdminBuildingManager({ onShowToast, askConfirm }: AdminB
               </div>
 
               <div>
-                <label className="text-[10px] font-black uppercase text-gray-400 block mb-1">Phone Number (Optional)</label>
+                <label className="text-[10px] font-bold uppercase text-gray-400 block mb-1">Phone Number (Optional)</label>
                 <input
                   type="tel"
                   placeholder="9876543210"
                   value={fPhone}
                   onChange={(e) => setFPhone(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-gray-200 text-xs font-bold bg-gray-50 outline-none focus:bg-white focus:border-[#5a0000]"
+                  className="w-full px-3 py-2 rounded-xl border border-gray-200 text-xs font-medium bg-gray-50 outline-none focus:bg-white focus:border-[#5a0000]"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-[10px] font-black uppercase text-gray-400 block mb-1">Expected Chanda (₹)</label>
+                  <label className="text-[10px] font-bold uppercase text-gray-400 block mb-1">Expected Chanda (₹)</label>
                   <input
                     type="number"
                     value={fExpected}
@@ -943,7 +990,7 @@ export default function AdminBuildingManager({ onShowToast, askConfirm }: AdminB
                 </div>
 
                 <div>
-                  <label className="text-[10px] font-black uppercase text-gray-400 block mb-1">Paid Chanda (₹)</label>
+                  <label className="text-[10px] font-bold uppercase text-gray-400 block mb-1">Paid Chanda (₹)</label>
                   <input
                     type="number"
                     value={fPaid}
@@ -954,7 +1001,7 @@ export default function AdminBuildingManager({ onShowToast, askConfirm }: AdminB
               </div>
 
               <div>
-                <label className="text-[10px] font-black uppercase text-gray-400 block mb-1">Payment Status</label>
+                <label className="text-[10px] font-bold uppercase text-gray-400 block mb-1">Payment Status</label>
                 <select
                   value={fStatus}
                   onChange={(e) => setFStatus(e.target.value as any)}
@@ -968,27 +1015,27 @@ export default function AdminBuildingManager({ onShowToast, askConfirm }: AdminB
               </div>
 
               <div>
-                <label className="text-[10px] font-black uppercase text-gray-400 block mb-1">Notes</label>
+                <label className="text-[10px] font-bold uppercase text-gray-400 block mb-1">Notes</label>
                 <input
                   type="text"
                   placeholder="Optional notes..."
                   value={fNotes}
                   onChange={(e) => setFNotes(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-gray-200 text-xs font-bold bg-gray-50 outline-none focus:bg-white focus:border-[#5a0000]"
+                  className="w-full px-3 py-2 rounded-xl border border-gray-200 text-xs font-medium bg-gray-50 outline-none focus:bg-white focus:border-[#5a0000]"
                 />
               </div>
 
-              <div className="flex justify-end gap-2 pt-2">
+              <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
                 <button
                   type="button"
                   onClick={() => setShowFlatModal(false)}
-                  className="px-4 py-2.5 rounded-xl text-xs font-black uppercase bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  className="px-4 py-2.5 rounded-xl text-xs font-bold uppercase bg-gray-100 text-gray-700 hover:bg-gray-200 cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2.5 rounded-xl text-xs font-black uppercase bg-[#5a0000] text-white hover:bg-[#7a0000] shadow-sm"
+                  className="px-5 py-2.5 rounded-xl text-xs font-bold uppercase bg-[#5a0000] text-white hover:bg-[#7a0000] shadow-xs cursor-pointer"
                 >
                   Save Flat
                 </button>
@@ -1001,30 +1048,30 @@ export default function AdminBuildingManager({ onShowToast, askConfirm }: AdminB
       {/* ─── MODAL: BULK FLAT GENERATOR ──────────────────────── */}
       {showBulkModal && (
         <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-150">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg p-6 space-y-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg p-5 sm:p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-gray-100 pb-3">
               <div>
-                <h3 className="text-sm font-black uppercase tracking-wider text-gray-900">
+                <h3 className="text-sm font-bold uppercase tracking-wider text-gray-900">
                   Bulk Flat Generator
                 </h3>
-                <p className="text-[10px] font-bold text-gray-400">
+                <p className="text-[10px] font-medium text-gray-400">
                   Generate flats for {currentWing?.name}
                 </p>
               </div>
-              <button onClick={() => setShowBulkModal(false)} className="p-1 text-gray-400 hover:text-gray-600">
+              <button onClick={() => setShowBulkModal(false)} className="p-1 text-gray-400 hover:text-gray-600 cursor-pointer">
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             <div className="space-y-3">
-              <p className="text-xs font-semibold text-gray-600">
-                Configure room number ranges. For example: <span className="font-bold text-[#5a0000]">101–116</span> for 16 flats, or add another range <span className="font-bold text-[#5a0000]">201–216</span> for B-wing floors.
+              <p className="text-xs font-medium text-gray-600">
+                Configure room number ranges. For example: <span className="font-bold text-[#5a0000]">101–116</span> for 16 flats, or add another range <span className="font-bold text-[#5a0000]">201–216</span> for upper floors.
               </p>
 
               {bulkRanges.map((range, idx) => (
                 <div key={idx} className="flex items-center gap-2 bg-gray-50 p-3 rounded-2xl border border-gray-200">
                   <div className="flex-1">
-                    <label className="text-[9px] font-black uppercase text-gray-400 block mb-1">Start Room</label>
+                    <label className="text-[9px] font-bold uppercase text-gray-400 block mb-1">Start Room</label>
                     <input
                       type="number"
                       value={range.start}
@@ -1039,7 +1086,7 @@ export default function AdminBuildingManager({ onShowToast, askConfirm }: AdminB
                   </div>
 
                   <div className="flex-1">
-                    <label className="text-[9px] font-black uppercase text-gray-400 block mb-1">End Room</label>
+                    <label className="text-[9px] font-bold uppercase text-gray-400 block mb-1">End Room</label>
                     <input
                       type="number"
                       value={range.end}
@@ -1058,7 +1105,7 @@ export default function AdminBuildingManager({ onShowToast, askConfirm }: AdminB
                       <button
                         type="button"
                         onClick={() => setBulkRanges(bulkRanges.filter((_, i) => i !== idx))}
-                        className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg"
+                        className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg cursor-pointer"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -1070,13 +1117,13 @@ export default function AdminBuildingManager({ onShowToast, askConfirm }: AdminB
               <button
                 type="button"
                 onClick={() => setBulkRanges([...bulkRanges, { start: 201, end: 216 }])}
-                className="text-xs font-black uppercase tracking-wider text-[#5a0000] hover:underline flex items-center gap-1"
+                className="text-xs font-bold uppercase tracking-wider text-[#5a0000] hover:underline flex items-center gap-1 cursor-pointer"
               >
                 <Plus className="w-3.5 h-3.5" /> Add Another Number Range
               </button>
 
               <div>
-                <label className="text-[10px] font-black uppercase text-gray-400 block mb-1">Default Expected Chanda (₹)</label>
+                <label className="text-[10px] font-bold uppercase text-gray-500 block mb-1">Default Expected Chanda (₹)</label>
                 <input
                   type="number"
                   value={bulkExpected}
@@ -1085,19 +1132,34 @@ export default function AdminBuildingManager({ onShowToast, askConfirm }: AdminB
                 />
               </div>
 
+              {/* Live Preview & Range Validation Summary */}
+              {(() => {
+                const totalFlatsPreview = bulkRanges.reduce((sum, r) => sum + (r.end >= r.start && r.start > 0 ? (r.end - r.start + 1) : 0), 0);
+                const hasInvalidRange = bulkRanges.some(r => r.end < r.start || r.start <= 0);
+                return (
+                  <div className={`p-2.5 rounded-xl border text-[11px] sm:text-xs font-bold ${hasInvalidRange ? 'bg-red-50 text-red-700 border-red-200' : 'bg-amber-50 text-amber-800 border-amber-200'}`}>
+                    {hasInvalidRange ? (
+                      <p>⚠️ End Room cannot be smaller than Start Room (must be &gt; 0).</p>
+                    ) : (
+                      <p>⚡ Will generate <span className="font-bold text-[#5a0000]">{totalFlatsPreview} flats</span> ({bulkRanges.map(r => `${r.start}–${r.end}`).join(', ')}) for {currentWing?.name}.</p>
+                    )}
+                  </div>
+                );
+              })()}
+
               <div className="flex justify-end gap-2 pt-3 border-t border-gray-100">
                 <button
                   type="button"
                   onClick={() => setShowBulkModal(false)}
-                  className="px-4 py-2.5 rounded-xl text-xs font-black uppercase bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  className="px-4 py-2.5 rounded-xl text-xs font-bold uppercase bg-gray-100 text-gray-700 hover:bg-gray-200 cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
                   onClick={handleBulkGenerate}
-                  disabled={isBulkGenerating}
-                  className="px-5 py-2.5 rounded-xl text-xs font-black uppercase bg-amber-500 text-white hover:bg-amber-600 shadow-sm disabled:opacity-50"
+                  disabled={isBulkGenerating || bulkRanges.some(r => r.end < r.start || r.start <= 0)}
+                  className="px-5 py-2.5 rounded-xl text-xs font-bold uppercase bg-amber-500 text-white hover:bg-amber-600 shadow-xs disabled:opacity-50 cursor-pointer"
                 >
                   {isBulkGenerating ? 'Generating...' : 'Generate Flats'}
                 </button>

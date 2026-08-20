@@ -410,6 +410,43 @@ export const bulkUpdateMonthlyDues = async (
   });
 };
 
+export const addCustomMonthlyDue = async (
+  seasonId: string,
+  data: {
+    monthKey: string;
+    monthName: string;
+    monthOrder: number;
+    dueAmount: number;
+    notes?: string;
+  },
+  adminUid?: string
+): Promise<void> => {
+  const cleanKey = data.monthKey.toUpperCase().trim().replace(/[^A-Z0-9_-]/g, '_');
+  const ref = doc(db, SEASONS_COLLECTION, seasonId, DUES_SUBCOLLECTION, cleanKey);
+
+  await setDoc(ref, {
+    seasonId,
+    monthKey: cleanKey,
+    monthName: data.monthName.trim() || cleanKey,
+    monthOrder: data.monthOrder || 13,
+    dueAmount: data.dueAmount,
+    status: 'open',
+    locked: false,
+    lockReason: data.notes || '',
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
+  }, { merge: true });
+
+  await logSeasonAudit({
+    adminUid,
+    action: 'EDIT_MONTH_AMOUNT',
+    seasonId,
+    monthKey: cleanKey,
+    after: data.dueAmount,
+    reason: `Added new schedule target: ${data.monthName}`
+  });
+};
+
 export const toggleMonthLock = async (
   seasonId: string,
   monthKey: string,
@@ -431,6 +468,22 @@ export const toggleMonthLock = async (
     seasonId,
     monthKey,
     reason: lockReason
+  });
+};
+
+export const deleteMonthlyDue = async (
+  seasonId: string,
+  monthKey: string,
+  adminUid?: string
+): Promise<void> => {
+  const ref = doc(db, SEASONS_COLLECTION, seasonId, DUES_SUBCOLLECTION, monthKey);
+  await deleteDoc(ref);
+  await logSeasonAudit({
+    adminUid,
+    action: 'EDIT_MONTH_AMOUNT',
+    seasonId,
+    monthKey,
+    reason: `Deleted month/due item ${monthKey}`
   });
 };
 

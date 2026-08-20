@@ -7,6 +7,8 @@ import {
   X, Check, IndianRupee, Layers, FileText, BarChart2, ChevronRight, UserPlus,
   Coins, Settings, Clock, ArrowUpRight, ShieldCheck, UserCheck, Eye
 } from 'lucide-react';
+import { StatCard } from '@/components/ui/StatCard';
+import { Select } from '@/components/ui/Select';
 import { ChandaSeason, MonthlyDue, MemberOverride, SeasonStatus } from '@/lib/types/season';
 import {
   subscribeSeasons,
@@ -19,6 +21,8 @@ import {
   archiveSeason,
   cloneSeason,
   updateMonthlyDue,
+  addCustomMonthlyDue,
+  deleteMonthlyDue,
   bulkUpdateMonthlyDues,
   toggleMonthLock,
   setMemberOverride,
@@ -98,6 +102,15 @@ export default function AdminSeasonManager({
   const [editAmount, setEditAmount] = useState('100');
   const [editReason, setEditReason] = useState('');
   const [isUpdatingMonth, setIsUpdatingMonth] = useState(false);
+
+  // Add Custom Month Modal
+  const [showAddMonthModal, setShowAddMonthModal] = useState(false);
+  const [newMonthKey, setNewMonthKey] = useState('');
+  const [newMonthName, setNewMonthName] = useState('');
+  const [newMonthAmount, setNewMonthAmount] = useState('250');
+  const [newMonthOrder, setNewMonthOrder] = useState('13');
+  const [newMonthNotes, setNewMonthNotes] = useState('');
+  const [isAddingMonth, setIsAddingMonth] = useState(false);
 
   // Bulk Edit Modal
   const [showBulkModal, setShowBulkModal] = useState(false);
@@ -336,6 +349,52 @@ export default function AdminSeasonManager({
     }
   };
 
+  const handleAddCustomMonth = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedSeasonId) return;
+    if (!newMonthKey.trim()) {
+      onShowToast({ text: 'Please enter a target/month key (e.g. GANPATI)', type: 'error' });
+      return;
+    }
+    setIsAddingMonth(true);
+    try {
+      await addCustomMonthlyDue(
+        selectedSeasonId,
+        {
+          monthKey: newMonthKey.toUpperCase().trim(),
+          monthName: newMonthName.trim() || newMonthKey.toUpperCase().trim(),
+          monthOrder: Number(newMonthOrder) || (dues.length + 1),
+          dueAmount: Number(newMonthAmount) || 100,
+          notes: newMonthNotes.trim()
+        },
+        currentUserData?.uid
+      );
+      onShowToast({ text: `Added target "${newMonthName || newMonthKey}" (₹${newMonthAmount})`, type: 'success' });
+      setShowAddMonthModal(false);
+      setNewMonthKey('');
+      setNewMonthName('');
+      setNewMonthAmount('250');
+      setNewMonthNotes('');
+    } catch (err: any) {
+      onShowToast({ text: err.message || 'Failed to add target', type: 'error' });
+    } finally {
+      setIsAddingMonth(false);
+    }
+  };
+
+  const handleDeleteCustomMonth = (monthKey: string) => {
+    if (!selectedSeasonId) return;
+    askConfirm(`Delete target item "${monthKey}"?`, async () => {
+      try {
+        await deleteMonthlyDue(selectedSeasonId, monthKey, currentUserData?.uid);
+        onShowToast({ text: `Target ${monthKey} deleted!`, type: 'success' });
+        setShowEditMonthModal(false);
+      } catch (err: any) {
+        onShowToast({ text: err.message || 'Failed to delete target', type: 'error' });
+      }
+    });
+  };
+
   const handleBulkUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedSeasonId) return;
@@ -462,46 +521,38 @@ export default function AdminSeasonManager({
           </div>
         </div>
 
-        {/* Live Metrics Grid */}
+        {/* Live Metrics Grid using shared StatCard */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 mt-3">
-          <div className="bg-amber-50/60 border border-amber-100 rounded-xl p-2.5 sm:p-3">
-            <span className="text-[9px] font-black uppercase tracking-wider text-amber-600 block mb-0.5">Live Season</span>
-            <div className="flex items-center justify-between">
-              <span className="text-xs sm:text-sm font-black text-amber-900 truncate">
-                {activeSeason ? activeSeason.name : 'None'}
-              </span>
-              <CheckCircle2 className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-            </div>
-          </div>
-
-          <div className="bg-emerald-50/60 border border-emerald-100 rounded-xl p-2.5 sm:p-3">
-            <span className="text-[9px] font-black uppercase tracking-wider text-emerald-600 block mb-0.5">Target / Member</span>
-            <div className="flex items-center justify-between">
-              <span className="text-sm sm:text-base font-black text-emerald-700">₹{stats.totalTargetSum.toLocaleString('en-IN')}</span>
-              <IndianRupee className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-            </div>
-          </div>
-
-          <div className="bg-blue-50/60 border border-blue-100 rounded-xl p-2.5 sm:p-3">
-            <span className="text-[9px] font-black uppercase tracking-wider text-blue-600 block mb-0.5">Active Members</span>
-            <div className="flex items-center justify-between">
-              <span className="text-sm sm:text-base font-black text-blue-800">{stats.membersCount}</span>
-              <UserCheck className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-            </div>
-          </div>
-
-          <div className="bg-rose-50/60 border border-rose-100 rounded-xl p-2.5 sm:p-3">
-            <span className="text-[9px] font-black uppercase tracking-wider text-rose-600 block mb-0.5">Pending Approvals</span>
-            <div className="flex items-center justify-between">
-              <span className="text-sm sm:text-base font-black text-rose-800">{stats.pendingCount}</span>
-              <Clock className="w-3.5 h-3.5 text-rose-600 shrink-0" />
-            </div>
-          </div>
+          <StatCard
+            label="Live Season"
+            value={activeSeason ? activeSeason.name : 'None'}
+            icon={<CheckCircle2 className="w-3.5 h-3.5" />}
+            colorTheme="maroon"
+          />
+          <StatCard
+            label="Target / Member"
+            value={`₹${stats.totalTargetSum.toLocaleString('en-IN')}`}
+            icon={<IndianRupee className="w-3.5 h-3.5" />}
+            colorTheme="success"
+          />
+          <StatCard
+            label="Active Members"
+            value={stats.membersCount}
+            icon={<UserCheck className="w-3.5 h-3.5" />}
+            colorTheme="info"
+          />
+          <StatCard
+            label="Pending Approvals"
+            value={stats.pendingCount}
+            icon={<Clock className="w-3.5 h-3.5" />}
+            colorTheme={stats.pendingCount > 0 ? "danger" : "neutral"}
+            onClick={() => setActiveSubView('approvals')}
+          />
         </div>
       </div>
 
       {/* ─── Season Selector Tabs & Actions ────────────────── */}
-      <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4 shadow-sm space-y-3">
+      <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4 shadow-xs space-y-3">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-2">
           <div className="flex items-center gap-1.5">
             <Calendar className="w-3.5 h-3.5 text-[#5a0000]" />
@@ -514,7 +565,7 @@ export default function AdminSeasonManager({
             <div className="flex flex-wrap items-center gap-1.5">
               <button
                 onClick={() => handleOpenEditSeason(selectedSeason)}
-                className="px-2 py-1 rounded-md bg-gray-100 text-gray-800 font-bold text-[10px] uppercase tracking-wider hover:bg-gray-200 flex items-center gap-1 border border-gray-200"
+                className="px-2 py-1 rounded-md bg-gray-100 text-gray-800 font-bold text-[10px] uppercase tracking-wider hover:bg-gray-200 flex items-center gap-1 border border-gray-200 cursor-pointer"
               >
                 <Edit3 className="w-3 h-3" /> Settings
               </button>
@@ -522,7 +573,7 @@ export default function AdminSeasonManager({
               {selectedSeason.status !== 'active' && (
                 <button
                   onClick={() => handleActivateSeason(selectedSeason)}
-                  className="px-2 py-1 rounded-md bg-emerald-600 text-white font-bold text-[10px] uppercase tracking-wider hover:bg-emerald-700 flex items-center gap-1 shadow-sm"
+                  className="px-2 py-1 rounded-md bg-emerald-600 text-white font-bold text-[10px] uppercase tracking-wider hover:bg-emerald-700 flex items-center gap-1 shadow-xs cursor-pointer"
                 >
                   <Check className="w-3 h-3" /> Set Live
                 </button>
@@ -531,14 +582,14 @@ export default function AdminSeasonManager({
               {displaySeasons.length > 1 && (
                 <button
                   onClick={() => handleDeleteSeason(selectedSeason)}
-                  className="px-2 py-1 rounded-md bg-rose-50 text-rose-600 font-bold text-[10px] uppercase tracking-wider hover:bg-rose-100 flex items-center gap-1 border border-rose-200"
+                  className="px-2 py-1 rounded-md bg-rose-50 text-rose-600 font-bold text-[10px] uppercase tracking-wider hover:bg-rose-100 flex items-center gap-1 border border-rose-200 cursor-pointer"
                   title="Delete this season"
                 >
                   <Trash2 className="w-3 h-3" /> Delete
                 </button>
               )}
 
-              <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider border ${
+              <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider border ${
                 selectedSeason.status === 'active'
                   ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
                   : selectedSeason.status === 'draft'
@@ -559,9 +610,9 @@ export default function AdminSeasonManager({
               <button
                 key={s.id}
                 onClick={() => setSelectedSeasonId(s.id)}
-                className={`px-3 py-1.5 rounded-lg font-bold text-[11px] uppercase tracking-wider transition-all shrink-0 flex items-center gap-1.5 ${
+                className={`px-3 py-1.5 rounded-lg font-bold text-[11px] uppercase tracking-wider transition-all shrink-0 flex items-center gap-1.5 cursor-pointer ${
                   isSelected
-                    ? 'bg-[#5a0000] text-white shadow-sm'
+                    ? 'bg-[#5a0000] text-white shadow-xs'
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                 }`}
               >
@@ -570,7 +621,7 @@ export default function AdminSeasonManager({
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
                 )}
                 {s.status === 'closed' && (
-                  <span className="text-[8px] opacity-70">🔒</span>
+                  <span className="text-[9px] opacity-70">🔒</span>
                 )}
               </button>
             );
@@ -581,13 +632,13 @@ export default function AdminSeasonManager({
         {selectedSeasonId && (
           <div className="border-t border-gray-100 pt-2.5">
             <div className="flex items-center justify-between gap-1.5 overflow-x-auto pb-1 custom-scrollbar">
-              <div className="flex gap-1.5">
+              <div className="flex gap-1 bg-gray-100/80 p-1 rounded-xl">
                 <button
                   onClick={() => setActiveSubView('schedule')}
-                  className={`px-2.5 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold uppercase tracking-wider transition-all shrink-0 ${
+                  className={`px-2.5 py-1.5 rounded-lg text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all shrink-0 cursor-pointer ${
                     activeSubView === 'schedule'
-                      ? 'bg-[#5a0000] text-white shadow-sm'
-                      : 'bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-200'
+                      ? 'bg-[#5a0000] text-white shadow-xs'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-white/60'
                   }`}
                 >
                   Schedule ({dues.length})
@@ -595,10 +646,10 @@ export default function AdminSeasonManager({
 
                 <button
                   onClick={() => setActiveSubView('overrides')}
-                  className={`px-2.5 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold uppercase tracking-wider transition-all shrink-0 ${
+                  className={`px-2.5 py-1.5 rounded-lg text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all shrink-0 cursor-pointer ${
                     activeSubView === 'overrides'
-                      ? 'bg-[#5a0000] text-white shadow-sm'
-                      : 'bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-200'
+                      ? 'bg-[#5a0000] text-white shadow-xs'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-white/60'
                   }`}
                 >
                   Overrides ({overrides.length})
@@ -606,15 +657,15 @@ export default function AdminSeasonManager({
 
                 <button
                   onClick={() => setActiveSubView('approvals')}
-                  className={`px-2.5 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-1 shrink-0 ${
+                  className={`px-2.5 py-1.5 rounded-lg text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1 shrink-0 cursor-pointer ${
                     activeSubView === 'approvals'
-                      ? 'bg-[#5a0000] text-white shadow-sm'
-                      : 'bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-200'
+                      ? 'bg-[#5a0000] text-white shadow-xs'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-white/60'
                   }`}
                 >
                   <span>Approvals</span>
                   {stats.pendingCount > 0 && (
-                    <span className="px-1 py-0.2 bg-rose-500 text-white rounded-full text-[9px] font-bold">
+                    <span className="px-1.5 py-0.2 bg-rose-500 text-white rounded-full text-[9px] font-black">
                       {stats.pendingCount}
                     </span>
                   )}
@@ -622,10 +673,10 @@ export default function AdminSeasonManager({
 
                 <button
                   onClick={() => setActiveSubView('members')}
-                  className={`px-2.5 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold uppercase tracking-wider transition-all shrink-0 ${
+                  className={`px-2.5 py-1.5 rounded-lg text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all shrink-0 cursor-pointer ${
                     activeSubView === 'members'
-                      ? 'bg-[#5a0000] text-white shadow-sm'
-                      : 'bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-200'
+                      ? 'bg-[#5a0000] text-white shadow-xs'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-white/60'
                   }`}
                 >
                   Members ({stats.membersCount})
@@ -633,20 +684,35 @@ export default function AdminSeasonManager({
               </div>
 
               {activeSubView === 'schedule' && (
-                <button
-                  onClick={() => setShowBulkModal(true)}
-                  className="px-2 py-1 rounded-md bg-gray-100 text-gray-800 font-bold text-[10px] uppercase tracking-wider hover:bg-gray-200 flex items-center gap-1 shrink-0 border border-gray-200"
-                >
-                  <Edit3 className="w-3 h-3" /> Bulk Set
-                </button>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    onClick={() => {
+                      setNewMonthKey('');
+                      setNewMonthName('');
+                      setNewMonthAmount('250');
+                      setNewMonthOrder(String(dues.length + 1));
+                      setNewMonthNotes('');
+                      setShowAddMonthModal(true);
+                    }}
+                    className="px-2.5 py-1.5 rounded-lg bg-[#5a0000] text-white font-bold text-[10px] sm:text-xs uppercase tracking-wider hover:bg-[#7a0000] flex items-center gap-1 shadow-2xs cursor-pointer active:scale-95"
+                  >
+                    <Plus className="w-3 h-3" /> Add Target
+                  </button>
+                  <button
+                    onClick={() => setShowBulkModal(true)}
+                    className="px-2.5 py-1.5 rounded-lg bg-gray-100 text-gray-800 font-bold text-[10px] sm:text-xs uppercase tracking-wider hover:bg-gray-200 flex items-center gap-1 border border-gray-200 cursor-pointer"
+                  >
+                    <Edit3 className="w-3 h-3" /> Bulk Set
+                  </button>
+                </div>
               )}
 
               {activeSubView === 'overrides' && (
                 <button
                   onClick={() => setShowOverrideModal(true)}
-                  className="px-2 py-1 rounded-md bg-[#5a0000] text-white font-bold text-[10px] uppercase tracking-wider hover:bg-[#7a0000] flex items-center gap-1 shrink-0"
+                  className="px-2.5 py-1.5 rounded-lg bg-[#5a0000] text-white font-bold text-[10px] sm:text-xs uppercase tracking-wider hover:bg-[#7a0000] flex items-center gap-1 shrink-0 cursor-pointer shadow-xs"
                 >
-                  <Plus className="w-3 h-3" /> Add
+                  <Plus className="w-3 h-3" /> Add Override
                 </button>
               )}
             </div>
@@ -656,14 +722,14 @@ export default function AdminSeasonManager({
 
       {/* ─── TAB 1: MONTHLY DUE SCHEDULE MATRIX ────────────── */}
       {selectedSeasonId && activeSubView === 'schedule' && (
-        <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4 shadow-sm space-y-3">
+        <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4 shadow-xs space-y-3">
           <div className="flex items-center justify-between border-b border-gray-100 pb-2">
             <div>
-              <h3 className="text-xs font-black uppercase tracking-wider text-gray-800">
-                12-Month Schedule ({selectedSeason?.name})
+              <h3 className="text-xs sm:text-sm font-bold uppercase tracking-wider text-gray-800">
+                Monthly Due Schedule ({selectedSeason?.name})
               </h3>
-              <p className="text-[10px] font-semibold text-gray-500">
-                Customize targets per month or lock/unlock months
+              <p className="text-[10px] text-gray-500 font-medium">
+                Tap any month card to adjust target amounts or lock/unlock
               </p>
             </div>
           </div>
@@ -674,39 +740,50 @@ export default function AdminSeasonManager({
               return (
                 <div
                   key={month.monthKey}
-                  className={`bg-gray-50 border rounded-xl p-2.5 flex flex-col justify-between transition-all relative ${
-                    isLocked ? 'border-red-200 bg-red-50/20' : 'border-gray-200 hover:border-amber-400 hover:shadow-sm'
+                  onClick={() => {
+                    setEditingMonth(month);
+                    setEditAmount(String(month.dueAmount));
+                    setEditReason(month.lockReason || '');
+                    setShowEditMonthModal(true);
+                  }}
+                  className={`bg-white border rounded-xl p-2.5 sm:p-3 flex flex-col justify-between transition-all relative cursor-pointer active:scale-98 select-none ${
+                    isLocked ? 'border-red-200 bg-red-50/40' : 'border-gray-200 hover:border-amber-400 hover:shadow-xs shadow-2xs'
                   }`}
                 >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[9px] font-black uppercase tracking-wider text-gray-500">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-gray-500">
                       {month.monthOrder}. {month.monthKey}
                     </span>
                     <button
-                      onClick={() => handleToggleLock(month)}
-                      className={`p-0.5 rounded text-xs ${month.locked ? 'text-red-500 hover:bg-red-50' : 'text-gray-400 hover:text-gray-700'}`}
-                      title={month.locked ? 'Locked: Click to Unlock' : 'Open: Click to Lock'}
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditingMonth(month);
+                        setEditAmount(String(month.dueAmount));
+                        setEditReason(month.lockReason || '');
+                        setShowEditMonthModal(true);
+                      }}
+                      className="w-6 h-6 rounded-md bg-gray-50 hover:bg-gray-100 border border-gray-200 flex items-center justify-center text-gray-500 hover:text-gray-800 transition-colors shadow-2xs"
+                      title="Edit month target"
+                      aria-label="Edit month target"
                     >
-                      {month.locked ? <Lock className="w-3 h-3" /> : <Unlock className="w-3 h-3" />}
+                      <Edit3 className="w-3 h-3" />
                     </button>
                   </div>
 
-                  <div className="my-0.5">
-                    <span className="text-[11px] font-bold text-gray-700 block truncate">{month.monthName}</span>
-                    <span className="text-base font-black text-gray-900 block mt-0.5">₹{month.dueAmount}</span>
+                  <div className="my-2">
+                    <span className="text-lg sm:text-xl font-bold text-gray-900 block tracking-tight">₹{month.dueAmount}</span>
+                    {month.lockReason && (
+                      <span className="text-[10px] text-gray-400 font-medium truncate block mt-0.5">{month.lockReason}</span>
+                    )}
                   </div>
 
-                  <button
-                    onClick={() => {
-                      setEditingMonth(month);
-                      setEditAmount(String(month.dueAmount));
-                      setEditReason('');
-                      setShowEditMonthModal(true);
-                    }}
-                    className="mt-1.5 w-full py-1 rounded-md bg-white border border-gray-200 text-[9px] font-black uppercase tracking-wider text-gray-800 hover:bg-gray-100 flex items-center justify-center gap-1 shadow-2xs cursor-pointer"
-                  >
-                    <Edit3 className="w-2.5 h-2.5" /> Edit Target
-                  </button>
+                  <div className="flex items-center justify-between pt-1 border-t border-gray-100 text-[10px] font-semibold">
+                    <span className={isLocked ? 'text-red-500 flex items-center gap-0.5' : 'text-emerald-600 flex items-center gap-0.5'}>
+                      {isLocked ? '🔒 Locked' : '🟢 Active'}
+                    </span>
+                    <span className="text-gray-400 font-normal">Edit</span>
+                  </div>
                 </div>
               );
             })}
@@ -797,35 +874,40 @@ export default function AdminSeasonManager({
           ) : (
             <div className="space-y-2">
               {pendingChandaPayments.map((payment) => (
-                <div key={payment.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-xl border border-amber-200 bg-amber-50/40">
-                  <div>
+                <div key={payment.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 p-3 rounded-xl border border-amber-200 bg-amber-50/50 shadow-2xs">
+                  <div className="space-y-0.5">
                     <div className="flex items-center gap-2">
-                      <span className="text-xs sm:text-sm font-black text-gray-900">{payment.userName || 'Unknown'}</span>
-                      <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-black">
+                      <span className="text-xs sm:text-sm font-black text-gray-900">{payment.userName || payment.userId || 'Unknown'}</span>
+                      <span className="px-2 py-0.5 rounded-full bg-emerald-100 border border-emerald-200 text-emerald-800 text-[10px] font-black">
                         ₹{payment.amount || 0}
                       </span>
                     </div>
-                    <p className="text-[10px] text-gray-500 font-semibold mt-0.5">
-                      UTR: <span className="font-mono bg-white px-1 py-0.2 rounded border border-gray-200 text-gray-900">{payment.utr_number || 'N/A'}</span>
+                    <p className="text-[10px] text-gray-600 font-bold">
+                      UTR: <span className="font-mono bg-white px-1.5 py-0.5 rounded border border-gray-200 text-gray-900">{payment.utr_number || 'N/A'}</span>
+                      {payment.userEmail && <span className="text-gray-400 font-medium ml-1.5">• {payment.userEmail}</span>}
                     </p>
                     {payment.message && (
-                      <p className="text-[9px] text-gray-600 italic mt-0.5">&quot;{payment.message}&quot;</p>
+                      <p className="text-[10px] text-gray-600 italic mt-0.5">&quot;{payment.message}&quot;</p>
                     )}
                   </div>
 
-                  <div className="flex items-center gap-1.5 shrink-0">
+                  <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-auto">
                     {onApproveChanda && (
                       <button
-                        onClick={() => onApproveChanda(payment.id)}
-                        className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-[10px] sm:text-xs font-black uppercase tracking-wider hover:bg-emerald-700 shadow-sm"
+                        onClick={() => {
+                          askConfirm(`₹${payment.amount} contribution from ${payment.userName || 'Member'} approve karein?`, () => onApproveChanda(payment.id));
+                        }}
+                        className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-[10px] sm:text-xs font-black uppercase tracking-wider hover:bg-emerald-700 shadow-xs cursor-pointer active:scale-95"
                       >
                         Approve
                       </button>
                     )}
                     {onRejectChanda && (
                       <button
-                        onClick={() => onRejectChanda(payment.id)}
-                        className="px-2.5 py-1.5 rounded-lg bg-red-100 text-red-700 text-[10px] sm:text-xs font-black uppercase tracking-wider hover:bg-red-200"
+                        onClick={() => {
+                          askConfirm(`₹${payment.amount} payment request reject karein?`, () => onRejectChanda(payment.id));
+                        }}
+                        className="px-2.5 py-1.5 rounded-lg bg-red-100 text-red-700 text-[10px] sm:text-xs font-black uppercase tracking-wider hover:bg-red-200 border border-red-200 cursor-pointer active:scale-95"
                       >
                         Reject
                       </button>
@@ -858,11 +940,11 @@ export default function AdminSeasonManager({
                   placeholder="New Member Name"
                   value={newMemberName}
                   onChange={(e) => setNewMemberName(e.target.value)}
-                  className="px-2.5 py-1 rounded-lg border border-gray-200 text-xs font-bold bg-gray-50 outline-none"
+                  className="px-2.5 py-1.5 rounded-lg border border-gray-200 text-xs font-bold bg-gray-50 outline-none focus:bg-white"
                 />
                 <button
                   type="submit"
-                  className="px-2.5 py-1 rounded-lg bg-[#5a0000] text-white text-[10px] sm:text-xs font-black uppercase tracking-wider hover:bg-[#7a0000]"
+                  className="px-3 py-1.5 rounded-lg bg-[#5a0000] text-white text-[10px] sm:text-xs font-bold uppercase tracking-wider hover:bg-[#7a0000] transition-colors cursor-pointer"
                 >
                   Add Member
                 </button>
@@ -875,16 +957,16 @@ export default function AdminSeasonManager({
               const isExpanded = expandedMemberId === member.id;
               const memberExempt: string[] = member.exemptMonths || [];
               return (
-                <div key={member.id} className="rounded-xl border border-gray-200 bg-gray-50/70 p-2.5 flex flex-col justify-between">
+                <div key={member.id} className="rounded-2xl border border-gray-200 bg-gray-50/80 p-3 flex flex-col justify-between shadow-2xs">
                   <div className="flex items-center justify-between">
                     <div>
-                      <span className="text-xs font-black text-gray-900 block">{member.name}</span>
+                      <span className="text-xs font-bold text-gray-900 block">{member.name}</span>
                       <div className="flex items-center gap-1.5 mt-0.5">
                         {member.isHonorary && (
-                          <span className="text-[8px] font-bold uppercase text-yellow-700 bg-yellow-100 px-1.5 rounded">Honorary</span>
+                          <span className="text-[9px] font-bold uppercase text-yellow-800 bg-yellow-100 px-1.5 py-0.2 rounded-md">Honorary</span>
                         )}
                         {memberExempt.length > 0 && (
-                          <span className="text-[8px] font-bold text-blue-700">{memberExempt.length} mo exempt</span>
+                          <span className="text-[9px] font-bold text-blue-700 bg-blue-50 px-1.5 py-0.2 rounded-md">{memberExempt.length} mo exempt</span>
                         )}
                       </div>
                     </div>
@@ -893,15 +975,16 @@ export default function AdminSeasonManager({
                       <button
                         type="button"
                         onClick={() => setExpandedMemberId(isExpanded ? null : member.id)}
-                        className="px-2 py-0.5 rounded-md bg-white border border-gray-200 text-[9px] font-bold uppercase text-gray-700 hover:bg-gray-100"
+                        className="px-2 py-1 rounded-lg bg-white border border-gray-200 text-[9px] font-bold uppercase text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer shadow-2xs"
                       >
-                        {isExpanded ? 'Close' : 'Months'}
+                        {isExpanded ? 'Close' : 'Exempt Months'}
                       </button>
                       {onRemoveMember && (
                         <button
                           type="button"
                           onClick={() => onRemoveMember(member.id, member.name)}
-                          className="p-1 text-red-500 hover:bg-red-50 rounded"
+                          className="p-1 text-red-500 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                          title="Remove Member"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -910,11 +993,14 @@ export default function AdminSeasonManager({
                   </div>
 
                   {isExpanded && onToggleMemberExemptMonth && (
-                    <div className="mt-3 pt-2 border-t border-gray-200 bg-white p-2 rounded-xl">
-                      <span className="text-[9px] font-black uppercase tracking-wider text-gray-400 block mb-1.5">
-                        Toggle Exempt Months:
-                      </span>
-                      <div className="flex flex-wrap gap-1">
+                    <div className="mt-2.5 pt-2 border-t border-gray-200/70 bg-white p-2 rounded-xl">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-[9px] font-bold uppercase tracking-wider text-gray-500">
+                          Toggle Exempted Months:
+                        </span>
+                        <span className="text-[9px] text-gray-400 font-medium">Tap to block</span>
+                      </div>
+                      <div className="grid grid-cols-4 sm:grid-cols-6 gap-1">
                         {MANDAL_MONTHS.map((m) => {
                           const isBlocked = memberExempt.includes(m.key);
                           return (
@@ -922,9 +1008,10 @@ export default function AdminSeasonManager({
                               key={m.key}
                               type="button"
                               onClick={() => onToggleMemberExemptMonth(member, m.key)}
-                              className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase transition-all ${
-                                isBlocked ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                              className={`py-1 px-1 rounded-lg text-[9px] font-bold uppercase transition-all text-center cursor-pointer ${
+                                isBlocked ? 'bg-rose-600 text-white shadow-2xs' : 'bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-200'
                               }`}
+                              title={isBlocked ? `${m.name} is exempt` : `Click to exempt ${m.name}`}
                             >
                               {m.key} {isBlocked ? '🚫' : ''}
                             </button>
@@ -943,24 +1030,24 @@ export default function AdminSeasonManager({
       {/* ─── MODAL: CREATE NEW SEASON ────────────────────────── */}
       {showCreateModal && (
         <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-150">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 space-y-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-5 sm:p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-gray-100 pb-3">
               <div>
-                <h3 className="text-sm font-black uppercase tracking-wider text-gray-900">
+                <h3 className="text-sm font-bold uppercase tracking-wider text-gray-900">
                   Create New Chanda Season
                 </h3>
-                <p className="text-[10px] font-bold text-gray-400">
+                <p className="text-[10px] font-medium text-gray-400">
                   Set up future year rules without code edits
                 </p>
               </div>
-              <button onClick={() => setShowCreateModal(false)} className="p-1 text-gray-400 hover:text-gray-600">
+              <button onClick={() => setShowCreateModal(false)} className="p-1 text-gray-400 hover:text-gray-600 cursor-pointer">
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             <form onSubmit={handleCreateSeason} className="space-y-3">
               <div>
-                <label className="text-[10px] font-black uppercase text-gray-400 block mb-1">Season Name *</label>
+                <label className="text-[10px] font-bold uppercase text-gray-400 block mb-1">Season Name *</label>
                 <input
                   type="text"
                   required
@@ -972,7 +1059,7 @@ export default function AdminSeasonManager({
               </div>
 
               <div>
-                <label className="text-[10px] font-black uppercase text-gray-400 block mb-1">Display Title</label>
+                <label className="text-[10px] font-bold uppercase text-gray-400 block mb-1">Display Title</label>
                 <input
                   type="text"
                   placeholder="Ganpati Chanda Season 2026–27"
@@ -984,7 +1071,7 @@ export default function AdminSeasonManager({
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-[10px] font-black uppercase text-gray-400 block mb-1">Start Date</label>
+                  <label className="text-[10px] font-bold uppercase text-gray-400 block mb-1">Start Date</label>
                   <input
                     type="date"
                     value={newStartDate}
@@ -993,7 +1080,7 @@ export default function AdminSeasonManager({
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] font-black uppercase text-gray-400 block mb-1">End Date</label>
+                  <label className="text-[10px] font-bold uppercase text-gray-400 block mb-1">End Date</label>
                   <input
                     type="date"
                     value={newEndDate}
@@ -1010,9 +1097,9 @@ export default function AdminSeasonManager({
                     type="checkbox"
                     checked={copyPrevious}
                     onChange={(e) => setCopyPrevious(e.target.checked)}
-                    className="w-4 h-4 accent-[#5a0000] rounded"
+                    className="w-4 h-4 accent-[#5a0000] rounded cursor-pointer"
                   />
-                  <span className="text-xs font-black uppercase tracking-wider text-amber-950">
+                  <span className="text-xs font-bold uppercase tracking-wider text-amber-950">
                     Copy from previous season?
                   </span>
                 </label>
@@ -1036,18 +1123,18 @@ export default function AdminSeasonManager({
                 )}
               </div>
 
-              <div className="flex justify-end gap-2 pt-2">
+              <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
                 <button
                   type="button"
                   onClick={() => setShowCreateModal(false)}
-                  className="px-4 py-2.5 rounded-xl text-xs font-black uppercase bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  className="px-4 py-2.5 rounded-xl text-xs font-bold uppercase bg-gray-100 text-gray-700 hover:bg-gray-200 cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isCreating}
-                  className="px-5 py-2.5 rounded-xl text-xs font-black uppercase bg-[#5a0000] text-white hover:bg-[#7a0000] shadow-sm disabled:opacity-50"
+                  className="px-5 py-2.5 rounded-xl text-xs font-bold uppercase bg-[#5a0000] text-white hover:bg-[#7a0000] shadow-xs disabled:opacity-50 cursor-pointer"
                 >
                   {isCreating ? 'Creating...' : 'Create Draft Season'}
                 </button>
@@ -1060,19 +1147,19 @@ export default function AdminSeasonManager({
       {/* ─── MODAL: EDIT SEASON DETAILS ──────────────────────── */}
       {showEditSeasonModal && selectedSeason && (
         <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-150">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 space-y-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-5 sm:p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-              <h3 className="text-sm font-black uppercase tracking-wider text-gray-900">
+              <h3 className="text-sm font-bold uppercase tracking-wider text-gray-900">
                 Edit Season Settings ({selectedSeason.name})
               </h3>
-              <button onClick={() => setShowEditSeasonModal(false)} className="p-1 text-gray-400 hover:text-gray-600">
+              <button onClick={() => setShowEditSeasonModal(false)} className="p-1 text-gray-400 hover:text-gray-600 cursor-pointer">
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             <form onSubmit={handleSaveSeasonDetails} className="space-y-3">
               <div>
-                <label className="text-[10px] font-black uppercase text-gray-400 block mb-1">Season Name</label>
+                <label className="text-[10px] font-bold uppercase text-gray-400 block mb-1">Season Name</label>
                 <input
                   type="text"
                   required
@@ -1083,7 +1170,7 @@ export default function AdminSeasonManager({
               </div>
 
               <div>
-                <label className="text-[10px] font-black uppercase text-gray-400 block mb-1">Display Title</label>
+                <label className="text-[10px] font-bold uppercase text-gray-400 block mb-1">Display Title</label>
                 <input
                   type="text"
                   value={editSeasonDisplayName}
@@ -1093,7 +1180,7 @@ export default function AdminSeasonManager({
               </div>
 
               <div>
-                <label className="text-[10px] font-black uppercase text-gray-400 block mb-1">Season Status</label>
+                <label className="text-[10px] font-bold uppercase text-gray-400 block mb-1">Season Status</label>
                 <select
                   value={editSeasonStatus}
                   onChange={(e) => setEditSeasonStatus(e.target.value as SeasonStatus)}
@@ -1107,7 +1194,7 @@ export default function AdminSeasonManager({
               </div>
 
               <div>
-                <label className="text-[10px] font-black uppercase text-gray-400 block mb-1">Receipt Prefix</label>
+                <label className="text-[10px] font-bold uppercase text-gray-400 block mb-1">Receipt Prefix</label>
                 <input
                   type="text"
                   value={editSeasonPrefix}
@@ -1116,20 +1203,118 @@ export default function AdminSeasonManager({
                 />
               </div>
 
-              <div className="flex justify-end gap-2 pt-2">
+              <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
                 <button
                   type="button"
                   onClick={() => setShowEditSeasonModal(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-black uppercase bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  className="px-4 py-2.5 rounded-xl text-xs font-bold uppercase bg-gray-100 text-gray-700 hover:bg-gray-200 cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isUpdatingSeason}
-                  className="px-5 py-2 rounded-xl text-xs font-black uppercase bg-[#5a0000] text-white hover:bg-[#7a0000] shadow-sm disabled:opacity-50"
+                  className="px-5 py-2.5 rounded-xl text-xs font-bold uppercase bg-[#5a0000] text-white hover:bg-[#7a0000] shadow-xs disabled:opacity-50 cursor-pointer"
                 >
                   {isUpdatingSeason ? 'Saving...' : 'Save Settings'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ─── MODAL: ADD CUSTOM MONTH / DUE TARGET ───────────── */}
+      {showAddMonthModal && (
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-5 sm:p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <div>
+                <h3 className="text-sm font-bold uppercase tracking-wider text-gray-900">
+                  Add Month / Schedule Target
+                </h3>
+                <p className="text-[10px] text-gray-500 mt-0.5">
+                  e.g. Ganpati Visarjan target, Navratri, or custom month
+                </p>
+              </div>
+              <button onClick={() => setShowAddMonthModal(false)} className="p-1 text-gray-400 hover:text-gray-600 cursor-pointer">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddCustomMonth} className="space-y-3">
+              <div>
+                <label className="text-[10px] font-bold uppercase text-gray-400 block mb-1">Target Key (Short Code) *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. GANPATI, SEPT-14, NOV-EXT"
+                  value={newMonthKey}
+                  onChange={(e) => setNewMonthKey(e.target.value.toUpperCase())}
+                  className="w-full px-3 py-2 rounded-xl border border-gray-200 text-xs font-bold bg-gray-50 outline-none uppercase"
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold uppercase text-gray-400 block mb-1">Display Title</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Ganpati 14th Sept Target"
+                  value={newMonthName}
+                  onChange={(e) => setNewMonthName(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-gray-200 text-xs font-bold bg-gray-50 outline-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[10px] font-bold uppercase text-gray-400 block mb-1">Due Amount (₹) *</label>
+                  <input
+                    type="number"
+                    required
+                    min="0"
+                    value={newMonthAmount}
+                    onChange={(e) => setNewMonthAmount(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm font-bold bg-gray-50 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold uppercase text-gray-400 block mb-1">Order Index</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={newMonthOrder}
+                    onChange={(e) => setNewMonthOrder(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm font-bold bg-gray-50 outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold uppercase text-gray-400 block mb-1">Target Notes</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Sab log milke ₹250 jama karenge"
+                  value={newMonthNotes}
+                  onChange={(e) => setNewMonthNotes(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-gray-200 text-xs font-medium bg-gray-50 outline-none"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAddMonthModal(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-bold uppercase bg-gray-100 text-gray-700 hover:bg-gray-200 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isAddingMonth}
+                  className="px-5 py-2 rounded-xl text-xs font-bold uppercase bg-[#5a0000] text-white hover:bg-[#7a0000] shadow-xs disabled:opacity-50 cursor-pointer"
+                >
+                  {isAddingMonth ? 'Adding...' : 'Add to Schedule'}
                 </button>
               </div>
             </form>
@@ -1140,55 +1325,84 @@ export default function AdminSeasonManager({
       {/* ─── MODAL: EDIT SINGLE MONTH AMOUNT ────────────────── */}
       {showEditMonthModal && editingMonth && (
         <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-150">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-5 sm:p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-              <h3 className="text-sm font-black uppercase tracking-wider text-gray-900">
-                Edit {editingMonth.monthName} Target
-              </h3>
-              <button onClick={() => setShowEditMonthModal(false)} className="p-1 text-gray-400 hover:text-gray-600">
+              <div>
+                <h3 className="text-sm font-bold uppercase tracking-wider text-gray-900">
+                  Edit {editingMonth.monthKey} Target
+                </h3>
+                <p className="text-[10px] text-gray-400">{editingMonth.monthName || editingMonth.monthKey}</p>
+              </div>
+              <button onClick={() => setShowEditMonthModal(false)} className="p-1 text-gray-400 hover:text-gray-600 cursor-pointer">
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             <form onSubmit={handleSaveMonthAmount} className="space-y-3">
               <div>
-                <label className="text-[10px] font-black uppercase text-gray-400 block mb-1">Fixed Due Amount (₹) *</label>
+                <label className="text-[10px] font-bold uppercase text-gray-400 block mb-1">Fixed Due Amount (₹) *</label>
                 <input
                   type="number"
                   required
                   min="0"
                   value={editAmount}
                   onChange={(e) => setEditAmount(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm font-black bg-gray-50 outline-none focus:bg-white focus:border-[#5a0000]"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm font-bold bg-gray-50 outline-none focus:bg-white focus:border-[#5a0000]"
                 />
               </div>
 
               <div>
-                <label className="text-[10px] font-black uppercase text-gray-400 block mb-1">Reason / Note</label>
+                <label className="text-[10px] font-bold uppercase text-gray-400 block mb-1">Reason / Note</label>
                 <input
                   type="text"
-                  placeholder="e.g. Festival preparation increment"
+                  placeholder="e.g. Festival preparation target"
                   value={editReason}
                   onChange={(e) => setEditReason(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-gray-200 text-xs font-bold bg-gray-50 outline-none"
+                  className="w-full px-3 py-2 rounded-xl border border-gray-200 text-xs font-medium bg-gray-50 outline-none"
                 />
               </div>
 
-              <div className="flex justify-end gap-2 pt-2">
+              <div className="flex items-center justify-between p-2.5 bg-gray-50 rounded-xl border border-gray-100">
+                <div>
+                  <p className="text-xs font-bold text-gray-800">Lock Month</p>
+                  <p className="text-[10px] text-gray-400">Prevent member contributions</p>
+                </div>
                 <button
                   type="button"
-                  onClick={() => setShowEditMonthModal(false)}
-                  className="px-4 py-2.5 rounded-xl text-xs font-black uppercase bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  onClick={() => handleToggleLock(editingMonth)}
+                  className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer ${
+                    editingMonth.locked ? 'bg-red-100 text-red-700 border border-red-200' : 'bg-gray-200 text-gray-700'
+                  }`}
                 >
-                  Cancel
+                  {editingMonth.locked ? 'Locked 🔒' : 'Open 🟢'}
                 </button>
+              </div>
+
+              <div className="flex items-center justify-between gap-2 pt-2">
                 <button
-                  type="submit"
-                  disabled={isUpdatingMonth}
-                  className="px-5 py-2.5 rounded-xl text-xs font-black uppercase bg-[#5a0000] text-white hover:bg-[#7a0000] shadow-sm disabled:opacity-50"
+                  type="button"
+                  onClick={() => handleDeleteCustomMonth(editingMonth.monthKey)}
+                  className="px-3 py-2 rounded-xl text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200 cursor-pointer"
+                  title="Delete target"
                 >
-                  {isUpdatingMonth ? 'Updating...' : 'Save Target'}
+                  <Trash2 className="w-3.5 h-3.5" />
                 </button>
+                <div className="flex gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setShowEditMonthModal(false)}
+                    className="px-3.5 py-2 rounded-xl text-xs font-bold uppercase bg-gray-100 text-gray-700 hover:bg-gray-200 cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isUpdatingMonth}
+                    className="px-4 py-2 rounded-xl text-xs font-bold uppercase bg-[#5a0000] text-white hover:bg-[#7a0000] shadow-xs disabled:opacity-50 cursor-pointer"
+                  >
+                    {isUpdatingMonth ? 'Updating...' : 'Save Target'}
+                  </button>
+                </div>
               </div>
             </form>
           </div>
@@ -1198,45 +1412,45 @@ export default function AdminSeasonManager({
       {/* ─── MODAL: BULK EDIT MONTHS ────────────────────────── */}
       {showBulkModal && (
         <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-150">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-5 sm:p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-              <h3 className="text-sm font-black uppercase tracking-wider text-gray-900">
+              <h3 className="text-sm font-bold uppercase tracking-wider text-gray-900">
                 Bulk Set Monthly Targets
               </h3>
-              <button onClick={() => setShowBulkModal(false)} className="p-1 text-gray-400 hover:text-gray-600">
+              <button onClick={() => setShowBulkModal(false)} className="p-1 text-gray-400 hover:text-gray-600 cursor-pointer">
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             <form onSubmit={handleBulkUpdate} className="space-y-3">
-              <p className="text-xs font-semibold text-gray-600">
+              <p className="text-xs font-medium text-gray-600">
                 Apply this fixed amount across all 12 months in <span className="font-bold text-[#5a0000]">{selectedSeason?.name}</span>.
               </p>
 
               <div>
-                <label className="text-[10px] font-black uppercase text-gray-400 block mb-1">Target Amount (₹)</label>
+                <label className="text-[10px] font-bold uppercase text-gray-400 block mb-1">Target Amount (₹)</label>
                 <input
                   type="number"
                   required
                   min="0"
                   value={bulkAmount}
                   onChange={(e) => setBulkAmount(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm font-black bg-gray-50 outline-none focus:bg-white focus:border-[#5a0000]"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm font-bold bg-gray-50 outline-none focus:bg-white focus:border-[#5a0000]"
                 />
               </div>
 
-              <div className="flex justify-end gap-2 pt-2">
+              <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
                 <button
                   type="button"
                   onClick={() => setShowBulkModal(false)}
-                  className="px-4 py-2.5 rounded-xl text-xs font-black uppercase bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  className="px-4 py-2.5 rounded-xl text-xs font-bold uppercase bg-gray-100 text-gray-700 hover:bg-gray-200 cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isBulkUpdating}
-                  className="px-5 py-2.5 rounded-xl text-xs font-black uppercase bg-amber-500 text-white hover:bg-amber-600 shadow-sm disabled:opacity-50"
+                  className="px-5 py-2.5 rounded-xl text-xs font-bold uppercase bg-amber-500 text-white hover:bg-amber-600 shadow-xs disabled:opacity-50 cursor-pointer"
                 >
                   {isBulkUpdating ? 'Applying...' : 'Apply to All Months'}
                 </button>
@@ -1249,42 +1463,42 @@ export default function AdminSeasonManager({
       {/* ─── MODAL: ADD MEMBER OVERRIDE ─────────────────────── */}
       {showOverrideModal && (
         <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-150">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 space-y-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-5 sm:p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-              <h3 className="text-sm font-black uppercase tracking-wider text-gray-900">
+              <h3 className="text-sm font-bold uppercase tracking-wider text-gray-900">
                 Add Custom Member / Flat Override
               </h3>
-              <button onClick={() => setShowOverrideModal(false)} className="p-1 text-gray-400 hover:text-gray-600">
+              <button onClick={() => setShowOverrideModal(false)} className="p-1 text-gray-400 hover:text-gray-600 cursor-pointer">
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             <form onSubmit={handleSaveOverride} className="space-y-3">
               <div>
-                <label className="text-[10px] font-black uppercase text-gray-400 block mb-1">Member Name</label>
+                <label className="text-[10px] font-bold uppercase text-gray-400 block mb-1">Member Name</label>
                 <input
                   type="text"
                   placeholder="e.g. Ronik Sahu"
                   value={overrideUser}
                   onChange={(e) => setOverrideUser(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-gray-200 text-xs font-bold bg-gray-50 outline-none"
+                  className="w-full px-3 py-2 rounded-xl border border-gray-200 text-xs font-bold bg-gray-50 outline-none focus:bg-white focus:border-[#5a0000]"
                 />
               </div>
 
               <div>
-                <label className="text-[10px] font-black uppercase text-gray-400 block mb-1">Flat (Optional)</label>
+                <label className="text-[10px] font-bold uppercase text-gray-400 block mb-1">Flat (Optional)</label>
                 <input
                   type="text"
                   placeholder="e.g. A-101"
                   value={overrideFlat}
                   onChange={(e) => setOverrideFlat(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-gray-200 text-xs font-bold bg-gray-50 outline-none"
+                  className="w-full px-3 py-2 rounded-xl border border-gray-200 text-xs font-bold bg-gray-50 outline-none focus:bg-white focus:border-[#5a0000]"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-[10px] font-black uppercase text-gray-400 block mb-1">Applicable Month</label>
+                  <label className="text-[10px] font-bold uppercase text-gray-400 block mb-1">Applicable Month</label>
                   <select
                     value={overrideMonth}
                     onChange={(e) => setOverrideMonth(e.target.value)}
@@ -1298,41 +1512,41 @@ export default function AdminSeasonManager({
                 </div>
 
                 <div>
-                  <label className="text-[10px] font-black uppercase text-gray-400 block mb-1">Override Amount (₹)</label>
+                  <label className="text-[10px] font-bold uppercase text-gray-400 block mb-1">Override Amount (₹)</label>
                   <input
                     type="number"
                     required
                     min="0"
                     value={overrideAmount}
                     onChange={(e) => setOverrideAmount(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-gray-200 text-xs font-bold bg-gray-50 outline-none"
+                    className="w-full px-3 py-2 rounded-xl border border-gray-200 text-xs font-bold bg-gray-50 outline-none focus:bg-white focus:border-[#5a0000]"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="text-[10px] font-black uppercase text-gray-400 block mb-1">Reason</label>
+                <label className="text-[10px] font-bold uppercase text-gray-400 block mb-1">Reason</label>
                 <input
                   type="text"
                   placeholder="Special arrangement / student discount"
                   value={overrideReason}
                   onChange={(e) => setOverrideReason(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-gray-200 text-xs font-bold bg-gray-50 outline-none"
+                  className="w-full px-3 py-2 rounded-xl border border-gray-200 text-xs font-medium bg-gray-50 outline-none focus:bg-white focus:border-[#5a0000]"
                 />
               </div>
 
-              <div className="flex justify-end gap-2 pt-2">
+              <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
                 <button
                   type="button"
                   onClick={() => setShowOverrideModal(false)}
-                  className="px-4 py-2.5 rounded-xl text-xs font-black uppercase bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  className="px-4 py-2.5 rounded-xl text-xs font-bold uppercase bg-gray-100 text-gray-700 hover:bg-gray-200 cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSavingOverride}
-                  className="px-5 py-2.5 rounded-xl text-xs font-black uppercase bg-[#5a0000] text-white hover:bg-[#7a0000] shadow-sm disabled:opacity-50"
+                  className="px-5 py-2.5 rounded-xl text-xs font-bold uppercase bg-[#5a0000] text-white hover:bg-[#7a0000] shadow-xs disabled:opacity-50 cursor-pointer"
                 >
                   {isSavingOverride ? 'Saving...' : 'Save Override'}
                 </button>

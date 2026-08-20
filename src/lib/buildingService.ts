@@ -37,7 +37,13 @@ export const getBuildings = async (): Promise<Building[]> => {
 
 export const subscribeBuildings = (callback: (buildings: Building[]) => void): Unsubscribe => {
   const q = query(collection(db, BUILDINGS_COLLECTION), orderBy('name', 'asc'));
-  return onSnapshot(q, (snap) => {
+  return onSnapshot(q, async (snap) => {
+    if (snap.empty) {
+      // Auto-initialize default building if empty
+      try {
+        await migrateLegacyBuildingChanda('siyaram_main');
+      } catch (_) {}
+    }
     const data = snap.docs.map(d => ({ id: d.id, ...d.data() } as Building));
     callback(data);
   }, (err) => {
