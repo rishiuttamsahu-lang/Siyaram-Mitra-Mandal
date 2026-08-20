@@ -88,7 +88,128 @@ const CustomSelect = ({ value, onChange, options, placeholder, theme = 'light', 
     </div>
   );
 };
-// 🔥 COMPONENT KHATAM
+
+// 🔥 MODERN PROFESSIONAL GLASSMORPHIC SEASON DROPDOWN
+const SeasonDropdown = ({
+  seasons,
+  selectedId,
+  onSelect,
+}: {
+  seasons: ChandaSeason[];
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (ref.current && !ref.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const activeSeason = seasons.find((s) => s.id === selectedId) || seasons[0];
+
+  return (
+    <div className="relative inline-block text-left" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className={`group inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[9px] sm:text-[10px] font-bold uppercase tracking-wider transition-all duration-200 cursor-pointer shadow-xs ${
+          isOpen
+            ? 'bg-black/80 text-yellow-300 border border-yellow-400 ring-2 ring-yellow-400/20'
+            : 'bg-black/40 hover:bg-black/60 text-yellow-200 border border-yellow-500/30 hover:border-yellow-400/60'
+        } backdrop-blur-md`}
+        aria-expanded={isOpen}
+        aria-label="Select Season"
+      >
+        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+        <span className="truncate max-w-[130px] sm:max-w-[180px]">
+          {activeSeason?.name ? `Season ${activeSeason.name}` : 'Select Season'}
+        </span>
+        {activeSeason?.status && (
+          <span className={`text-[8px] px-1.5 py-0.2 rounded font-extrabold uppercase ${
+            activeSeason.status === 'active'
+              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+              : 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/30'
+          }`}>
+            {activeSeason.status}
+          </span>
+        )}
+        <ChevronDown
+          className={`w-3 h-3 text-yellow-400/70 transition-transform duration-200 shrink-0 ${
+            isOpen ? 'rotate-180 text-yellow-300' : 'group-hover:text-yellow-300'
+          }`}
+        />
+      </button>
+
+      {isOpen && (
+        <div className="absolute top-[calc(100%+6px)] left-1/2 -translate-x-1/2 min-w-[210px] sm:min-w-[250px] bg-[#1a0505]/95 backdrop-blur-2xl border border-yellow-500/30 rounded-2xl shadow-[0_12px_40px_rgba(0,0,0,0.6)] p-1.5 z-[9999] animate-in fade-in zoom-in-95 duration-150">
+          <div className="px-2.5 py-1.5 border-b border-white/10 flex items-center justify-between">
+            <span className="text-[8px] sm:text-[9px] font-bold uppercase tracking-widest text-yellow-500/80">
+              Select Chanda Season
+            </span>
+            <span className="text-[8px] text-gray-400 font-medium">
+              {seasons.length} Available
+            </span>
+          </div>
+
+          <div className="max-h-56 overflow-y-auto custom-scrollbar p-1 space-y-1">
+            {seasons.map((s) => {
+              const isSelected = s.id === selectedId;
+              const isActive = s.status === 'active';
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => {
+                    onSelect(s.id);
+                    setIsOpen(false);
+                  }}
+                  className={`w-full text-left px-2.5 py-2 rounded-xl transition-all flex items-center justify-between gap-2 cursor-pointer ${
+                    isSelected
+                      ? 'bg-yellow-500/20 text-yellow-200 border border-yellow-500/40 shadow-xs'
+                      : 'hover:bg-white/5 text-gray-300 hover:text-white border border-transparent'
+                  }`}
+                >
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs font-bold text-white truncate">
+                        Season {s.name}
+                      </span>
+                      <span
+                        className={`text-[8px] px-1.5 py-0.2 rounded font-extrabold uppercase ${
+                          isActive
+                            ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                            : 'bg-white/10 text-gray-400 border border-white/10'
+                        }`}
+                      >
+                        {s.status}
+                      </span>
+                    </div>
+                    {s.displayName && s.displayName !== s.name && (
+                      <p className="text-[9px] text-gray-400 truncate mt-0.5 font-medium">
+                        {s.displayName}
+                      </p>
+                    )}
+                  </div>
+
+                  {isSelected && (
+                    <CheckCircle2 className="w-3.5 h-3.5 text-yellow-400 shrink-0" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const PREVIOUS_YEAR = 6500;
 const MONTHS = [
@@ -867,18 +988,12 @@ export default function Dashboard({ userData }: { userData: any }) {
             </p>
 
             {dynSeasons.length > 0 && (
-              <div className="flex items-center justify-center gap-1.5 mt-1.5">
-                <select
-                  value={selectedDashboardSeasonId || ''}
-                  onChange={(e) => setSelectedDashboardSeasonId(e.target.value)}
-                  className="bg-black/40 text-yellow-300 text-[8px] sm:text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full border border-yellow-500/30 outline-none backdrop-blur-md cursor-pointer hover:bg-black/60 transition-colors"
-                >
-                  {dynSeasons.map(s => (
-                    <option key={s.id} value={s.id} className="bg-gray-900 text-white">
-                      Season {s.name} ({s.status})
-                    </option>
-                  ))}
-                </select>
+              <div className="flex items-center justify-center mt-2">
+                <SeasonDropdown
+                  seasons={dynSeasons}
+                  selectedId={selectedDashboardSeasonId}
+                  onSelect={setSelectedDashboardSeasonId}
+                />
               </div>
             )}
           </div>

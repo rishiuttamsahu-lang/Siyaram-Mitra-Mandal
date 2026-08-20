@@ -682,39 +682,6 @@ export default function AdminSeasonManager({
                   Members ({stats.membersCount})
                 </button>
               </div>
-
-              {activeSubView === 'schedule' && (
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <button
-                    onClick={() => {
-                      setNewMonthKey('');
-                      setNewMonthName('');
-                      setNewMonthAmount('250');
-                      setNewMonthOrder(String(dues.length + 1));
-                      setNewMonthNotes('');
-                      setShowAddMonthModal(true);
-                    }}
-                    className="px-2.5 py-1.5 rounded-lg bg-[#5a0000] text-white font-bold text-[10px] sm:text-xs uppercase tracking-wider hover:bg-[#7a0000] flex items-center gap-1 shadow-2xs cursor-pointer active:scale-95"
-                  >
-                    <Plus className="w-3 h-3" /> Add Target
-                  </button>
-                  <button
-                    onClick={() => setShowBulkModal(true)}
-                    className="px-2.5 py-1.5 rounded-lg bg-gray-100 text-gray-800 font-bold text-[10px] sm:text-xs uppercase tracking-wider hover:bg-gray-200 flex items-center gap-1 border border-gray-200 cursor-pointer"
-                  >
-                    <Edit3 className="w-3 h-3" /> Bulk Set
-                  </button>
-                </div>
-              )}
-
-              {activeSubView === 'overrides' && (
-                <button
-                  onClick={() => setShowOverrideModal(true)}
-                  className="px-2.5 py-1.5 rounded-lg bg-[#5a0000] text-white font-bold text-[10px] sm:text-xs uppercase tracking-wider hover:bg-[#7a0000] flex items-center gap-1 shrink-0 cursor-pointer shadow-xs"
-                >
-                  <Plus className="w-3 h-3" /> Add Override
-                </button>
-              )}
             </div>
           </div>
         )}
@@ -723,7 +690,7 @@ export default function AdminSeasonManager({
       {/* ─── TAB 1: MONTHLY DUE SCHEDULE MATRIX ────────────── */}
       {selectedSeasonId && activeSubView === 'schedule' && (
         <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4 shadow-xs space-y-3">
-          <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-2.5">
             <div>
               <h3 className="text-xs sm:text-sm font-bold uppercase tracking-wider text-gray-800">
                 Monthly Due Schedule ({selectedSeason?.name})
@@ -731,6 +698,30 @@ export default function AdminSeasonManager({
               <p className="text-[10px] text-gray-500 font-medium">
                 Tap any month card to adjust target amounts or lock/unlock
               </p>
+            </div>
+
+            <div className="flex items-center gap-1.5 self-end sm:self-auto shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  setNewMonthKey('');
+                  setNewMonthName('');
+                  setNewMonthAmount('250');
+                  setNewMonthOrder(String(dues.length + 1));
+                  setNewMonthNotes('');
+                  setShowAddMonthModal(true);
+                }}
+                className="px-3 py-1.5 rounded-lg bg-[#5a0000] text-white font-bold text-[10px] sm:text-xs uppercase tracking-wider hover:bg-[#7a0000] flex items-center gap-1 shadow-2xs cursor-pointer active:scale-95 transition-all"
+              >
+                <Plus className="w-3.5 h-3.5" /> Add Target
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowBulkModal(true)}
+                className="px-2.5 py-1.5 rounded-lg bg-gray-100 text-gray-700 font-bold text-[10px] sm:text-xs uppercase tracking-wider hover:bg-gray-200 flex items-center gap-1 border border-gray-200 cursor-pointer transition-colors"
+              >
+                <Edit3 className="w-3 h-3" /> Bulk Set
+              </button>
             </div>
           </div>
 
@@ -763,7 +754,7 @@ export default function AdminSeasonManager({
                         setEditReason(month.lockReason || '');
                         setShowEditMonthModal(true);
                       }}
-                      className="w-6 h-6 rounded-md bg-gray-50 hover:bg-gray-100 border border-gray-200 flex items-center justify-center text-gray-500 hover:text-gray-800 transition-colors shadow-2xs"
+                      className="w-6 h-6 rounded-md bg-gray-50 hover:bg-gray-100 border border-gray-200 flex items-center justify-center text-gray-500 hover:text-gray-800 transition-colors shadow-2xs cursor-pointer"
                       title="Edit month target"
                       aria-label="Edit month target"
                     >
@@ -794,12 +785,12 @@ export default function AdminSeasonManager({
       {/* ─── TAB 2: MEMBER OVERRIDES ────────────────────────── */}
       {selectedSeasonId && activeSubView === 'overrides' && (
         <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4 shadow-sm space-y-3">
-          <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-2">
             <div>
-              <h3 className="text-xs font-black uppercase tracking-wider text-gray-800">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-gray-800">
                 Custom Member / Flat Overrides
               </h3>
-              <p className="text-[10px] font-semibold text-gray-500">
+              <p className="text-[10px] font-medium text-gray-500">
                 Special arrangements taking precedence over default schedule
               </p>
             </div>
