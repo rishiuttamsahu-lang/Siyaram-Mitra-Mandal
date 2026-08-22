@@ -408,15 +408,15 @@ export default function Dashboard({ userData }: { userData: any }) {
   useEffect(() => {
     const unsubMembers = onSnapshot(collection(db, "mandal_members"), (snap) => {
       const fetchedMembers: Member[] = snap.docs.map(doc => ({
-        id: doc.data().id,
-        name: doc.data().name,
+        id: doc.data().id !== undefined ? (typeof doc.data().id === 'number' ? doc.data().id : Number(doc.data().id) || doc.data().id) : (isNaN(Number(doc.id)) ? (doc.id as any) : Number(doc.id)),
+        name: doc.data().name || '',
         payments: doc.data().payments || {},
         isHonorary: doc.data().isHonorary || false,
         isRemoved: doc.data().isRemoved || false,
         exemptMonths: doc.data().exemptMonths || [],
       }));
       // Sort by ID
-      fetchedMembers.sort((a, b) => a.id - b.id);
+      fetchedMembers.sort((a, b) => (Number(a.id) || 0) - (Number(b.id) || 0));
       setMembers(fetchedMembers);
     });
 

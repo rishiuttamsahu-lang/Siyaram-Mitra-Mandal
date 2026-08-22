@@ -1248,13 +1248,14 @@ export default function AdminSeasonManager({
                           const monthK = m.monthKey;
                           const mId = m.id;
                           const legacyKey = m.key;
-                          const isBlocked = Boolean(
-                            (pKey && memberExempt.includes(pKey)) ||
-                            (monthK && memberExempt.includes(monthK)) ||
-                            (mId && memberExempt.includes(mId)) ||
-                            (legacyKey && memberExempt.includes(legacyKey))
-                          );
                           const primaryKey = pKey || monthK || mId || legacyKey;
+                          const isBlocked = memberExempt.some((em: string) =>
+                            isMonthMatching({ periodKeyOrMonthKey: primaryKey, due: m }, em) ||
+                            (pKey && em === pKey) ||
+                            (monthK && em === monthK) ||
+                            (mId && em === mId) ||
+                            (legacyKey && em === legacyKey)
+                          );
                           const shortName = m.monthName ? m.monthName.slice(0, 4).toUpperCase() : (m.name ? m.name.slice(0, 4).toUpperCase() : primaryKey);
                           const yearTag = m.year ? `'${String(m.year).slice(-2)}` : '';
 
@@ -1263,7 +1264,13 @@ export default function AdminSeasonManager({
                               key={primaryKey}
                               type="button"
                               onClick={() => {
-                                const allAliases = [pKey, monthK, mId, legacyKey].filter(Boolean) as string[];
+                                const allAliases = Array.from(new Set([
+                                  ...getPeriodMatchingAliases(primaryKey, m),
+                                  pKey,
+                                  monthK,
+                                  mId,
+                                  legacyKey
+                                ].filter(Boolean))) as string[];
                                 onToggleMemberExemptMonth(member, primaryKey, allAliases);
                               }}
                               className={`py-1 px-1 rounded-lg text-[9px] transition-all text-center cursor-pointer select-none ${

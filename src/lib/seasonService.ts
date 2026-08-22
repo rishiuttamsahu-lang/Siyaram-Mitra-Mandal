@@ -106,26 +106,37 @@ export const getMonthNumberFromNameOrKey = (keyOrName: string): number | null =>
     if (n >= 1 && n <= 12) return n;
   }
 
+  // "MONTH_1" or "M1" or "MONTH1" or "MONTH_01"
+  const mPrefixMatch = s.match(/^(?:MONTH|M)[_-\s]*(\d{1,2})$/);
+  if (mPrefixMatch) {
+    const n = parseInt(mPrefixMatch[1], 10);
+    if (n >= 1 && n <= 12) return n;
+  }
+
   // Period format "YYYY-MM" or "YYYY-M"
-  const ymMatch = s.match(/^\d{4}-(\d{1,2})$/);
+  const ymMatch = s.match(/^\d{4}[-_](\d{1,2})$/);
   if (ymMatch) {
     const n = parseInt(ymMatch[1], 10);
     if (n >= 1 && n <= 12) return n;
   }
 
+  // Month + Year format e.g. "SEPT '25", "OCTO 2025", "JUNE-26", "2025-09"
+  const monthLeadMatch = s.match(/^([A-Z]+)/);
+  const leadStr = monthLeadMatch ? monthLeadMatch[1] : s;
+
   // Check against month names / keys
-  if (s.startsWith('SEPT') || s.startsWith('SEP')) return 9;
-  if (s.startsWith('OCT')) return 10;
-  if (s.startsWith('NOV')) return 11;
-  if (s.startsWith('DEC')) return 12;
-  if (s.startsWith('JAN')) return 1;
-  if (s.startsWith('FEB')) return 2;
-  if (s.startsWith('MAR')) return 3;
-  if (s.startsWith('APR')) return 4;
-  if (s.startsWith('MAY')) return 5;
-  if (s.startsWith('JUN')) return 6;
-  if (s.startsWith('JUL')) return 7;
-  if (s.startsWith('AUG')) return 8;
+  if (leadStr.startsWith('SEPT') || leadStr.startsWith('SEP')) return 9;
+  if (leadStr.startsWith('OCT')) return 10;
+  if (leadStr.startsWith('NOV')) return 11;
+  if (leadStr.startsWith('DEC')) return 12;
+  if (leadStr.startsWith('JAN')) return 1;
+  if (leadStr.startsWith('FEB')) return 2;
+  if (leadStr.startsWith('MAR')) return 3;
+  if (leadStr.startsWith('APR')) return 4;
+  if (leadStr.startsWith('MAY')) return 5;
+  if (leadStr.startsWith('JUN')) return 6;
+  if (leadStr.startsWith('JUL')) return 7;
+  if (leadStr.startsWith('AUG')) return 8;
 
   return null;
 };
@@ -141,7 +152,11 @@ export const getPeriodMatchingAliases = (
   const add = (v: any) => {
     if (v !== undefined && v !== null) {
       const str = String(v).trim().toUpperCase();
-      if (str) aliases.add(str);
+      if (str) {
+        aliases.add(str);
+        // Also add space-cleaned and hyphen-cleaned variants
+        aliases.add(str.replace(/[\s'-]/g, ''));
+      }
     }
   };
 
@@ -154,13 +169,17 @@ export const getPeriodMatchingAliases = (
     add(normDue.id);
     add(normDue.monthName);
     add((normDue as any).key);
+    if (normDue.monthOrder) {
+      add(`MONTH_${normDue.monthOrder}`);
+      add(`month_${normDue.monthOrder}`);
+    }
   }
 
   let calMonth: number | null = null;
   let year: number | null = normDue?.year || null;
 
   const rawKey = (periodKeyOrMonthKey || '').toUpperCase().trim();
-  const ymMatch = rawKey.match(/^(\d{4})-(\d{1,2})$/);
+  const ymMatch = rawKey.match(/^(\d{4})[-_](\d{1,2})$/);
   if (ymMatch) {
     year = year || parseInt(ymMatch[1], 10);
     calMonth = parseInt(ymMatch[2], 10);
@@ -181,14 +200,20 @@ export const getPeriodMatchingAliases = (
       'JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN',
       'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'
     ];
+    const short4Keys = [
+      'JANU', 'FEBR', 'MARC', 'APRI', 'MAY', 'JUNE',
+      'JULY', 'AUGU', 'SEPT', 'OCTO', 'NOVE', 'DECE'
+    ];
 
     const fullName = fullNames[calMonth - 1];
     const mandalKey = mandalKeys[calMonth - 1];
     const short3 = short3Keys[calMonth - 1];
+    const short4 = short4Keys[calMonth - 1];
 
     add(fullName);
     add(mandalKey);
     add(short3);
+    add(short4);
     add(`MONTH_${calMonth}`);
 
     if (year) {
@@ -198,20 +223,19 @@ export const getPeriodMatchingAliases = (
       add(`${year}-${calMonth}`);
       add(`${year}_${mm}`);
       add(`${year}_${calMonth}`);
-      add(`${mandalKey}-${year}`);
-      add(`${mandalKey} ${year}`);
-      add(`${mandalKey}'${yy}`);
-      add(`${mandalKey} ${yy}`);
-      add(`${short3}-${year}`);
-      add(`${short3} ${year}`);
-      add(`${short3}'${yy}`);
-      add(`${short3} ${yy}`);
-      add(`${fullName}-${year}`);
-      add(`${fullName} ${year}`);
-      add(`${fullName}'${yy}`);
-      add(`${fullName} ${yy}`);
       add(`${yy}-${mm}`);
       add(`${yy}-${calMonth}`);
+
+      [mandalKey, short3, short4, fullName].forEach(k => {
+        add(`${k}-${year}`);
+        add(`${k} ${year}`);
+        add(`${k}'${yy}`);
+        add(`${k} '${yy}`);
+        add(`${k} ${yy}`);
+        add(`${k}_${yy}`);
+        add(`${k}${yy}`);
+        add(`${k}${year}`);
+      });
     }
   }
 
@@ -226,35 +250,65 @@ export const isMonthMatching = (
   const uItem = item.trim().toUpperCase();
   if (uItem === 'ALL') return true;
 
-  const aliases = getPeriodMatchingAliases(target.periodKeyOrMonthKey, target.due);
-  if (aliases.includes(uItem)) return true;
+  const targetKey = (target.periodKeyOrMonthKey || '').trim().toUpperCase();
+  if (targetKey && (uItem === targetKey || uItem.replace(/[^A-Z0-9]/g, '') === targetKey.replace(/[^A-Z0-9]/g, ''))) {
+    return true;
+  }
 
-  const itemYearMatch = uItem.match(/^(\d{4})[-_](\d{1,2})$/);
-  const targetYear = target.due?.year;
-  const targetMonth = getMonthNumberFromNameOrKey(target.due?.monthKey || target.due?.monthName || target.periodKeyOrMonthKey);
+  const due = target.due ? normalizeMonthlyDue(target.due) : undefined;
+  if (due) {
+    if (due.periodKey && uItem === due.periodKey.trim().toUpperCase()) return true;
+    if (due.monthKey && uItem === due.monthKey.trim().toUpperCase()) return true;
+    if (due.id && uItem === due.id.trim().toUpperCase()) return true;
+    if (due.monthName && uItem === due.monthName.trim().toUpperCase()) return true;
+    if ((due as any).key && uItem === String((due as any).key).trim().toUpperCase()) return true;
+  }
 
-  if (itemYearMatch) {
-    const itemYear = parseInt(itemYearMatch[1], 10);
-    const itemMonth = parseInt(itemYearMatch[2], 10);
-    if (targetYear && targetMonth) {
-      return itemYear === targetYear && itemMonth === targetMonth;
+  const aliases = getPeriodMatchingAliases(target.periodKeyOrMonthKey, due);
+  if (aliases.some(a => a === uItem || a.replace(/[^A-Z0-9]/g, '') === uItem.replace(/[^A-Z0-9]/g, ''))) {
+    return true;
+  }
+
+  // Extract year & calendar month from item (e.g. "2025-09", "SEPT '25", "OCTO 2025")
+  let itemYear: number | null = null;
+  let itemMonth: number | null = null;
+
+  const ymMatch = uItem.match(/^(\d{4})[-_](\d{1,2})$/);
+  if (ymMatch) {
+    itemYear = parseInt(ymMatch[1], 10);
+    itemMonth = parseInt(ymMatch[2], 10);
+  } else {
+    const namedYearMatch = uItem.match(/^([A-Z]+)[-\s']+(\d{2,4})$/);
+    if (namedYearMatch) {
+      let y = parseInt(namedYearMatch[2], 10);
+      if (y < 100) y += 2000;
+      itemYear = y;
+      itemMonth = getMonthNumberFromNameOrKey(namedYearMatch[1]);
+    } else {
+      itemMonth = getMonthNumberFromNameOrKey(uItem);
     }
   }
 
-  const itemNamedYearMatch = uItem.match(/^([A-Z]+)[-\s']+(\d{2,4})$/);
-  if (itemNamedYearMatch) {
-    const itemMonthName = itemNamedYearMatch[1];
-    let itemYear = parseInt(itemNamedYearMatch[2], 10);
-    if (itemYear < 100) itemYear += 2000;
-    const itemCalMonth = getMonthNumberFromNameOrKey(itemMonthName);
-    if (itemCalMonth && targetYear && targetMonth) {
-      return itemYear === targetYear && itemCalMonth === targetMonth;
-    }
+  // Extract year & calendar month from target
+  let targetYear: number | null = due?.year || null;
+  let targetMonth: number | null = null;
+
+  const targetYmMatch = targetKey.match(/^(\d{4})[-_](\d{1,2})$/);
+  if (targetYmMatch) {
+    targetYear = targetYear || parseInt(targetYmMatch[1], 10);
+    targetMonth = parseInt(targetYmMatch[2], 10);
+  } else {
+    targetMonth = getMonthNumberFromNameOrKey(due?.monthKey || due?.monthName || targetKey);
   }
 
-  const itemCalMonthOnly = getMonthNumberFromNameOrKey(uItem);
-  if (itemCalMonthOnly !== null && targetMonth !== null) {
-    return itemCalMonthOnly === targetMonth;
+  // If item specifies year and target specifies year, both MUST match
+  if (itemYear !== null && targetYear !== null && itemMonth !== null && targetMonth !== null) {
+    return itemYear === targetYear && itemMonth === targetMonth;
+  }
+
+  // If either item or target does NOT specify year, match by calendar month
+  if (itemMonth !== null && targetMonth !== null) {
+    return itemMonth === targetMonth;
   }
 
   return false;
@@ -387,6 +441,22 @@ export const logSeasonAudit = async (log: Omit<SeasonAuditLog, 'id' | 'createdAt
  * SEASONS CRUD & LIFECYCLE
  * ==========================================
  */
+
+export const assertSeasonIsActive = async (seasonId?: string): Promise<void> => {
+  if (!seasonId) return;
+  try {
+    const ref = doc(db, SEASONS_COLLECTION, seasonId);
+    const snap = await getDoc(ref);
+    if (snap.exists()) {
+      const status = snap.data()?.status;
+      if (status === 'closed' || status === 'archived') {
+        throw new Error(`Season "${snap.data()?.name || seasonId}" is ${status} and cannot be modified.`);
+      }
+    }
+  } catch (err: any) {
+    if (err?.message?.includes('cannot be modified')) throw err;
+  }
+};
 
 export const getSeasons = async (): Promise<ChandaSeason[]> => {
   const q = query(collection(db, SEASONS_COLLECTION), orderBy('startDate', 'desc'));

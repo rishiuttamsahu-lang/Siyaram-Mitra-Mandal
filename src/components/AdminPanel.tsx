@@ -9,6 +9,7 @@ import AdminBuildingManager from '@/components/AdminBuildingManager';
 import AdminSeasonManager from '@/components/AdminSeasonManager';
 import { StatCard } from '@/components/ui/StatCard';
 import { Select } from '@/components/ui/Select';
+import { isMonthMatching } from '@/lib/seasonService';
 import {
   Shield, ShieldAlert, Ban, RefreshCcw, Key, Mail, User, Image as ImageIcon,
   BarChart2, Settings, Lock, Activity, Database, AlertTriangle, Trash2, Search, Bell, UserCircle, CheckCircle2,
@@ -378,10 +379,14 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
   // register instantly, instead of waiting for the Firestore snapshot to come back.
   const toggleMemberExemptMonth = async (member: any, month: string, aliases?: string[]) => {
     const keysToCheck = aliases && aliases.length > 0 ? aliases : [month];
-    const isCurrentlyBlocked = (member.exemptMonths || []).some((m: string) => keysToCheck.includes(m));
+    const isCurrentlyBlocked = (member.exemptMonths || []).some((m: string) =>
+      keysToCheck.includes(m) || isMonthMatching({ periodKeyOrMonthKey: month }, m)
+    );
 
     const updatedExempt = isCurrentlyBlocked
-      ? (member.exemptMonths || []).filter((mo: string) => !keysToCheck.includes(mo))
+      ? (member.exemptMonths || []).filter((mo: string) =>
+          !keysToCheck.includes(mo) && !isMonthMatching({ periodKeyOrMonthKey: month }, mo)
+        )
       : Array.from(new Set([...(member.exemptMonths || []), month]));
 
     // Optimistic local update — instant visual feedback
