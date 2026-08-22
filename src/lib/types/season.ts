@@ -23,13 +23,15 @@ export interface ChandaSeason {
 }
 
 export interface MonthlyDue {
-  id: string; // e.g. "SEPT", "OCT", "2026-09"
+  id: string; // e.g. "2026-09" or "SEPT"
   seasonId: string;
-  monthKey: string; // e.g. "SEPT", "OCT", "NOV", etc.
+  periodKey?: string; // Canonical period key e.g. "2026-09"
+  monthKey?: string; // Legacy month key e.g. "SEPT", "OCT", etc.
   monthName: string; // e.g. "September", "October"
-  monthOrder: number; // 1 to 12
-  dueAmount: number; // Fixed monthly target (e.g. 100, 150, 200)
-  status: 'open' | 'closed' | 'locked';
+  year?: number; // e.g. 2026
+  monthOrder: number; // 1, 2, ... 12, 13+
+  dueAmount: number; // Fixed monthly target (e.g. 100, 150, 200, 250)
+  status?: 'open' | 'closed' | 'locked';
   locked?: boolean;
   lockReason?: string;
   createdAt?: any;
@@ -46,7 +48,8 @@ export interface MemberOverride {
   wingId?: string;
   flatId?: string;
   flatDisplay?: string;
-  monthKey: string; // Specific month or "ALL" for full season override
+  periodKey?: string; // Canonical period key e.g. "2026-09"
+  monthKey?: string; // Specific month or "ALL" for full season override
   defaultAmount: number;
   overrideAmount: number;
   reason: string;
@@ -68,6 +71,10 @@ export interface SeasonAuditLog {
     | 'EDIT_MONTH_AMOUNT'
     | 'LOCK_MONTH'
     | 'UNLOCK_MONTH'
+    | 'BULK_LOCK_MONTHS'
+    | 'BULK_UNLOCK_MONTHS'
+    | 'GLOBAL_BLOCK_MONTHS'
+    | 'GLOBAL_UNBLOCK_MONTHS'
     | 'CREATE_OVERRIDE'
     | 'EDIT_OVERRIDE'
     | 'REMOVE_OVERRIDE'
@@ -75,6 +82,8 @@ export interface SeasonAuditLog {
   seasonId: string;
   seasonName?: string;
   monthKey?: string;
+  periodKey?: string;
+  periodKeys?: string[];
   before?: any;
   after?: any;
   reason?: string;
@@ -91,3 +100,4 @@ export interface SeasonMetrics {
   paidMembersCount: number;
   pendingMembersCount: number;
 }
+

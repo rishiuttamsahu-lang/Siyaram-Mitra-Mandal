@@ -6,9 +6,9 @@ import { db } from "@/lib/firebase";
 import { collection, onSnapshot, doc, setDoc, updateDoc, deleteDoc, query, addDoc, orderBy, serverTimestamp } from "firebase/firestore";
 import { Bell, ChevronDown, CheckCircle2, Building2, Users, IndianRupee, Layers, Search, Save, Store, UserPlus, Home, X, Trash2, AlertCircle } from "lucide-react";
 import { Building, Wing, Flat } from "@/lib/types/building";
-import { subscribeBuildings, subscribeWings, subscribeFlats, createOrUpdateFlat } from "@/lib/buildingService";
+import { subscribeBuildings, subscribeWings, subscribeFlats, createOrUpdateFlat, calculateWingMetrics, WingMetricsSummary } from "@/lib/buildingService";
 import { ChandaSeason, MonthlyDue } from "@/lib/types/season";
-import { subscribeSeasons, subscribeMonthlyDues } from "@/lib/seasonService";
+import { subscribeSeasons, subscribeMonthlyDues, resolveEffectivePeriodStatus, MANDAL_MONTHS } from "@/lib/seasonService";
 
 type BuildingPayment = {
   id: string;
@@ -35,6 +35,15 @@ type ExpenseLog = {
   date: string;
   time: string;
   timestamp?: any;
+};
+
+type Member = {
+  id: number;
+  name: string;
+  payments: Record<string, number>;
+  isHonorary?: boolean;
+  isRemoved?: boolean;
+  exemptMonths?: string[];
 };
 
 // 🔥 PREMIUM CUSTOM DROPDOWN COMPONENT
@@ -215,22 +224,10 @@ const PREVIOUS_YEAR = 6500;
 const MONTHS = [
   "SEPT", "OCT", "NOV", "DEC", "JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG",
 ] as const;
-const getTargetForMonth = (month: string): number => {
-  return ["JUN", "JUL", "AUG"].includes(month) ? 200 : 100;
-};
 
 const DELETE_SYNC_BASE_URL = process.env.NEXT_PUBLIC_RENDER_BOT_URL?.replace(/\/$/, "");
 
-type Month = (typeof MONTHS)[number];
-
-type Member = {
-  id: number;
-  name: string;
-  payments: Partial<Record<Month, number>>;
-  isHonorary?: boolean;
-  isRemoved?: boolean;
-  exemptMonths?: Month[];
-};
+type Month = string;
 
 const DEFAULT_MEMBERS: Member[] = [
   { id: 1, name: "AYUSH", payments: { SEPT: 100, OCT: 50 } },
@@ -249,8 +246,8 @@ function normalizeMemberCode(value: string) {
   return value.trim().toLowerCase().replace(/\s+/g, "");
 }
 
-function getCurrentTrackingMonth(): Month {
-  const jsMonths: Month[] = [
+function getCurrentTrackingMonth(): string {
+  const jsMonths = [
     "JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEPT", "OCT", "NOV", "DEC",
   ];
   return jsMonths[new Date().getMonth()];
@@ -259,8 +256,8 @@ function getCurrentTrackingMonth(): Month {
 export default function Dashboard({ userData }: { userData: any }) {
   const isAdmin = userData?.role === "Admin"; // Auth is now managed by Firebase Google Login
 
-  const [currentTrackingMonth, setCurrentTrackingMonth] = useState<Month>(getCurrentTrackingMonth());
-  const [blockedMonths, setBlockedMonths] = useState<Month[]>([]);
+  const [currentTrackingMonth, setCurrentTrackingMonth] = useState<string>(getCurrentTrackingMonth());
+  const [blockedMonths, setBlockedMonths] = useState<string[]>([]);
   const [expandedMemberId, setExpandedMemberId] = useState<number | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [sysSettings, setSysSettings] = useState<any>(null);
@@ -290,6 +287,10 @@ export default function Dashboard({ userData }: { userData: any }) {
   const [inputStatus, setInputStatus] = useState<'Pending' | 'Collected'>('Pending');
   const [isUpdatingFlat, setIsUpdatingFlat] = useState(false);
 
+  // Flat Autosave refs
+  const flatEditorRef = useRef<HTMLFormElement>(null);
+  const flatDraftRef = useRef({ name: inputName, amount: inputAmount, status: inputStatus, flatId: selectedFlat });
+
   // Others (Dost & Dukan) states
   const [otherPayments, setOtherPayments] = useState<OtherPayment[]>([]);
   const [otherName, setOtherName] = useState('');
@@ -316,13 +317,14 @@ export default function Dashboard({ userData }: { userData: any }) {
   ];
 
   const [paymentMemberId, setPaymentMemberId] = useState("");
-  const [paymentMonth, setPaymentMonth] = useState<Month>(getCurrentTrackingMonth());
-  const [paymentAmount, setPaymentAmount] = useState(String(getTargetForMonth(getCurrentTrackingMonth())));
+  const [paymentMonth, setPaymentMonth] = useState<string>(getCurrentTrackingMonth());
+  const [paymentAmount, setPaymentAmount] = useState('100');
   const [newMemberName, setNewMemberName] = useState("");
   const [isNewMemberHonorary, setIsNewMemberHonorary] = useState(false);
-  const [editCell, setEditCell] = useState<{ id: number | null; month: Month | null }>({ id: null, month: null });
+  const [editCell, setEditCell] = useState<{ id: number | null; dueKey: string | null }>({ id: null, dueKey: null });
   const [editValue, setEditValue] = useState("");
   const [isRestoring, setIsRestoring] = useState(false);
+
 
   // 🔥 UPGRADED TOAST NOTIFICATION STATES
   const [toast, setToast] = useState<{ show: boolean; title: string; message: string; type: 'success' | 'error' | 'info' }>({
@@ -439,6 +441,14 @@ export default function Dashboard({ userData }: { userData: any }) {
     };
   }, []);
 
+  const getDynamicTargetForMonth = (month: string): number => {
+    const match = seasonMonthlyDues.find(d => (d.periodKey === month || d.monthKey === month || d.id === month));
+    if (match && typeof match.dueAmount === 'number') {
+      return match.dueAmount;
+    }
+    return ["JUN", "JUL", "AUG"].includes(month) ? 200 : 100;
+  };
+
   useEffect(() => {
     setPaymentMonth(currentTrackingMonth);
     setPaymentAmount(String(getDynamicTargetForMonth(currentTrackingMonth)));
@@ -518,13 +528,37 @@ export default function Dashboard({ userData }: { userData: any }) {
     return () => unsub();
   }, [selectedDashboardSeasonId]);
 
-  // Dynamic Monthly Target Resolver
-  const getDynamicTargetForMonth = (month: string): number => {
-    const match = seasonMonthlyDues.find(d => d.monthKey === month);
-    if (match && typeof match.dueAmount === 'number') {
-      return match.dueAmount;
-    }
-    return ["JUN", "JUL", "AUG"].includes(month) ? 200 : 100;
+  // Dynamic Schedule
+  const activeSchedule: MonthlyDue[] = useMemo(() => {
+    if (seasonMonthlyDues.length > 0) return seasonMonthlyDues;
+    const currentSeason = dynSeasons.find(s => s.id === selectedDashboardSeasonId);
+    const startYear = parseInt((currentSeason?.startDate || '2025-09-01').split('-')[0], 10) || 2025;
+    return MANDAL_MONTHS.map((m, idx) => {
+      const calculatedYear = idx < 4 ? startYear : startYear + 1;
+      return {
+        id: m.key,
+        seasonId: selectedDashboardSeasonId || 'default',
+        monthKey: m.key,
+        periodKey: m.key,
+        monthName: m.name,
+        year: calculatedYear,
+        monthOrder: m.order,
+        dueAmount: m.defaultAmount,
+        status: 'open' as const,
+        locked: false
+      };
+    });
+  }, [seasonMonthlyDues, dynSeasons, selectedDashboardSeasonId]);
+
+  const getMemberPaymentForDue = (payments: Record<string, number> | undefined, due: MonthlyDue): number => {
+    if (!payments) return 0;
+    const pKey = due.periodKey;
+    const mKey = due.monthKey;
+    const id = due.id;
+    if (pKey && payments[pKey] !== undefined) return Number(payments[pKey]) || 0;
+    if (mKey && payments[mKey] !== undefined) return Number(payments[mKey]) || 0;
+    if (id && payments[id] !== undefined) return Number(payments[id]) || 0;
+    return 0;
   };
 
   // Group dynamic flats by floor
@@ -550,7 +584,7 @@ export default function Dashboard({ userData }: { userData: any }) {
     return () => unsub();
   }, []);
 
-  // 🔥 NAYA REAL-TIME LISTENER FOR EXPENSES (KHARCHA LOGS)
+  // 🔥 REAL-TIME LISTENER FOR EXPENSES
   useEffect(() => {
     const q = query(collection(db, "expenses_log"), orderBy("timestamp", "desc"));
     const unsub = onSnapshot(q, (snap) => {
@@ -573,7 +607,7 @@ export default function Dashboard({ userData }: { userData: any }) {
   const buildingMetrics = useMemo(() => {
     const totals = { totalCollected: 0, collectedCount: 0, pendingCount: 0 };
     buildingPayments.forEach(p => {
-      if (p.status === 'Collected') {
+      if (p.status === 'Collected' && (Number(p.amount) || 0) > 0) {
         totals.totalCollected += (Number(p.amount) || 0);
         totals.collectedCount++;
       } else {
@@ -582,6 +616,38 @@ export default function Dashboard({ userData }: { userData: any }) {
     });
     return totals;
   }, [buildingPayments]);
+
+  // Compute per-wing summary metrics
+  const wingWiseMetrics = useMemo(() => {
+    const wingMap: Record<string, { total: number; collected: number; pending: number; count: number; collectedCount: number }> = {};
+    
+    // Detected wing codes
+    const wingCodes = dynWings.length > 0
+      ? dynWings.map(w => w.code)
+      : Array.from(new Set(buildingPayments.map(p => p.wing || (p.id.includes('_') ? p.id.split('_')[0] : 'A'))));
+
+    wingCodes.forEach(w => {
+      wingMap[w] = { total: 0, collected: 0, pending: 0, count: 0, collectedCount: 0 };
+    });
+
+    buildingPayments.forEach(p => {
+      const w = p.wing || (p.id.includes('_') ? p.id.split('_')[0] : 'A');
+      if (!wingMap[w]) {
+        wingMap[w] = { total: 0, collected: 0, pending: 0, count: 0, collectedCount: 0 };
+      }
+      const amt = Number(p.amount) || 0;
+      wingMap[w].count++;
+      if (p.status === 'Collected' && amt > 0) {
+        wingMap[w].collected += amt;
+        wingMap[w].collectedCount++;
+      } else {
+        wingMap[w].pending += (amt > 0 ? amt : 500);
+      }
+      wingMap[w].total += amt;
+    });
+
+    return wingMap;
+  }, [dynWings, buildingPayments]);
 
   // Compute others metrics
   const otherMetrics = useMemo(() => {
@@ -595,12 +661,73 @@ export default function Dashboard({ userData }: { userData: any }) {
     return totals;
   }, [otherPayments]);
 
+  // Keep draft in sync for outside-click autosave
+  useEffect(() => {
+    flatDraftRef.current = { name: inputName, amount: inputAmount, status: inputStatus, flatId: selectedFlat };
+  }, [inputName, inputAmount, inputStatus, selectedFlat]);
+
+  const autoSaveCurrentFlat = async () => {
+    const currentDraft = flatDraftRef.current;
+    if (!currentDraft.flatId) return;
+
+    const [wing, room] = currentDraft.flatId.split('_');
+    const amt = Number(currentDraft.amount) || 0;
+    const derivedStatus: 'Pending' | 'Collected' = amt > 0 ? 'Collected' : 'Pending';
+
+    try {
+      await setDoc(doc(db, "building_chanda", currentDraft.flatId), {
+        wing,
+        floor: room.startsWith('0') ? '0' : room[0],
+        room,
+        name: currentDraft.name.trim(),
+        amount: amt,
+        status: derivedStatus,
+        lastUpdated: serverTimestamp()
+      }, { merge: true });
+
+      if (activeBuildingId) {
+        const currentWingObj = dynWings.find(w => w.code === wing);
+        if (currentWingObj) {
+          await createOrUpdateFlat(activeBuildingId, currentWingObj.id, {
+            flatNumber: room,
+            residentName: currentDraft.name.trim(),
+            paidChanda: amt,
+            paymentStatus: amt > 0 ? 'Paid' : 'Due'
+          });
+        }
+      }
+    } catch (err) {
+      console.warn("Flat auto-save error:", err);
+      triggerToast("Autosave Error", "Could not save flat update", "error");
+    }
+  };
+
+  // Outside interaction listener for flat editor autosave
+  useEffect(() => {
+    const handleOutsideInteraction = (event: MouseEvent | TouchEvent) => {
+      if (selectedFlat && flatEditorRef.current && !flatEditorRef.current.contains(event.target as Node)) {
+        autoSaveCurrentFlat();
+        setSelectedFlat(null);
+      }
+    };
+
+    document.addEventListener('mousedown', handleOutsideInteraction);
+    document.addEventListener('touchstart', handleOutsideInteraction);
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideInteraction);
+      document.removeEventListener('touchstart', handleOutsideInteraction);
+    };
+  }, [selectedFlat, activeBuildingId, dynWings]);
+
   const handleSelectFlatTile = (wing: string, roomNum: string) => {
+    if (selectedFlat) {
+      autoSaveCurrentFlat();
+    }
     const flatId = `${wing}_${roomNum}`;
     const match = buildingPayments.find(p => p.id === flatId);
     setSelectedFlat(flatId);
     setInputName(match?.name || '');
-    setInputAmount(match ? String(match.amount) : '');
+    setInputAmount(match && match.amount > 0 ? String(match.amount) : '');
     setInputStatus(match ? match.status : 'Pending');
   };
 
@@ -610,33 +737,9 @@ export default function Dashboard({ userData }: { userData: any }) {
 
     setIsUpdatingFlat(true);
     try {
-      const [wing, room] = selectedFlat.split('_');
-      const floor = room.startsWith('0') ? '0' : room[0];
-
-      await setDoc(doc(db, "building_chanda", selectedFlat), {
-        wing,
-        floor,
-        room,
-        name: inputName.trim(),
-        amount: Number(inputAmount) || 0,
-        status: inputStatus,
-        lastUpdated: serverTimestamp()
-      }, { merge: true });
-
-      if (activeBuildingId) {
-        const currentWingObj = dynWings.find(w => w.code === wing);
-        if (currentWingObj) {
-          await createOrUpdateFlat(activeBuildingId, currentWingObj.id, {
-            flatNumber: room,
-            residentName: inputName.trim(),
-            paidChanda: Number(inputAmount) || 0,
-            paymentStatus: inputStatus === 'Collected' ? 'Paid' : 'Due'
-          });
-        }
-      }
-
+      await autoSaveCurrentFlat();
       setSelectedFlat(null);
-      triggerToast("Success ✅", `Flat ${room} data updated successfully!`, "success");
+      triggerToast("Success ✅", `Flat saved successfully!`, "success");
     } catch (err) {
       console.error(err);
       triggerToast("Error ❌", "Permission Denied or Database Error", "error");
@@ -668,7 +771,7 @@ export default function Dashboard({ userData }: { userData: any }) {
     }
   };
 
-  // 🔥 NEW LOG DELETE HANDLER
+  // Log Delete Handler
   const handleDeleteOtherLog = async (id: string, name: string, amount: number) => {
     const confirmDelete = window.confirm(`Kya aap "${name}" ka record sach me delete karna chahte hain?`);
     if (!confirmDelete) return;
@@ -697,10 +800,8 @@ export default function Dashboard({ userData }: { userData: any }) {
     }
   };
 
-  // 🔥 DEDICATED EXPENSE LOG DELETE HANDLER - FIX FOR POPUP GLITCH
+  // Dedicated Expense Log Delete Handler
   const handleDeleteExpenseLog = async (id: string, name: string, amount: number) => {
-    console.log("Delete trigger for ID:", id, "Name:", name);
-    
     if (!id) {
       triggerToast("Error ❌", "Expense ID nahi mili!", "error");
       return;
@@ -751,45 +852,80 @@ export default function Dashboard({ userData }: { userData: any }) {
     setIsRestoring(false);
   };
 
-  const getMemberTotal = (payments: Member["payments"]) =>
-    Object.values(payments).reduce((sum, amount) => sum + (amount ?? 0), 0);
+  const getMemberTotal = (payments: Record<string, number> | undefined) =>
+    Object.values(payments || {}).reduce((sum, amount) => sum + (Number(amount) || 0), 0);
 
-  const currentMonthIndex = MONTHS.indexOf(currentTrackingMonth);
-  const monthsPassed = MONTHS.slice(0, currentMonthIndex + 1);
-  const chargeableMonths = monthsPassed.filter((month) => !blockedMonths.includes(month));
-  const expectedTotalPerMember = chargeableMonths.reduce((sum, month) => sum + getDynamicTargetForMonth(month), 0);
-  // ✅ Per-member expected total — subtracts months this specific member has been
-  // individually exempted from (e.g. months before they joined the mandal).
+  // Find current tracking month cutoff in the active season schedule
+  const currentTrackingDueIndex = useMemo(() => {
+    const norm = currentTrackingMonth.trim().toUpperCase();
+    const idx = activeSchedule.findIndex(d => {
+      const pKey = (d.periodKey || '').toUpperCase();
+      const mKey = (d.monthKey || '').toUpperCase();
+      const id = (d.id || '').toUpperCase();
+      const name = (d.monthName || '').toUpperCase();
+      return pKey === norm || mKey === norm || id === norm || name === norm || name.startsWith(norm);
+    });
+    return idx >= 0 ? idx : activeSchedule.length - 1;
+  }, [activeSchedule, currentTrackingMonth]);
+
+  const chargeableSchedule = useMemo(() => {
+    return activeSchedule.slice(0, currentTrackingDueIndex + 1);
+  }, [activeSchedule, currentTrackingDueIndex]);
+
+  // Dynamic Expected Target Per Member (Calculated strictly up to tracking cutoff)
   const getMemberExpectedTotal = (member: Member) => {
-    const memberExempt: Month[] = member.exemptMonths || [];
+    const memberExempt: string[] = member.exemptMonths || [];
+    let expected = 0;
+    chargeableSchedule.forEach(due => {
+      const pKey = due.periodKey || due.monthKey || due.id;
+      const status = resolveEffectivePeriodStatus(pKey, due, blockedMonths, memberExempt);
+      if (!status.isBlocked) {
+        expected += (typeof due.dueAmount === 'number' ? due.dueAmount : 100);
+      }
+    });
+
     if (member.isRemoved) {
       const paidTotal = getMemberTotal(member.payments);
-      const normalExpected = chargeableMonths.filter((month) => !memberExempt.includes(month)).reduce((sum, month) => sum + getDynamicTargetForMonth(month), 0);
-      return Math.min(paidTotal, normalExpected);
+      return Math.min(paidTotal, expected);
     }
-    return chargeableMonths.filter((month) => !memberExempt.includes(month)).reduce((sum, month) => sum + getDynamicTargetForMonth(month), 0);
+    return expected;
   };
+
+  const expectedTotalPerMember = useMemo(() => {
+    let sum = 0;
+    chargeableSchedule.forEach(due => {
+      const pKey = due.periodKey || due.monthKey || due.id;
+      const status = resolveEffectivePeriodStatus(pKey, due, blockedMonths, []);
+      if (!status.isBlocked) {
+        sum += (typeof due.dueAmount === 'number' ? due.dueAmount : 100);
+      }
+    });
+    return sum;
+  }, [chargeableSchedule, blockedMonths]);
+
   const payingMembersCount = members.filter((member) => !member.isHonorary && !member.isRemoved).length;
   const totalExpectedMandal = members.filter((member) => !member.isHonorary && !member.isRemoved).reduce((sum, member) => sum + getMemberExpectedTotal(member), 0);
   
-  // 1. Saare alag-alag tabs ki kamai (Income) calculate karo
+  // Total Income
   const totalCollected = members.reduce((sum, member) => sum + getMemberTotal(member.payments), 0);
-  const totalBuildingCollected = buildingPayments.reduce((sum, p) => p.status === 'Collected' ? sum + (Number(p.amount) || 0) : sum, 0);
+  const totalBuildingCollected = buildingPayments.reduce((sum, p) => (p.status === 'Collected' && (Number(p.amount) || 0) > 0) ? sum + (Number(p.amount) || 0) : sum, 0);
   const totalOthersCollected = otherPayments.reduce((sum, p) => p.status === 'Collected' ? sum + (Number(p.amount) || 0) : sum, 0);
   const totalDeficit = Math.max(0, totalExpectedMandal - totalCollected);
 
-  // 2. Pure 4th Tab ka total kharcha (Expenses) nikalon
+  // Total Expenses
   const totalExpensesDeduction = expenseLogs.reduce((sum, exp) => sum + (Number(exp.amount) || 0), 0);
 
-  // 3. 🔥 THE MASTER BALANCED FORMULA: Total Income - Total Expenses + Backlog
+  // Master Balanced Formula
   const grandTotal = (totalCollected + totalBuildingCollected + totalOthersCollected + previousYearBalance) - totalExpensesDeduction;
 
-  const monthlyTotals = useMemo(() =>
-    MONTHS.reduce((acc, month) => {
-      acc[month] = members.reduce((sum, member) => sum + (member.payments[month] || 0), 0);
-      return acc;
-    }, {} as Record<Month, number>),
-    [members]);
+  const periodTotals = useMemo(() => {
+    const totals: Record<string, number> = {};
+    activeSchedule.forEach(due => {
+      const key = due.periodKey || due.monthKey || due.id;
+      totals[key] = members.reduce((sum, member) => sum + getMemberPaymentForDue(member.payments, due), 0);
+    });
+    return totals;
+  }, [members, activeSchedule]);
 
   const toggleExpandedMember = (memberId: number) => {
     setExpandedMemberId((currentExpandedMemberId) =>
@@ -798,10 +934,10 @@ export default function Dashboard({ userData }: { userData: any }) {
   };
 
   // --- FIREBASE WRITE OPERATIONS ---
-  const toggleBlockMonth = async (month: Month) => {
-    const newBlocked = blockedMonths.includes(month)
-      ? blockedMonths.filter((m) => m !== month)
-      : [...blockedMonths, month];
+  const toggleBlockMonth = async (monthKey: string) => {
+    const newBlocked = blockedMonths.includes(monthKey)
+      ? blockedMonths.filter((m) => m !== monthKey)
+      : [...blockedMonths, monthKey];
 
     await setDoc(doc(db, "mandal_settings", "config"), { blockedMonths: newBlocked }, { merge: true });
   };
@@ -826,7 +962,8 @@ export default function Dashboard({ userData }: { userData: any }) {
       [`payments.${paymentMonth}`]: currentAmount + amount
     });
 
-    setPaymentAmount(String(getDynamicTargetForMonth(paymentMonth)));
+    const targetDue = activeSchedule.find(d => (d.periodKey === paymentMonth || d.monthKey === paymentMonth || d.id === paymentMonth));
+    setPaymentAmount(String(targetDue?.dueAmount || 100));
     setPaymentMemberId("");
   };
 
@@ -857,36 +994,36 @@ export default function Dashboard({ userData }: { userData: any }) {
     setIsNewMemberHonorary(false);
   };
 
-  // --- INLINE EDITING LOGIC (FIREBASE) ---
-  const handleCellClick = (memberId: number, month: Month, currentValue: number | undefined) => {
-    if (isAdmin && !blockedMonths.includes(month)) {
-      setEditCell({ id: memberId, month: month });
+  // --- INLINE EDITING LOGIC ---
+  const handleCellClick = (memberId: number, due: MonthlyDue, currentValue: number | undefined) => {
+    const pKey = due.periodKey || due.monthKey || due.id;
+    const status = resolveEffectivePeriodStatus(pKey, due, blockedMonths, []);
+    if (isAdmin && !status.isBlocked) {
+      setEditCell({ id: memberId, dueKey: pKey });
       setEditValue(String(currentValue || ""));
     }
   };
 
   const saveInlineEdit = async () => {
-    if (editCell.id !== null && editCell.month !== null) {
+    if (editCell.id !== null && editCell.dueKey !== null) {
       const numValue = parseInt(editValue) || 0;
       await updateDoc(doc(db, "mandal_members", editCell.id.toString()), {
-        [`payments.${editCell.month}`]: numValue
+        [`payments.${editCell.dueKey}`]: numValue
       });
     }
-    setEditCell({ id: null, month: null });
+    setEditCell({ id: null, dueKey: null });
     setEditValue("");
   };
 
   const handleInlineKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") saveInlineEdit();
     if (e.key === "Escape") {
-      setEditCell({ id: null, month: null });
+      setEditCell({ id: null, dueKey: null });
       setEditValue("");
     }
   };
 
-  // 🔥 YAHAN SE NAYA LOGIC SHURU HOTA HAI
   const sortedMembers = useMemo(() => {
-    const monthsPassed = Math.max(0, MONTHS.indexOf(currentTrackingMonth) + 1);
     let sorted = [...members].filter((m) => !m.isRemoved);
 
     switch (sortBy) {
@@ -898,9 +1035,9 @@ export default function Dashboard({ userData }: { userData: any }) {
         break;
       case "paid-desc":
         sorted.sort((a, b) => {
-          const totalA = Object.values(a.payments).reduce((sum, val) => sum + (val || 0), 0);
-          const totalB = Object.values(b.payments).reduce((sum, val) => sum + (val || 0), 0);
-          return totalB - totalA; // High to Low
+          const totalA = getMemberTotal(a.payments);
+          const totalB = getMemberTotal(b.payments);
+          return totalB - totalA;
         });
         break;
       case "due-desc":
@@ -909,16 +1046,15 @@ export default function Dashboard({ userData }: { userData: any }) {
           const deficitA = a.isHonorary || a.isRemoved ? 0 : Math.max(0, getMemberExpectedTotal(a) - totalA);
           const totalB = getMemberTotal(b.payments);
           const deficitB = b.isHonorary || b.isRemoved ? 0 : Math.max(0, getMemberExpectedTotal(b) - totalB);
-          return deficitB - deficitA; // High to Low Deficit
+          return deficitB - deficitA;
         });
         break;
       default:
-        sorted.sort((a, b) => a.id - b.id); // Default by original ID
+        sorted.sort((a, b) => a.id - b.id);
         break;
     }
     return sorted;
-  }, [members, sortBy, currentTrackingMonth]);
-  // 🔥 NAYA LOGIC YAHAN KHATAM HOTA HAI
+  }, [members, sortBy, activeSchedule, blockedMonths]);
 
   return (
     <div className="min-h-screen bg-gray-50/50 pb-24 relative overflow-x-hidden" style={{ padding: 0 }}>
@@ -1099,59 +1235,113 @@ export default function Dashboard({ userData }: { userData: any }) {
                 </div>
               </div>
 
-              {/* MOBILE VIEW LIST - Sleek Rows */}
+              {/* 📱 MOBILE VIEW LIST - Sleek Cards */}
               <div className="block space-y-2 md:hidden mt-2.5">
-                {sortedMembers.length === 0 && <p className="text-center text-[10px] text-gray-400 py-4 font-bold uppercase tracking-wider">No members yet.</p>}
+                {sortedMembers.length === 0 && (
+                  <p className="text-center text-[10px] text-gray-400 py-4 font-medium uppercase tracking-wider">
+                    No members found.
+                  </p>
+                )}
                 {sortedMembers.map((member) => {
                   const totalPaid = getMemberTotal(member.payments);
                   const remaining = getMemberExpectedTotal(member) - totalPaid;
                   const isExpanded = expandedMemberId === member.id;
 
                   return (
-                    <div key={member.id} className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-xs">
-                      <button type="button" onClick={() => toggleExpandedMember(member.id)} className="flex w-full items-center justify-between p-3 text-left">
+                    <div
+                      key={member.id}
+                      className="overflow-hidden rounded-xl border border-gray-200/80 bg-white shadow-2xs transition-all hover:border-gray-300"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => toggleExpandedMember(member.id)}
+                        className="flex w-full items-center justify-between p-2.5 sm:p-3 text-left cursor-pointer"
+                      >
                         <div className="flex-1 min-w-0 pr-2">
                           <div className="flex items-center gap-1.5">
-                            <span className="text-xs font-black text-gray-900 truncate">{member.name}</span>
+                            <span className="text-xs font-semibold text-gray-900 truncate tracking-tight">{member.name}</span>
                             {member.isHonorary && (
-                              <span className="rounded border border-purple-200 bg-purple-50 px-1 py-[1px] text-[7px] font-black uppercase tracking-wider text-purple-700">Honorary</span>
+                              <span className="rounded border border-purple-200 bg-purple-50 px-1.5 py-[1px] text-[7.5px] font-semibold uppercase tracking-wider text-purple-700">
+                                Honorary
+                              </span>
                             )}
                           </div>
-                          <div className="text-[10px] text-gray-500 mt-0.5">
-                            Paid: <span className="font-black text-gray-800">₹{totalPaid}</span>
+                          <div className="text-[10px] text-gray-500 font-normal mt-0.5">
+                            Paid: <span className="font-semibold text-gray-800">₹{totalPaid.toLocaleString('en-IN')}</span>
                           </div>
                         </div>
 
                         <div className="flex items-center gap-1.5 shrink-0">
                           {member.isHonorary ? (
-                            <span className="text-[9px] font-bold text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200">Honorary</span>
+                            <span className="text-[9px] font-medium text-purple-700 bg-purple-50 px-2 py-0.5 rounded-full border border-purple-200">
+                              Honorary
+                            </span>
                           ) : remaining > 0 ? (
-                            <span className="text-[10px] font-black text-red-600 bg-red-50 px-2 py-0.5 rounded border border-red-100">₹{remaining} Due</span>
+                            <span className="text-[10px] font-semibold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-200/80">
+                              ₹{remaining.toLocaleString('en-IN')} Due
+                            </span>
                           ) : remaining < 0 ? (
-                            <span className="text-[10px] font-black text-green-700 bg-green-50 px-2 py-0.5 rounded border border-green-100">Adv ₹{Math.abs(remaining)}</span>
+                            <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/80">
+                              Adv ₹{Math.abs(remaining).toLocaleString('en-IN')}
+                            </span>
                           ) : (
-                            <span className="text-[10px] font-black text-gray-500 bg-gray-100 px-2 py-0.5 rounded">Clear</span>
+                            <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/80">
+                              Clear ✅
+                            </span>
                           )}
-                          <span className="text-[9px] text-gray-400 ml-0.5">{isExpanded ? "▲" : "▼"}</span>
+                          <span className="text-[9px] text-gray-400 font-mono ml-0.5">{isExpanded ? "▲" : "▼"}</span>
                         </div>
                       </button>
 
                       {isExpanded && (
-                        <div className="border-t border-gray-50 bg-gray-50/60 p-2.5">
-                          <div className="grid grid-cols-3 gap-1.5">
-                            {MONTHS.map((month) => {
-                              const isBlocked = blockedMonths.includes(month) || (member.exemptMonths || []).includes(month);
-                              const isEditing = editCell.id === member.id && editCell.month === month;
+                        <div className="border-t border-gray-100 bg-gray-50/70 p-2.5">
+                          <div className="grid grid-cols-3 sm:grid-cols-4 gap-1.5">
+                            {activeSchedule.map((due) => {
+                              const pKey = due.periodKey || due.monthKey || due.id;
+                              const status = resolveEffectivePeriodStatus(pKey, due, blockedMonths, member.exemptMonths || []);
+                              const isBlocked = status.isBlocked;
+                              const isEditing = editCell.id === member.id && editCell.dueKey === pKey;
+                              const paidVal = getMemberPaymentForDue(member.payments, due);
 
                               return (
-                                <div key={month} onClick={() => handleCellClick(member.id, month, member.payments[month])} className={`relative rounded-lg border p-1.5 text-center shadow-2xs ${isBlocked ? "border-red-200 bg-gray-100" : isAdmin ? "border-yellow-300 cursor-pointer bg-white hover:bg-yellow-50" : "border-gray-100 bg-white"}`}>
-                                  <div className="text-[9px] font-bold uppercase text-gray-400">{month} {isBlocked ? "🚫" : ""}</div>
+                                <div
+                                  key={due.id}
+                                  onClick={() => handleCellClick(member.id, due, paidVal)}
+                                  className={`relative rounded-lg border p-1.5 text-center transition-all ${
+                                    isBlocked
+                                      ? "border-red-200/80 bg-red-50/40"
+                                      : isAdmin
+                                      ? "border-amber-200 bg-white hover:bg-amber-50 cursor-pointer shadow-2xs"
+                                      : "border-gray-200 bg-white"
+                                  }`}
+                                  title={status.reasonText}
+                                >
+                                  <div className="text-[8.5px] font-medium uppercase text-gray-500 truncate">
+                                    {due.monthName ? due.monthName.slice(0, 4) : due.monthKey} {due.year ? `'${String(due.year).slice(-2)}` : ''} {isBlocked ? `🚫` : ""}
+                                  </div>
                                   {isEditing ? (
-                                    <input type="number" autoFocus className="w-full border-b-2 border-[#5a0000] bg-transparent text-center text-xs font-bold outline-none" value={editValue} onChange={(e) => setEditValue(e.target.value)} onBlur={saveInlineEdit} onKeyDown={handleInlineKeyDown} />
+                                    <input
+                                      type="number"
+                                      autoFocus
+                                      className="w-full border-b border-[#5a0000] bg-transparent text-center text-xs font-semibold outline-none text-[#5a0000]"
+                                      value={editValue}
+                                      onChange={(e) => setEditValue(e.target.value)}
+                                      onBlur={saveInlineEdit}
+                                      onKeyDown={handleInlineKeyDown}
+                                    />
                                   ) : (
-                                    <div className={`text-xs font-semibold ${isBlocked ? "line-through text-gray-400" : "text-gray-800"}`}>{member.payments[month] ? `₹${member.payments[month]}` : "-"}</div>
+                                    <div className={`text-xs font-semibold mt-0.5 ${isBlocked ? "line-through text-gray-400" : paidVal > 0 ? "text-gray-800" : "text-gray-400 font-normal"}`}>
+                                      {paidVal > 0 ? `₹${paidVal}` : "-"}
+                                    </div>
                                   )}
-                                  {isAdmin && !isBlocked && !isEditing && <span className="absolute right-1 top-1 text-[7px] text-yellow-500 opacity-50">✎</span>}
+                                  {isBlocked && (
+                                    <span className="block text-[7px] font-medium text-red-600 truncate mt-0.5">
+                                      {status.badgeText}
+                                    </span>
+                                  )}
+                                  {isAdmin && !isBlocked && !isEditing && (
+                                    <span className="absolute right-1 top-1 text-[7px] text-amber-500 opacity-60">✎</span>
+                                  )}
                                 </div>
                               );
                             })}
@@ -1163,86 +1353,186 @@ export default function Dashboard({ userData }: { userData: any }) {
                 })}
               </div>
 
-              {/* 🖥️ SLEEK DESKTOP TABLE */}
-              <div className="hidden overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm md:block">
+              {/* 🖥️ SLEEK & CLEAN DESKTOP TABLE */}
+              <div className="hidden overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-xs md:block">
                 <div className="overflow-x-auto custom-scrollbar">
-                  <table className="w-full border-collapse text-left">
+                  <table className="w-full border-collapse text-left text-xs">
                     <thead>
-                      <tr className="border-b border-gray-100 bg-gray-50">
-                        <th className="sticky left-0 z-10 bg-gray-50 px-3 py-2.5 text-[10px] font-black uppercase tracking-widest text-gray-500 whitespace-nowrap shadow-[2px_0_5px_rgba(0,0,0,0.02)]">Name</th>
-                        {MONTHS.map((month) => <th key={month} className={`px-2 py-2.5 text-center text-[10px] font-black uppercase tracking-widest ${blockedMonths.includes(month) ? "text-red-400" : "text-gray-500"}`}>{month} {blockedMonths.includes(month) ? "🚫" : ""}</th>)}
-                        <th className="bg-blue-50 px-3 py-2.5 text-center text-[10px] font-black uppercase tracking-widest text-gray-900 border-l border-white">Total</th>
-                        <th className="bg-orange-50 px-3 py-2.5 text-center text-[10px] font-black uppercase tracking-widest text-gray-900 border-l border-white">Remaining</th>
+                      <tr className="border-b border-gray-200 bg-gray-50/90 text-gray-600">
+                        <th className="sticky left-0 z-20 bg-gray-50 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-gray-700 whitespace-nowrap border-r border-gray-200 shadow-[3px_0_6px_-2px_rgba(0,0,0,0.06)] min-w-[130px]">
+                          Member Name
+                        </th>
+                        {activeSchedule.map((due) => {
+                          const pKey = due.periodKey || due.monthKey || due.id;
+                          const isBlocked = blockedMonths.includes(pKey) || due.locked;
+                          const shortName = due.monthName ? due.monthName.slice(0, 4).toUpperCase() : due.monthKey;
+                          return (
+                            <th
+                              key={due.id}
+                              className={`px-2 py-2 text-center text-[10px] font-bold uppercase tracking-tight min-w-[62px] ${
+                                isBlocked ? "text-rose-500 bg-rose-50/30" : "text-gray-600"
+                              }`}
+                            >
+                              <div className="flex items-center justify-center gap-0.5">
+                                <span>{shortName}</span>
+                                {isBlocked && <span className="text-[9px]">🚫</span>}
+                              </div>
+                              {due.year && (
+                                <span className="block text-[8px] font-medium text-gray-400 tracking-tighter leading-none mt-0.5">
+                                  {due.year}
+                                </span>
+                              )}
+                            </th>
+                          );
+                        })}
+                        <th className="bg-blue-50/90 px-3 py-2 text-center text-[10px] font-bold uppercase tracking-wider text-blue-900 border-l border-gray-200 min-w-[70px]">
+                          Total
+                        </th>
+                        <th className="bg-amber-50/90 px-3 py-2 text-center text-[10px] font-bold uppercase tracking-wider text-amber-900 border-l border-gray-200 min-w-[85px]">
+                          Status
+                        </th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {sortedMembers.length === 0 && <tr><td colSpan={15} className="text-center text-gray-400 py-6 text-xs font-bold uppercase tracking-widest">No members yet. Admins can restore them using the yellow button above!</td></tr>}
+                      {sortedMembers.length === 0 && (
+                        <tr>
+                          <td
+                            colSpan={activeSchedule.length + 3}
+                            className="text-center text-gray-400 py-8 text-xs font-medium uppercase tracking-wider"
+                          >
+                            No members found.
+                          </td>
+                        </tr>
+                      )}
                       {sortedMembers.map((member) => {
                         const totalPaid = getMemberTotal(member.payments);
                         const remaining = getMemberExpectedTotal(member) - totalPaid;
 
                         return (
-                          <tr key={member.id} className="transition-colors hover:bg-gray-50/80 bg-white group">
-                            <td className="sticky left-0 bg-white group-hover:bg-gray-50/80 px-3 py-2 text-xs font-bold text-gray-900 shadow-[2px_0_5px_rgba(0,0,0,0.02)] whitespace-nowrap transition-colors">
-                              <div className="flex items-center gap-2">
-                                <span>{member.name}</span>
-                                {member.isHonorary && <span className="rounded-md border border-purple-200 bg-purple-50 px-1.5 py-[2px] text-[8px] font-black uppercase tracking-wider text-purple-700">Honorary</span>}
+                          <tr key={member.id} className="transition-colors hover:bg-amber-50/20 bg-white group">
+                            <td className="sticky left-0 z-10 bg-white group-hover:bg-amber-50/30 px-3 py-2 text-xs font-semibold text-gray-900 border-r border-gray-200 shadow-[3px_0_6px_-2px_rgba(0,0,0,0.06)] whitespace-nowrap transition-colors">
+                              <div className="flex items-center gap-1.5">
+                                <span className="tracking-tight">{member.name}</span>
+                                {member.isHonorary && (
+                                  <span className="rounded border border-purple-200 bg-purple-50 px-1.5 py-[1px] text-[7.5px] font-semibold uppercase tracking-wider text-purple-700">
+                                    Honorary
+                                  </span>
+                                )}
                               </div>
                             </td>
-                            {MONTHS.map((month) => {
-                              const isBlocked = blockedMonths.includes(month) || (member.exemptMonths || []).includes(month);
-                              const isEditing = editCell.id === member.id && editCell.month === month;
+                            {activeSchedule.map((due) => {
+                              const pKey = due.periodKey || due.monthKey || due.id;
+                              const status = resolveEffectivePeriodStatus(pKey, due, blockedMonths, member.exemptMonths || []);
+                              const isBlocked = status.isBlocked;
+                              const isEditing = editCell.id === member.id && editCell.dueKey === pKey;
+                              const paidAmt = getMemberPaymentForDue(member.payments, due);
 
                               return (
                                 <td
-                                  key={month}
-                                  onClick={() => handleCellClick(member.id, month, member.payments[month])}
+                                  key={due.id}
+                                  onClick={() => handleCellClick(member.id, due, paidAmt)}
                                   className={`
-                                  relative px-2 py-2 text-center text-[11px] font-black transition-all cursor-pointer group
-                                  ${isBlocked ? "bg-gray-50 text-gray-400 cursor-not-allowed" : "text-gray-700 hover:bg-yellow-50 hover:shadow-inner"}
-                                `}
-                                  title={isAdmin && !isBlocked ? "Click to edit amount" : ""}
+                                    relative px-1.5 py-2 text-center text-xs transition-all select-none
+                                    ${
+                                      isBlocked
+                                        ? "bg-rose-50/25 text-gray-400 cursor-not-allowed"
+                                        : isAdmin
+                                        ? "text-gray-800 hover:bg-amber-100/50 cursor-pointer font-medium"
+                                        : "text-gray-800 font-medium"
+                                    }
+                                  `}
+                                  title={isBlocked ? status.reasonText : isAdmin ? "Click to edit amount" : ""}
                                 >
                                   {isEditing ? (
                                     <input
                                       type="number"
                                       autoFocus
-                                      className="w-12 border-b-2 border-[#5a0000] bg-transparent text-center font-black text-[#5a0000] outline-none text-[11px]"
+                                      className="w-12 border-b border-[#5a0000] bg-transparent text-center font-semibold text-[#5a0000] outline-none text-xs"
                                       value={editValue}
                                       onChange={(e) => setEditValue(e.target.value)}
                                       onBlur={saveInlineEdit}
                                       onKeyDown={handleInlineKeyDown}
                                     />
                                   ) : (
-                                    <>
-                                      {member.payments[month] ? `₹${member.payments[month]}` : "-"}
-
-                                      {/* 🔥 EDIT ICON: Sirf hover par dikhega, clean UI */}
+                                    <div className="flex items-center justify-center relative">
+                                      <span
+                                        className={
+                                          isBlocked
+                                            ? "line-through text-gray-400 text-[11px]"
+                                            : paidAmt > 0
+                                            ? "font-semibold text-gray-800"
+                                            : "text-gray-300 font-normal"
+                                        }
+                                      >
+                                        {paidAmt > 0 ? `₹${paidAmt}` : "-"}
+                                      </span>
                                       {isAdmin && !isBlocked && (
-                                        <span className="absolute right-0.5 top-0.5 text-[8px] text-gray-300 group-hover:text-yellow-600 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <span className="absolute -right-1 top-0 text-[7px] text-amber-500 opacity-0 group-hover:opacity-60 transition-opacity">
                                           ✎
                                         </span>
                                       )}
-                                    </>
+                                    </div>
                                   )}
                                 </td>
                               );
                             })}
                             {member.isHonorary ? (
-                              <><td className="bg-purple-50/30 px-3 py-2 text-center text-xs font-bold text-gray-400">-</td><td className="bg-purple-50/30 px-3 py-2 text-center"><span className="inline-flex items-center rounded-md border border-purple-200 bg-purple-100 px-2 py-0.5 text-[8px] font-black uppercase tracking-wider text-purple-800">Honorary</span></td></>
+                              <>
+                                <td className="bg-purple-50/20 px-3 py-2 text-center text-xs font-normal text-gray-400 border-l border-gray-200">
+                                  -
+                                </td>
+                                <td className="bg-purple-50/20 px-3 py-2 text-center border-l border-gray-200">
+                                  <span className="inline-flex items-center rounded-md border border-purple-200 bg-purple-100 px-2 py-0.5 text-[8px] font-semibold uppercase tracking-wider text-purple-800">
+                                    Honorary
+                                  </span>
+                                </td>
+                              </>
                             ) : (
-                              <><td className="bg-blue-50/30 px-3 py-2 text-center text-xs font-black text-blue-700">₹{totalPaid}</td><td className="bg-orange-50/30 px-3 py-2 text-center">{remaining > 0 ? <span className="text-[10px] font-black text-red-600">₹{remaining} Due</span> : remaining < 0 ? <span className="inline-flex items-center rounded-md bg-green-100 px-2 py-0.5 text-[10px] font-black text-green-800">+₹{Math.abs(remaining)} Adv</span> : <span className="text-[10px] font-black text-gray-400">Clear</span>}</td></>
+                              <>
+                                <td className="bg-blue-50/30 px-3 py-2 text-center text-xs font-semibold text-blue-800 border-l border-gray-200">
+                                  ₹{totalPaid.toLocaleString('en-IN')}
+                                </td>
+                                <td className="bg-amber-50/30 px-3 py-2 text-center border-l border-gray-200 whitespace-nowrap">
+                                  {remaining > 0 ? (
+                                    <span className="text-[10px] font-semibold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-200/60">
+                                      ₹{remaining.toLocaleString('en-IN')} Due
+                                    </span>
+                                  ) : remaining < 0 ? (
+                                    <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/60">
+                                      +₹{Math.abs(remaining).toLocaleString('en-IN')} Adv
+                                    </span>
+                                  ) : (
+                                    <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/60">
+                                      Clear ✅
+                                    </span>
+                                  )}
+                                </td>
+                              </>
                             )}
                           </tr>
                         );
                       })}
                     </tbody>
-                    <tfoot className="border-t-2 border-gray-200 bg-gray-50">
+                    <tfoot className="border-t-2 border-gray-200 bg-gray-50/95 font-semibold">
                       <tr>
-                        <td className="sticky left-0 bg-gray-50 px-3 py-2.5 text-[11px] font-black text-gray-900 uppercase tracking-widest shadow-[2px_0_5px_rgba(0,0,0,0.02)]">Total</td>
-                        {MONTHS.map((month) => <td key={month} className={`px-2 py-2.5 text-center text-xs font-black ${blockedMonths.includes(month) ? "text-gray-400" : "text-gray-900"}`}>{monthlyTotals[month] > 0 ? `₹${monthlyTotals[month]}` : "-"}</td>)}
-                        <td className="bg-blue-100/50 px-3 py-2.5 text-center text-xs font-black text-blue-800 border-l border-white">₹{totalCollected}</td>
-                        <td className="bg-orange-100/50 px-3 py-2.5 text-center text-xs font-black text-orange-800 border-l border-white">₹{totalDeficit.toLocaleString()} Due</td>
+                        <td className="sticky left-0 bg-gray-50 px-3 py-2 text-[10px] font-bold text-gray-800 uppercase tracking-wider border-r border-gray-200 shadow-[3px_0_6px_-2px_rgba(0,0,0,0.06)]">
+                          Total (₹)
+                        </td>
+                        {activeSchedule.map((due) => {
+                          const pKey = due.periodKey || due.monthKey || due.id;
+                          const total = periodTotals[pKey] || 0;
+                          return (
+                            <td key={due.id} className="px-1.5 py-2 text-center text-xs font-semibold text-gray-800">
+                              {total > 0 ? `₹${total.toLocaleString('en-IN')}` : "-"}
+                            </td>
+                          );
+                        })}
+                        <td className="bg-blue-100/60 px-3 py-2 text-center text-xs font-semibold text-blue-900 border-l border-gray-200">
+                          ₹{totalCollected.toLocaleString('en-IN')}
+                        </td>
+                        <td className="bg-amber-100/60 px-3 py-2 text-center text-xs font-semibold text-amber-900 border-l border-gray-200 whitespace-nowrap">
+                          ₹{totalDeficit.toLocaleString('en-IN')} Due
+                        </td>
                       </tr>
                     </tfoot>
                   </table>
@@ -1252,7 +1542,7 @@ export default function Dashboard({ userData }: { userData: any }) {
           ) : activeSubTab === 'buildings' ? (
             /* 🏢 SLEEK & COMPACT BUILDING MATRIX */
             <div className="space-y-4 animate-in fade-in duration-300">
-              {/* Tiny Metrics Grid */}
+              {/* Overall Building Metrics Grid */}
               <div className="grid grid-cols-3 gap-2">
                 <div className="bg-white border border-gray-100 p-2 sm:p-3 rounded-xl text-center shadow-sm">
                   <span className="text-[8px] font-black uppercase tracking-wider text-gray-400 block mb-0.5">Total</span>
@@ -1268,18 +1558,70 @@ export default function Dashboard({ userData }: { userData: any }) {
                 </div>
               </div>
 
-              <div className="bg-white border border-gray-100 rounded-2xl p-3 sm:p-4 shadow-sm space-y-4">
+              {/* Per-Wing Collection Summary Cards (Centered & Concise) */}
+              <div className="flex flex-wrap justify-center items-stretch gap-2 sm:gap-2.5 max-w-2xl mx-auto">
+                {Object.entries(wingWiseMetrics).map(([wCode, wData]) => {
+                  const isSelected = activeWing === wCode;
+                  const total = wData.count || 0;
+                  const collected = wData.collectedCount || 0;
+                  const pending = Math.max(0, total - collected);
+                  const progressPct = total > 0 ? Math.round((collected / total) * 100) : 0;
 
-                {/* Wing Switcher - Compact */}
-                <div className="flex justify-center border-b border-gray-100 pb-3">
-                  <div className="flex gap-1 p-1 bg-gray-100 rounded-lg overflow-x-auto max-w-full custom-scrollbar">
+                  return (
+                    <div
+                      key={wCode}
+                      onClick={() => setActiveWing(wCode)}
+                      className={`flex-1 min-w-[140px] max-w-[210px] p-2.5 sm:p-3 rounded-xl border transition-all cursor-pointer select-none flex flex-col justify-between ${
+                        isSelected
+                          ? 'bg-white border-[#5a0000] ring-2 ring-[#5a0000]/15 shadow-xs'
+                          : 'bg-white border-gray-200/90 hover:border-gray-300 hover:shadow-2xs shadow-2xs'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-1">
+                        <span className={`text-[11px] sm:text-xs font-bold uppercase tracking-tight ${isSelected ? 'text-[#5a0000]' : 'text-gray-900'}`}>
+                          {wCode} Wing
+                        </span>
+                        <span className="text-xs sm:text-sm font-bold text-emerald-700">
+                          ₹{wData.collected.toLocaleString('en-IN')}
+                        </span>
+                      </div>
+
+                      {/* Collection Progress Bar */}
+                      <div className="w-full bg-gray-100 h-1 rounded-full overflow-hidden my-1.5">
+                        <div
+                          className="bg-emerald-500 h-full rounded-full transition-all duration-300"
+                          style={{ width: `${progressPct}%` }}
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between text-[10px] text-gray-500">
+                        <span className="text-gray-400 font-medium">{total} Flats</span>
+                        <div className="flex items-center gap-1">
+                          <span className="text-[9px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200/60" title="Collected">
+                            ✓ {collected}
+                          </span>
+                          <span className="text-[9px] font-semibold text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200/60" title="Pending">
+                            ✗ {pending}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="bg-white border border-gray-200/90 rounded-2xl p-3 sm:p-4 shadow-xs space-y-3.5">
+
+                {/* Wing Switcher - Compact Segmented */}
+                <div className="flex justify-center border-b border-gray-100 pb-2.5">
+                  <div className="flex gap-1.5 p-1 bg-gray-100/90 rounded-xl overflow-x-auto max-w-full custom-scrollbar border border-gray-200/60">
                     {dynWings.length > 0 ? (
                       dynWings.map((w) => (
                         <button
                           key={w.id}
                           onClick={() => setActiveWing(w.code)}
-                          className={`px-4 py-1.5 rounded-md text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer shrink-0 ${
-                            activeWing === w.code ? 'bg-[#5A0000] text-white shadow-sm' : 'text-gray-500 hover:text-gray-900'
+                          className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wider transition-all cursor-pointer shrink-0 ${
+                            activeWing === w.code ? 'bg-[#5A0000] text-white shadow-2xs' : 'text-gray-600 hover:text-gray-900 hover:bg-white/80'
                           }`}
                         >
                           {w.name}
@@ -1287,29 +1629,56 @@ export default function Dashboard({ userData }: { userData: any }) {
                       ))
                     ) : (
                       <>
-                        <button onClick={() => setActiveWing('A')} className={`px-4 py-1.5 rounded-md text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${activeWing === 'A' ? 'bg-[#5A0000] text-white shadow-sm' : 'text-gray-500'}`}>A WING</button>
-                        <button onClick={() => setActiveWing('B')} className={`px-4 py-1.5 rounded-md text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${activeWing === 'B' ? 'bg-[#5A0000] text-white shadow-sm' : 'text-gray-500'}`}>B WING</button>
+                        <button onClick={() => setActiveWing('A')} className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wider transition-all cursor-pointer ${activeWing === 'A' ? 'bg-[#5A0000] text-white shadow-2xs' : 'text-gray-600 hover:text-gray-900'}`}>A WING</button>
+                        <button onClick={() => setActiveWing('B')} className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wider transition-all cursor-pointer ${activeWing === 'B' ? 'bg-[#5A0000] text-white shadow-2xs' : 'text-gray-600 hover:text-gray-900'}`}>B WING</button>
                       </>
                     )}
                   </div>
                 </div>
 
-                {/* Compact Editor Modal */}
+                {/* Compact Editor Modal with Autosave & Blur */}
                 {selectedFlat && (
-                  <form onSubmit={handleSaveFlatChanda} className="bg-red-50/80 border border-red-200 p-3 rounded-xl space-y-3 animate-in fade-in duration-200 shadow-sm">
+                  <form
+                    ref={flatEditorRef}
+                    onSubmit={handleSaveFlatChanda}
+                    className="bg-red-50/80 border border-red-200 p-3 rounded-xl space-y-3 animate-in fade-in duration-200 shadow-sm"
+                  >
                     <div className="flex items-center justify-between border-b border-red-100 pb-2">
                       <h4 className="text-[11px] font-black text-red-950 uppercase tracking-wide flex items-center gap-1"><Home className="w-3 h-3 text-[#5A0000]" /> {activeWing}-{selectedFlat.split('_')[1]}</h4>
-                      <button type="button" onClick={() => setSelectedFlat(null)} className="text-[9px] font-bold text-gray-500 hover:text-red-700 bg-white px-2 py-1 rounded border border-gray-200 cursor-pointer">Close</button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          autoSaveCurrentFlat();
+                          setSelectedFlat(null);
+                        }}
+                        className="text-[9px] font-bold text-gray-500 hover:text-red-700 bg-white px-2 py-1 rounded border border-gray-200 cursor-pointer"
+                      >
+                        Close
+                      </button>
                     </div>
                     <div className="space-y-2">
                       <div>
                         <label className="text-[8px] font-black uppercase text-gray-500 block mb-0.5">Resident / Family Name</label>
-                        <input type="text" placeholder="Name (Optional)" className="w-full px-2 py-1.5 border border-gray-200 rounded-lg font-bold text-[10px] outline-none" value={inputName} onChange={(e) => setInputName(e.target.value)} />
+                        <input
+                          type="text"
+                          placeholder="Name (Optional)"
+                          className="w-full px-2 py-1.5 border border-gray-200 rounded-lg font-bold text-[10px] outline-none"
+                          value={inputName}
+                          onChange={(e) => setInputName(e.target.value)}
+                          onBlur={autoSaveCurrentFlat}
+                        />
                       </div>
                       <div className="grid grid-cols-2 gap-2">
                         <div>
                           <label className="text-[8px] font-black uppercase text-gray-500 block mb-0.5">Amount (₹)</label>
-                          <input type="number" required placeholder="501" className="w-full px-2 py-1.5 border border-gray-200 rounded-lg font-bold text-[10px] outline-none" value={inputAmount} onChange={(e) => setInputAmount(e.target.value)} />
+                          <input
+                            type="number"
+                            placeholder="501"
+                            className="w-full px-2 py-1.5 border border-gray-200 rounded-lg font-bold text-[10px] outline-none"
+                            value={inputAmount}
+                            onChange={(e) => setInputAmount(e.target.value)}
+                            onBlur={autoSaveCurrentFlat}
+                          />
                         </div>
                         <div>
                           <label className="text-[8px] font-black uppercase text-gray-500 block mb-0.5">Status</label>

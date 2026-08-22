@@ -77,7 +77,7 @@ export const StatCard: React.FC<StatCardProps> = ({
       } ${className}`}
     >
       <div className="flex items-center justify-between gap-1.5 mb-1">
-        <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-gray-500 truncate">
+        <span className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-gray-500 truncate">
           {label}
         </span>
         {icon && (
@@ -88,11 +88,11 @@ export const StatCard: React.FC<StatCardProps> = ({
       </div>
 
       <div className="flex items-baseline gap-1.5">
-        <span className={`text-base sm:text-lg font-black tracking-tight ${styles.text}`}>
+        <span className={`text-base sm:text-lg font-bold tracking-tight ${styles.text}`}>
           {value}
         </span>
         {subtext && (
-          <span className="text-[10px] font-bold text-gray-400 truncate">
+          <span className="text-[10px] font-medium text-gray-400 truncate">
             {subtext}
           </span>
         )}

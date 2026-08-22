@@ -175,6 +175,96 @@ export const subscribeAllFlatsInBuilding = (buildingId: string, wings: Wing[], c
   return unsubs;
 };
 
+export interface WingMetricsSummary {
+  wingId: string;
+  wingCode: string;
+  wingName: string;
+  totalFlats: number;
+  collectedFlats: number;
+  pendingFlats: number;
+  collectedAmount: number;
+  pendingAmount: number;
+  expectedAmount: number;
+}
+
+export interface BuildingCollectionMetrics {
+  wingSummaries: WingMetricsSummary[];
+  totalCollected: number;
+  totalPending: number;
+  totalExpected: number;
+  totalCollectedFlats: number;
+  totalPendingFlats: number;
+  totalFlats: number;
+}
+
+export const calculateWingMetrics = (
+  wings: Wing[],
+  flatsMap: Record<string, Flat[]>
+): BuildingCollectionMetrics => {
+  let totalCollected = 0;
+  let totalPending = 0;
+  let totalExpected = 0;
+  let totalCollectedFlats = 0;
+  let totalPendingFlats = 0;
+  let totalFlats = 0;
+
+  const wingSummaries: WingMetricsSummary[] = (wings || []).map(wing => {
+    const wingFlats = flatsMap[wing.id] || [];
+    let wCollectedAmount = 0;
+    let wPendingAmount = 0;
+    let wExpectedAmount = 0;
+    let wCollectedFlats = 0;
+    let wPendingFlats = 0;
+
+    wingFlats.forEach(flat => {
+      const paid = Number(flat.paidChanda) || 0;
+      const expected = Number(flat.expectedChanda) || (paid > 0 ? paid : 500);
+      const isPaid = paid > 0 || flat.paymentStatus === 'Paid' || String(flat.paymentStatus) === 'Collected';
+
+      wExpectedAmount += expected;
+      if (isPaid) {
+        wCollectedAmount += paid;
+        wCollectedFlats++;
+        if (expected > paid) {
+          wPendingAmount += (expected - paid);
+        }
+      } else {
+        wPendingAmount += expected;
+        wPendingFlats++;
+      }
+    });
+
+    totalCollected += wCollectedAmount;
+    totalPending += wPendingAmount;
+    totalExpected += wExpectedAmount;
+    totalCollectedFlats += wCollectedFlats;
+    totalPendingFlats += wPendingFlats;
+    totalFlats += wingFlats.length;
+
+    return {
+      wingId: wing.id,
+      wingCode: wing.code || wing.id,
+      wingName: wing.name || `${wing.code} Wing`,
+      totalFlats: wingFlats.length,
+      collectedFlats: wCollectedFlats,
+      pendingFlats: wPendingFlats,
+      collectedAmount: wCollectedAmount,
+      pendingAmount: wPendingAmount,
+      expectedAmount: wExpectedAmount
+    };
+  });
+
+  return {
+    wingSummaries,
+    totalCollected,
+    totalPending,
+    totalExpected,
+    totalCollectedFlats,
+    totalPendingFlats,
+    totalFlats
+  };
+};
+
 export const createOrUpdateFlat = async (
   buildingId: string,
   wingId: string,
@@ -183,6 +273,8 @@ export const createOrUpdateFlat = async (
   const flatId = flatData.id || `${wingId}_${flatData.flatNumber}`;
   const ref = doc(db, BUILDINGS_COLLECTION, buildingId, WINGS_COLLECTION, wingId, FLATS_COLLECTION, flatId);
 
+  const paidAmount = flatData.paidChanda !== undefined ? Number(flatData.paidChanda) : undefined;
+  
   const payload: any = {
     ...flatData,
     flatNumber: String(flatData.flatNumber).trim(),
@@ -191,12 +283,17 @@ export const createOrUpdateFlat = async (
     updatedAt: serverTimestamp()
   };
 
+  if (paidAmount !== undefined) {
+    payload.paidChanda = paidAmount;
+    payload.paymentStatus = paidAmount > 0 ? 'Paid' : (flatData.paymentStatus || 'Due');
+  }
+
   const existing = await getDoc(ref);
   if (!existing.exists()) {
     payload.createdAt = serverTimestamp();
-    payload.paidChanda = flatData.paidChanda || 0;
-    payload.expectedChanda = flatData.expectedChanda || 0;
-    payload.paymentStatus = flatData.paymentStatus || 'No Record';
+    payload.paidChanda = payload.paidChanda || 0;
+    payload.expectedChanda = flatData.expectedChanda || 500;
+    payload.paymentStatus = payload.paidChanda > 0 ? 'Paid' : 'Due';
   }
 
   await setDoc(ref, payload, { merge: true });
@@ -204,12 +301,13 @@ export const createOrUpdateFlat = async (
   // Maintain backward compatibility with legacy `building_chanda` if needed
   try {
     const legacyRef = doc(db, LEGACY_COLLECTION, flatId);
+    const amountVal = payload.paidChanda !== undefined ? payload.paidChanda : (existing.exists() ? (existing.data().paidChanda || 0) : 0);
     await setDoc(legacyRef, {
       wing: wingId,
       room: flatData.flatNumber,
-      name: flatData.residentName || '',
-      amount: flatData.paidChanda || 0,
-      status: (flatData.paidChanda && flatData.paidChanda > 0) ? 'Collected' : 'Pending',
+      name: flatData.residentName !== undefined ? flatData.residentName : (existing.exists() ? (existing.data().residentName || '') : ''),
+      amount: amountVal,
+      status: amountVal > 0 ? 'Collected' : 'Pending',
       lastUpdated: serverTimestamp()
     }, { merge: true });
   } catch (err) {

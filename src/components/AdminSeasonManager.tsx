@@ -25,13 +25,20 @@ import {
   deleteMonthlyDue,
   bulkUpdateMonthlyDues,
   toggleMonthLock,
+  bulkLockMonthlyDues,
+  bulkUnlockMonthlyDues,
   setMemberOverride,
   deleteMemberOverride,
   seedInitialSeasons,
   deleteSeason,
   cleanupDuplicateSeasons,
+  formatPeriodKey,
+  CALENDAR_MONTH_NAMES,
   MANDAL_MONTHS
 } from '@/lib/seasonService';
+import { db } from '@/lib/firebase';
+import { doc, setDoc, onSnapshot } from 'firebase/firestore';
+
 
 interface AdminSeasonManagerProps {
   currentUserData?: any;
@@ -49,7 +56,7 @@ interface AdminSeasonManagerProps {
   setIsNewMemberHonorary?: (val: boolean) => void;
   onRemoveMember?: (id: number, name: string) => void;
   onRestoreMember?: (id: number, name: string) => void;
-  onToggleMemberExemptMonth?: (member: any, month: any) => void;
+  onToggleMemberExemptMonth?: (member: any, month: any, aliases?: string[]) => void;
 }
 
 export default function AdminSeasonManager({
@@ -77,7 +84,8 @@ export default function AdminSeasonManager({
   const [activeSubView, setActiveSubView] = useState<'schedule' | 'overrides' | 'approvals' | 'members'>('schedule');
   const [expandedMemberId, setExpandedMemberId] = useState<number | null>(null);
 
-  // Modals
+  // Modals & Selection
+  const [selectedDueIds, setSelectedDueIds] = useState<string[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [newSeasonName, setNewSeasonName] = useState('');
@@ -106,7 +114,8 @@ export default function AdminSeasonManager({
   // Add Custom Month Modal
   const [showAddMonthModal, setShowAddMonthModal] = useState(false);
   const [newMonthKey, setNewMonthKey] = useState('');
-  const [newMonthName, setNewMonthName] = useState('');
+  const [newMonthName, setNewMonthName] = useState('September');
+  const [newMonthYear, setNewMonthYear] = useState<number>(2026);
   const [newMonthAmount, setNewMonthAmount] = useState('250');
   const [newMonthOrder, setNewMonthOrder] = useState('13');
   const [newMonthNotes, setNewMonthNotes] = useState('');
@@ -125,6 +134,58 @@ export default function AdminSeasonManager({
   const [overrideAmount, setOverrideAmount] = useState('100');
   const [overrideReason, setOverrideReason] = useState('');
   const [isSavingOverride, setIsSavingOverride] = useState(false);
+
+  // Global Blocked Months (Mandal Settings)
+  const [blockedMonths, setBlockedMonths] = useState<string[]>([]);
+
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, 'mandal_settings', 'config'), (snap) => {
+      if (snap.exists() && snap.data()?.blockedMonths) {
+        setBlockedMonths(snap.data().blockedMonths);
+      } else {
+        setBlockedMonths([]);
+      }
+    });
+    return () => unsub();
+  }, []);
+
+  const handleToggleGlobalBlock = async (targetKey: string, aliasKeys: string[] = []) => {
+    const allKeys = [targetKey, ...aliasKeys].filter(Boolean);
+    const isCurrentlyBlocked = blockedMonths.some(m => allKeys.includes(m));
+    const newBlocked = isCurrentlyBlocked
+      ? blockedMonths.filter(m => !allKeys.includes(m))
+      : Array.from(new Set([...blockedMonths, targetKey]));
+
+    try {
+      await setDoc(doc(db, 'mandal_settings', 'config'), { blockedMonths: newBlocked }, { merge: true });
+      onShowToast?.({ text: isCurrentlyBlocked ? `${targetKey} unblocked globally ✅` : `${targetKey} blocked globally 🚫`, type: 'success' });
+    } catch (err) {
+      console.error(err);
+      onShowToast?.({ text: 'Failed to update global block settings', type: 'error' });
+    }
+  };
+
+  const handleBulkGlobalBlockSelected = async (block: boolean) => {
+    if (selectedDueIds.length === 0) return;
+    askConfirm(
+      `${selectedDueIds.length} periods ko globally ${block ? 'BLOCK' : 'UNBLOCK'} karein?`,
+      async () => {
+        try {
+          let newBlocked = [...blockedMonths];
+          if (block) {
+            newBlocked = Array.from(new Set([...newBlocked, ...selectedDueIds]));
+          } else {
+            newBlocked = newBlocked.filter(m => !selectedDueIds.includes(m));
+          }
+          await setDoc(doc(db, 'mandal_settings', 'config'), { blockedMonths: newBlocked }, { merge: true });
+          onShowToast?.({ text: `Successfully ${block ? 'globally blocked' : 'globally unblocked'} ${selectedDueIds.length} periods`, type: 'success' });
+          setSelectedDueIds([]);
+        } catch (err: any) {
+          onShowToast?.({ text: err.message || 'Action failed', type: 'error' });
+        }
+      }
+    );
+  };
 
   // Auto-seed / self-heal initial seasons & cleanup duplicates
   useEffect(() => {
@@ -165,13 +226,15 @@ export default function AdminSeasonManager({
   useEffect(() => {
     if (!selectedSeasonId) {
       setDues([]);
+      setSelectedDueIds([]);
       return;
     }
+    const currentSeason = seasons.find(s => s.id === selectedSeasonId);
     const unsub = subscribeMonthlyDues(selectedSeasonId, (dList) => {
       setDues(dList);
-    });
+    }, currentSeason?.startDate);
     return () => unsub();
-  }, [selectedSeasonId]);
+  }, [selectedSeasonId, seasons]);
 
   // Subscribe to Member Overrides for selected season
   useEffect(() => {
@@ -331,11 +394,13 @@ export default function AdminSeasonManager({
   const handleSaveMonthAmount = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedSeasonId || !editingMonth) return;
+    const docKey = editingMonth.id || editingMonth.periodKey || editingMonth.monthKey;
+    if (!docKey) return;
     setIsUpdatingMonth(true);
     try {
       await updateMonthlyDue(
         selectedSeasonId,
-        editingMonth.monthKey,
+        docKey,
         Number(editAmount) || 100,
         currentUserData?.uid,
         editReason.trim()
@@ -352,42 +417,62 @@ export default function AdminSeasonManager({
   const handleAddCustomMonth = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedSeasonId) return;
-    if (!newMonthKey.trim()) {
-      onShowToast({ text: 'Please enter a target/month key (e.g. GANPATI)', type: 'error' });
+
+    const monthNameClean = newMonthName.trim();
+    if (!monthNameClean) {
+      onShowToast({ text: 'Please select or enter a month/period name', type: 'error' });
       return;
     }
+
+    const monthIdx = CALENDAR_MONTH_NAMES.findIndex(m => m.toLowerCase() === monthNameClean.toLowerCase());
+    const canonicalKey = monthIdx >= 0
+      ? formatPeriodKey(newMonthYear, monthIdx + 1)
+      : (newMonthKey.trim() ? `${newMonthYear}_${newMonthKey.trim().toUpperCase()}` : `custom_${Date.now()}`);
+
+    // Check for collision
+    const existing = dues.find(d => (d.periodKey === canonicalKey || d.id === canonicalKey));
+    if (existing) {
+      onShowToast({ text: `Period "${monthNameClean} ${newMonthYear}" (${canonicalKey}) is already in the schedule!`, type: 'error' });
+      return;
+    }
+
     setIsAddingMonth(true);
     try {
       await addCustomMonthlyDue(
         selectedSeasonId,
         {
-          monthKey: newMonthKey.toUpperCase().trim(),
-          monthName: newMonthName.trim() || newMonthKey.toUpperCase().trim(),
+          periodKey: canonicalKey,
+          monthKey: newMonthKey.trim().toUpperCase() || monthNameClean.slice(0, 4).toUpperCase(),
+          monthName: monthNameClean,
+          year: newMonthYear,
           monthOrder: Number(newMonthOrder) || (dues.length + 1),
-          dueAmount: Number(newMonthAmount) || 100,
+          dueAmount: Number(newMonthAmount) || 250,
           notes: newMonthNotes.trim()
         },
         currentUserData?.uid
       );
-      onShowToast({ text: `Added target "${newMonthName || newMonthKey}" (₹${newMonthAmount})`, type: 'success' });
+      onShowToast({ text: `Added period "${monthNameClean} ${newMonthYear}" (#${newMonthOrder}, ₹${newMonthAmount})`, type: 'success' });
       setShowAddMonthModal(false);
       setNewMonthKey('');
-      setNewMonthName('');
+      setNewMonthName('September');
       setNewMonthAmount('250');
+      setNewMonthOrder(String(dues.length + 2));
       setNewMonthNotes('');
     } catch (err: any) {
-      onShowToast({ text: err.message || 'Failed to add target', type: 'error' });
+      onShowToast({ text: err.message || 'Failed to add period', type: 'error' });
     } finally {
       setIsAddingMonth(false);
     }
   };
 
-  const handleDeleteCustomMonth = (monthKey: string) => {
+  const handleDeleteCustomMonth = (due: MonthlyDue) => {
     if (!selectedSeasonId) return;
-    askConfirm(`Delete target item "${monthKey}"?`, async () => {
+    const docKey = due.id || due.periodKey || due.monthKey;
+    if (!docKey) return;
+    askConfirm(`Delete schedule item "${due.monthName} ${due.year || ''}"?`, async () => {
       try {
-        await deleteMonthlyDue(selectedSeasonId, monthKey, currentUserData?.uid);
-        onShowToast({ text: `Target ${monthKey} deleted!`, type: 'success' });
+        await deleteMonthlyDue(selectedSeasonId, docKey, currentUserData?.uid);
+        onShowToast({ text: `Deleted ${due.monthName}!`, type: 'success' });
         setShowEditMonthModal(false);
       } catch (err: any) {
         onShowToast({ text: err.message || 'Failed to delete target', type: 'error' });
@@ -401,6 +486,8 @@ export default function AdminSeasonManager({
     setIsBulkUpdating(true);
     try {
       const payload = dues.map(d => ({
+        dueId: d.id,
+        periodKey: d.periodKey,
         monthKey: d.monthKey,
         dueAmount: Number(bulkAmount) || 100
       }));
@@ -416,22 +503,64 @@ export default function AdminSeasonManager({
 
   const handleToggleLock = async (month: MonthlyDue) => {
     if (!selectedSeasonId) return;
+    const docKey = month.id || month.periodKey || month.monthKey;
+    if (!docKey) return;
     try {
       await toggleMonthLock(
         selectedSeasonId,
-        month.monthKey,
+        docKey,
         !month.locked,
         currentUserData?.uid,
         month.locked ? 'Unlocked by admin' : 'Locked by admin'
       );
       onShowToast({
-        text: `${month.monthName} is now ${month.locked ? 'Unlocked' : 'Locked'}`,
+        text: `${month.monthName} ${month.year || ''} is now ${month.locked ? 'Unlocked' : 'Locked'}`,
         type: 'success'
       });
     } catch (err: any) {
       onShowToast({ text: err.message || 'Lock toggle failed', type: 'error' });
     }
   };
+
+  const handleSelectAllDues = () => {
+    if (selectedDueIds.length === dues.length) {
+      setSelectedDueIds([]);
+    } else {
+      setSelectedDueIds(dues.map(d => d.id || d.periodKey || d.monthKey || '').filter(Boolean));
+    }
+  };
+
+
+  const handleToggleSelectDue = (id: string) => {
+    setSelectedDueIds(prev =>
+      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleBulkLockSelected = async (lock: boolean) => {
+    if (!selectedSeasonId || selectedDueIds.length === 0) {
+      onShowToast({ text: 'Select at least one month first', type: 'error' });
+      return;
+    }
+    const actionText = lock ? 'Lock' : 'Unlock';
+    askConfirm(
+      `${actionText} ${selectedDueIds.length} selected period(s)?`,
+      async () => {
+        try {
+          if (lock) {
+            await bulkLockMonthlyDues(selectedSeasonId, selectedDueIds, 'Bulk locked by administrator', currentUserData?.uid);
+          } else {
+            await bulkUnlockMonthlyDues(selectedSeasonId, selectedDueIds, 'Bulk unlocked by administrator', currentUserData?.uid);
+          }
+          onShowToast({ text: `Successfully ${lock ? 'locked' : 'unlocked'} ${selectedDueIds.length} periods`, type: 'success' });
+          setSelectedDueIds([]);
+        } catch (err: any) {
+          onShowToast({ text: err.message || 'Bulk lock action failed', type: 'error' });
+        }
+      }
+    );
+  };
+
 
   const handleSaveOverride = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -480,32 +609,32 @@ export default function AdminSeasonManager({
   };
 
   return (
-    <div className="space-y-3 sm:space-y-5 animate-in fade-in duration-300">
+    <div className="space-y-3 sm:space-y-4 animate-in fade-in duration-300">
       {/* ─── Top Control Bar ───────────────────────────────── */}
-      <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-5 shadow-sm">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border-b border-gray-100 pb-3">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-red-50 border border-red-200 flex items-center justify-center text-[#5a0000] shrink-0">
-              <Coins className="w-4 h-4" />
+      <div className="bg-white rounded-2xl border border-gray-200/90 p-3.5 sm:p-5 shadow-xs">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-3.5">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-red-50 border border-red-200/80 flex items-center justify-center text-[#5a0000] shrink-0">
+              <Coins className="w-5 h-5" />
             </div>
             <div>
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <h2 className="text-sm sm:text-base font-black text-gray-900 uppercase tracking-tight">
-                  Chanda & Finance
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-sm sm:text-base font-bold text-gray-900 uppercase tracking-tight">
+                  Chanda & Finance Hub
                 </h2>
                 {activeSeason && (
-                  <span className="px-2 py-0.5 rounded-full bg-emerald-100 border border-emerald-300 text-emerald-800 text-[9px] font-black uppercase tracking-wider">
-                    {activeSeason.name}
+                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-semibold uppercase tracking-wider">
+                    {activeSeason.name} Live
                   </span>
                 )}
               </div>
-              <p className="text-[10px] sm:text-xs font-semibold text-gray-500">
-                Seasons, monthly schedules, overrides & approvals
+              <p className="text-[11px] font-normal text-gray-500 mt-0.5">
+                Manage financial seasons, monthly targets, member overrides & payment approvals
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
             <button
               onClick={() => {
                 setNewSeasonName('2026–27');
@@ -514,7 +643,7 @@ export default function AdminSeasonManager({
                 setNewEndDate('2027-08-31');
                 setShowCreateModal(true);
               }}
-              className="px-3 py-1.5 rounded-lg bg-[#5a0000] text-white font-black text-[10px] sm:text-xs uppercase tracking-wider hover:bg-[#7a0000] transition-colors flex items-center gap-1 shadow-sm active:scale-95"
+              className="px-3.5 py-2 rounded-xl bg-[#5a0000] text-white font-semibold text-[11px] sm:text-xs uppercase tracking-wider hover:bg-[#720000] transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer active:scale-95"
             >
               <Plus className="w-3.5 h-3.5" /> Create Season
             </button>
@@ -522,7 +651,7 @@ export default function AdminSeasonManager({
         </div>
 
         {/* Live Metrics Grid using shared StatCard */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 mt-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3 mt-3.5">
           <StatCard
             label="Live Season"
             value={activeSeason ? activeSeason.name : 'None'}
@@ -551,29 +680,29 @@ export default function AdminSeasonManager({
         </div>
       </div>
 
-      {/* ─── Season Selector Tabs & Actions ────────────────── */}
-      <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4 shadow-xs space-y-3">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-2">
-          <div className="flex items-center gap-1.5">
-            <Calendar className="w-3.5 h-3.5 text-[#5a0000]" />
-            <h3 className="text-xs font-black uppercase tracking-wider text-gray-800">
+      {/* ─── Season Selector Tabs & Sub-Navigation ──────────── */}
+      <div className="bg-white rounded-2xl border border-gray-200/90 p-3 sm:p-4 shadow-xs space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border-b border-gray-100 pb-2.5">
+          <div className="flex items-center gap-2">
+            <Calendar className="w-4 h-4 text-[#5a0000]" />
+            <h3 className="text-xs sm:text-sm font-semibold uppercase tracking-wider text-gray-800">
               Select Mandal Season
             </h3>
           </div>
 
           {selectedSeason && (
-            <div className="flex flex-wrap items-center gap-1.5">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 onClick={() => handleOpenEditSeason(selectedSeason)}
-                className="px-2 py-1 rounded-md bg-gray-100 text-gray-800 font-bold text-[10px] uppercase tracking-wider hover:bg-gray-200 flex items-center gap-1 border border-gray-200 cursor-pointer"
+                className="px-2.5 py-1.5 rounded-lg bg-gray-50 text-gray-700 font-semibold text-[10px] sm:text-xs uppercase tracking-wider hover:bg-gray-100 flex items-center gap-1.5 border border-gray-200 cursor-pointer transition-colors shadow-2xs"
               >
-                <Edit3 className="w-3 h-3" /> Settings
+                <Edit3 className="w-3 h-3 text-gray-500" /> Settings
               </button>
 
               {selectedSeason.status !== 'active' && (
                 <button
                   onClick={() => handleActivateSeason(selectedSeason)}
-                  className="px-2 py-1 rounded-md bg-emerald-600 text-white font-bold text-[10px] uppercase tracking-wider hover:bg-emerald-700 flex items-center gap-1 shadow-xs cursor-pointer"
+                  className="px-2.5 py-1.5 rounded-lg bg-emerald-600 text-white font-semibold text-[10px] sm:text-xs uppercase tracking-wider hover:bg-emerald-700 flex items-center gap-1 shadow-2xs cursor-pointer transition-colors"
                 >
                   <Check className="w-3 h-3" /> Set Live
                 </button>
@@ -582,19 +711,19 @@ export default function AdminSeasonManager({
               {displaySeasons.length > 1 && (
                 <button
                   onClick={() => handleDeleteSeason(selectedSeason)}
-                  className="px-2 py-1 rounded-md bg-rose-50 text-rose-600 font-bold text-[10px] uppercase tracking-wider hover:bg-rose-100 flex items-center gap-1 border border-rose-200 cursor-pointer"
+                  className="px-2.5 py-1.5 rounded-lg bg-rose-50 text-rose-600 font-semibold text-[10px] sm:text-xs uppercase tracking-wider hover:bg-rose-100 flex items-center gap-1 border border-rose-200 cursor-pointer transition-colors shadow-2xs"
                   title="Delete this season"
                 >
                   <Trash2 className="w-3 h-3" /> Delete
                 </button>
               )}
 
-              <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider border ${
+              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider border ${
                 selectedSeason.status === 'active'
-                  ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                   : selectedSeason.status === 'draft'
-                  ? 'bg-amber-100 text-amber-800 border-amber-300'
-                  : 'bg-gray-100 text-gray-700 border-gray-300'
+                  ? 'bg-amber-50 text-amber-700 border-amber-200'
+                  : 'bg-gray-100 text-gray-600 border-gray-200'
               }`}>
                 {selectedSeason.status}
               </span>
@@ -603,17 +732,17 @@ export default function AdminSeasonManager({
         </div>
 
         {/* Season Chips */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 custom-scrollbar">
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 custom-scrollbar">
           {displaySeasons.map((s) => {
             const isSelected = s.id === selectedSeasonId;
             return (
               <button
                 key={s.id}
                 onClick={() => setSelectedSeasonId(s.id)}
-                className={`px-3 py-1.5 rounded-lg font-bold text-[11px] uppercase tracking-wider transition-all shrink-0 flex items-center gap-1.5 cursor-pointer ${
+                className={`px-3.5 py-1.5 rounded-xl font-semibold text-xs uppercase tracking-wider transition-all shrink-0 flex items-center gap-1.5 cursor-pointer ${
                   isSelected
-                    ? 'bg-[#5a0000] text-white shadow-xs'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    ? 'bg-[#5a0000] text-white shadow-2xs'
+                    : 'bg-gray-100/90 text-gray-700 hover:bg-gray-200/90'
                 }`}
               >
                 <span>{s.name}</span>
@@ -632,13 +761,13 @@ export default function AdminSeasonManager({
         {selectedSeasonId && (
           <div className="border-t border-gray-100 pt-2.5">
             <div className="flex items-center justify-between gap-1.5 overflow-x-auto pb-1 custom-scrollbar">
-              <div className="flex gap-1 bg-gray-100/80 p-1 rounded-xl">
+              <div className="flex gap-1.5 bg-gray-100/80 p-1 rounded-xl border border-gray-200/60">
                 <button
                   onClick={() => setActiveSubView('schedule')}
-                  className={`px-2.5 py-1.5 rounded-lg text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all shrink-0 cursor-pointer ${
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wider transition-all shrink-0 cursor-pointer ${
                     activeSubView === 'schedule'
-                      ? 'bg-[#5a0000] text-white shadow-xs'
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-white/60'
+                      ? 'bg-[#5a0000] text-white shadow-2xs'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-white/80'
                   }`}
                 >
                   Schedule ({dues.length})
@@ -646,10 +775,10 @@ export default function AdminSeasonManager({
 
                 <button
                   onClick={() => setActiveSubView('overrides')}
-                  className={`px-2.5 py-1.5 rounded-lg text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all shrink-0 cursor-pointer ${
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wider transition-all shrink-0 cursor-pointer ${
                     activeSubView === 'overrides'
-                      ? 'bg-[#5a0000] text-white shadow-xs'
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-white/60'
+                      ? 'bg-[#5a0000] text-white shadow-2xs'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-white/80'
                   }`}
                 >
                   Overrides ({overrides.length})
@@ -657,15 +786,15 @@ export default function AdminSeasonManager({
 
                 <button
                   onClick={() => setActiveSubView('approvals')}
-                  className={`px-2.5 py-1.5 rounded-lg text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1 shrink-0 cursor-pointer ${
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wider transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
                     activeSubView === 'approvals'
-                      ? 'bg-[#5a0000] text-white shadow-xs'
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-white/60'
+                      ? 'bg-[#5a0000] text-white shadow-2xs'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-white/80'
                   }`}
                 >
                   <span>Approvals</span>
                   {stats.pendingCount > 0 && (
-                    <span className="px-1.5 py-0.2 bg-rose-500 text-white rounded-full text-[9px] font-black">
+                    <span className="px-1.5 py-0.2 bg-rose-500 text-white rounded-full text-[9px] font-bold">
                       {stats.pendingCount}
                     </span>
                   )}
@@ -673,10 +802,10 @@ export default function AdminSeasonManager({
 
                 <button
                   onClick={() => setActiveSubView('members')}
-                  className={`px-2.5 py-1.5 rounded-lg text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all shrink-0 cursor-pointer ${
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wider transition-all shrink-0 cursor-pointer ${
                     activeSubView === 'members'
-                      ? 'bg-[#5a0000] text-white shadow-xs'
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-white/60'
+                      ? 'bg-[#5a0000] text-white shadow-2xs'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-white/80'
                   }`}
                 >
                   Members ({stats.membersCount})
@@ -689,62 +818,162 @@ export default function AdminSeasonManager({
 
       {/* ─── TAB 1: MONTHLY DUE SCHEDULE MATRIX ────────────── */}
       {selectedSeasonId && activeSubView === 'schedule' && (
-        <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4 shadow-xs space-y-3">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-2.5">
+        <div className="bg-white rounded-2xl border border-gray-200/90 p-3 sm:p-5 shadow-xs space-y-3.5">
+          {/* Header & Main Actions */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-3">
             <div>
-              <h3 className="text-xs sm:text-sm font-bold uppercase tracking-wider text-gray-800">
-                Monthly Due Schedule ({selectedSeason?.name})
-              </h3>
-              <p className="text-[10px] text-gray-500 font-medium">
-                Tap any month card to adjust target amounts or lock/unlock
+              <div className="flex items-center gap-2">
+                <h3 className="text-xs sm:text-sm font-semibold uppercase tracking-wider text-gray-900">
+                  Monthly Due Schedule ({selectedSeason?.name})
+                </h3>
+                <span className="text-[10px] font-semibold text-gray-600 bg-gray-100 px-2 py-0.5 rounded-full border border-gray-200">
+                  {dues.length} Periods
+                </span>
+              </div>
+              <p className="text-[11px] text-gray-500 font-normal mt-0.5">
+                Tap any month card to adjust target amount, block globally, or lock for this season.
               </p>
             </div>
 
-            <div className="flex items-center gap-1.5 self-end sm:self-auto shrink-0">
+            <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto shrink-0">
               <button
                 type="button"
                 onClick={() => {
-                  setNewMonthKey('');
-                  setNewMonthName('');
+                  const startYear = parseInt((selectedSeason?.startDate || '2025-09-01').split('-')[0], 10) || 2025;
+                  setNewMonthKey('SEPT');
+                  setNewMonthName('September');
+                  setNewMonthYear(startYear + 1);
                   setNewMonthAmount('250');
                   setNewMonthOrder(String(dues.length + 1));
                   setNewMonthNotes('');
                   setShowAddMonthModal(true);
                 }}
-                className="px-3 py-1.5 rounded-lg bg-[#5a0000] text-white font-bold text-[10px] sm:text-xs uppercase tracking-wider hover:bg-[#7a0000] flex items-center gap-1 shadow-2xs cursor-pointer active:scale-95 transition-all"
+                className="px-3 py-1.5 rounded-xl bg-[#5a0000] text-white font-semibold text-[11px] sm:text-xs uppercase tracking-wider hover:bg-[#7a0000] flex items-center gap-1.5 shadow-2xs cursor-pointer active:scale-95 transition-all"
               >
-                <Plus className="w-3.5 h-3.5" /> Add Target
+                <Plus className="w-3.5 h-3.5" /> Add Month / Target
               </button>
               <button
                 type="button"
                 onClick={() => setShowBulkModal(true)}
-                className="px-2.5 py-1.5 rounded-lg bg-gray-100 text-gray-700 font-bold text-[10px] sm:text-xs uppercase tracking-wider hover:bg-gray-200 flex items-center gap-1 border border-gray-200 cursor-pointer transition-colors"
+                className="px-3 py-1.5 rounded-xl bg-white text-gray-700 font-semibold text-[11px] sm:text-xs uppercase tracking-wider hover:bg-gray-50 flex items-center gap-1.5 border border-gray-200 shadow-2xs cursor-pointer transition-colors"
               >
-                <Edit3 className="w-3 h-3" /> Bulk Set
+                <Edit3 className="w-3 h-3" /> Bulk Set Target
               </button>
             </div>
           </div>
 
+          {/* Contextual Multi-Select & Bulk Action Toolbar */}
+          <div className="bg-gray-50/90 border border-gray-200/80 rounded-xl p-2.5 flex flex-wrap items-center justify-between gap-2.5 transition-all">
+            <div className="flex items-center gap-2">
+              <label className="flex items-center gap-2 text-xs font-semibold text-gray-700 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={dues.length > 0 && selectedDueIds.length === dues.length}
+                  onChange={handleSelectAllDues}
+                  className="w-3.5 h-3.5 accent-[#5a0000] rounded cursor-pointer"
+                />
+                <span>
+                  Select All <span className="text-gray-400 font-normal">({selectedDueIds.length}/{dues.length})</span>
+                </span>
+              </label>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-1.5">
+              {selectedDueIds.length === 0 ? (
+                <span className="text-[11px] font-normal text-gray-400 italic">
+                  Select cards below for bulk operations
+                </span>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => handleBulkGlobalBlockSelected(true)}
+                    className="px-2.5 py-1 rounded-lg bg-rose-50 text-rose-700 font-semibold text-[10px] uppercase tracking-wider hover:bg-rose-100 border border-rose-200 flex items-center gap-1 shadow-2xs cursor-pointer transition-all active:scale-95"
+                    title="Block selected months globally"
+                  >
+                    🚫 Global Block ({selectedDueIds.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleBulkGlobalBlockSelected(false)}
+                    className="px-2.5 py-1 rounded-lg bg-teal-50 text-teal-700 font-semibold text-[10px] uppercase tracking-wider hover:bg-teal-100 border border-teal-200 flex items-center gap-1 shadow-2xs cursor-pointer transition-all active:scale-95"
+                    title="Unblock selected months globally"
+                  >
+                    ✅ Global Unblock ({selectedDueIds.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleBulkLockSelected(true)}
+                    className="px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800 font-semibold text-[10px] uppercase tracking-wider hover:bg-amber-100 border border-amber-200 flex items-center gap-1 shadow-2xs cursor-pointer transition-all active:scale-95"
+                    title="Lock selected months for this season"
+                  >
+                    <Lock className="w-3 h-3" /> Season Lock ({selectedDueIds.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleBulkLockSelected(false)}
+                    className="px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 font-semibold text-[10px] uppercase tracking-wider hover:bg-emerald-100 border border-emerald-200 flex items-center gap-1 shadow-2xs cursor-pointer transition-all active:scale-95"
+                    title="Unlock selected months for this season"
+                  >
+                    <Unlock className="w-3 h-3" /> Season Unlock ({selectedDueIds.length})
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Month Target Cards Grid */}
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2 sm:gap-2.5">
             {dues.map((month) => {
-              const isLocked = month.locked;
+              const docKey = month.periodKey || month.monthKey || month.id || `month_${month.monthOrder}`;
+              const aliases = [month.periodKey, month.monthKey, month.id].filter(Boolean) as string[];
+              const isGloballyBlocked = blockedMonths.some(m => aliases.includes(m));
+              const isSeasonLocked = month.locked || month.status === 'locked';
+              const isSelected = selectedDueIds.includes(docKey);
+
               return (
                 <div
-                  key={month.monthKey}
+                  key={docKey}
                   onClick={() => {
                     setEditingMonth(month);
                     setEditAmount(String(month.dueAmount));
                     setEditReason(month.lockReason || '');
                     setShowEditMonthModal(true);
                   }}
-                  className={`bg-white border rounded-xl p-2.5 sm:p-3 flex flex-col justify-between transition-all relative cursor-pointer active:scale-98 select-none ${
-                    isLocked ? 'border-red-200 bg-red-50/40' : 'border-gray-200 hover:border-amber-400 hover:shadow-xs shadow-2xs'
+                  className={`rounded-2xl border p-3 flex flex-col justify-between transition-all relative cursor-pointer active:scale-[0.99] select-none ${
+                    isSelected
+                      ? 'ring-2 ring-[#5a0000] border-[#5a0000] bg-amber-50/20 shadow-xs'
+                      : isGloballyBlocked
+                      ? 'border-rose-200 bg-rose-50/25 hover:border-rose-300 hover:shadow-2xs'
+                      : isSeasonLocked
+                      ? 'border-amber-200 bg-amber-50/25 hover:border-amber-300 hover:shadow-2xs'
+                      : 'border-gray-200/90 bg-white hover:border-gray-300 hover:shadow-2xs'
                   }`}
                 >
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-gray-500">
-                      {month.monthOrder}. {month.monthKey}
-                    </span>
+                  {/* Top Row: Checkbox + Month Order & Name + Pencil */}
+                  <div className="flex items-start justify-between gap-1">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          handleToggleSelectDue(docKey);
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-3.5 h-3.5 accent-[#5a0000] rounded cursor-pointer mt-0.5 shrink-0"
+                      />
+                      <div className="truncate">
+                        <span className="text-[11px] font-bold uppercase tracking-tight text-gray-900 block truncate">
+                          #{month.monthOrder} {month.monthName || month.monthKey}
+                        </span>
+                        {month.year && (
+                          <span className="text-[9px] font-medium text-gray-400 block leading-none mt-0.5">
+                            {month.year}
+                          </span>
+                        )}
+                      </div>
+                    </div>
                     <button
                       type="button"
                       onClick={(e) => {
@@ -754,26 +983,45 @@ export default function AdminSeasonManager({
                         setEditReason(month.lockReason || '');
                         setShowEditMonthModal(true);
                       }}
-                      className="w-6 h-6 rounded-md bg-gray-50 hover:bg-gray-100 border border-gray-200 flex items-center justify-center text-gray-500 hover:text-gray-800 transition-colors shadow-2xs cursor-pointer"
+                      className="w-5 h-5 rounded-md bg-gray-50 hover:bg-gray-100 border border-gray-200/80 flex items-center justify-center text-gray-400 hover:text-gray-700 transition-colors shadow-2xs cursor-pointer shrink-0"
                       title="Edit month target"
                       aria-label="Edit month target"
                     >
-                      <Edit3 className="w-3 h-3" />
+                      <Edit3 className="w-2.5 h-2.5" />
                     </button>
                   </div>
 
-                  <div className="my-2">
-                    <span className="text-lg sm:text-xl font-bold text-gray-900 block tracking-tight">₹{month.dueAmount}</span>
+                  {/* Middle: Target Amount */}
+                  <div className="my-2.5">
+                    <span className="text-lg sm:text-xl font-bold text-gray-900 block tracking-tight">
+                      ₹{month.dueAmount.toLocaleString('en-IN')}
+                    </span>
                     {month.lockReason && (
-                      <span className="text-[10px] text-gray-400 font-medium truncate block mt-0.5">{month.lockReason}</span>
+                      <span className="text-[9px] text-gray-500 font-normal truncate block mt-0.5" title={month.lockReason}>
+                        {month.lockReason}
+                      </span>
                     )}
                   </div>
 
-                  <div className="flex items-center justify-between pt-1 border-t border-gray-100 text-[10px] font-semibold">
-                    <span className={isLocked ? 'text-red-500 flex items-center gap-0.5' : 'text-emerald-600 flex items-center gap-0.5'}>
-                      {isLocked ? '🔒 Locked' : '🟢 Active'}
+                  {/* Bottom: Status Pill + Edit Label */}
+                  <div className="flex items-center justify-between pt-1.5 border-t border-gray-100">
+                    {isGloballyBlocked ? (
+                      <span className="inline-flex items-center gap-1 text-[8.5px] font-semibold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-200/60">
+                        🚫 Blocked
+                      </span>
+                    ) : isSeasonLocked ? (
+                      <span className="inline-flex items-center gap-1 text-[8.5px] font-semibold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200/60">
+                        🔒 Locked
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-[8.5px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/60">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                        Active
+                      </span>
+                    )}
+                    <span className="text-[9px] text-gray-400 font-medium hover:text-gray-600">
+                      Edit ✎
                     </span>
-                    <span className="text-gray-400 font-normal">Edit</span>
                   </div>
                 </div>
               );
@@ -781,6 +1029,7 @@ export default function AdminSeasonManager({
           </div>
         </div>
       )}
+
 
       {/* ─── TAB 2: MEMBER OVERRIDES ────────────────────────── */}
       {selectedSeasonId && activeSubView === 'overrides' && (
@@ -984,27 +1233,48 @@ export default function AdminSeasonManager({
                   </div>
 
                   {isExpanded && onToggleMemberExemptMonth && (
-                    <div className="mt-2.5 pt-2 border-t border-gray-200/70 bg-white p-2 rounded-xl">
+                    <div className="mt-2.5 pt-2 border-t border-gray-200 bg-white p-2 rounded-xl">
                       <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-[9px] font-bold uppercase tracking-wider text-gray-500">
-                          Toggle Exempted Months:
+                        <span className="text-[9px] font-black uppercase tracking-wider text-gray-600">
+                          Toggle Exempted Periods:
                         </span>
-                        <span className="text-[9px] text-gray-400 font-medium">Tap to block</span>
+                        <span className="text-[9px] text-gray-400 font-medium">Tap month to block/unblock</span>
                       </div>
                       <div className="grid grid-cols-4 sm:grid-cols-6 gap-1">
-                        {MANDAL_MONTHS.map((m) => {
-                          const isBlocked = memberExempt.includes(m.key);
+                        {(dues.length > 0 ? dues : MANDAL_MONTHS).map((m: any) => {
+                          const pKey = m.periodKey;
+                          const monthK = m.monthKey;
+                          const mId = m.id;
+                          const legacyKey = m.key;
+                          const isBlocked = Boolean(
+                            (pKey && memberExempt.includes(pKey)) ||
+                            (monthK && memberExempt.includes(monthK)) ||
+                            (mId && memberExempt.includes(mId)) ||
+                            (legacyKey && memberExempt.includes(legacyKey))
+                          );
+                          const primaryKey = pKey || monthK || mId || legacyKey;
+                          const shortName = m.monthName ? m.monthName.slice(0, 4).toUpperCase() : (m.name ? m.name.slice(0, 4).toUpperCase() : primaryKey);
+                          const yearTag = m.year ? `'${String(m.year).slice(-2)}` : '';
+
                           return (
                             <button
-                              key={m.key}
+                              key={primaryKey}
                               type="button"
-                              onClick={() => onToggleMemberExemptMonth(member, m.key)}
-                              className={`py-1 px-1 rounded-lg text-[9px] font-bold uppercase transition-all text-center cursor-pointer ${
-                                isBlocked ? 'bg-rose-600 text-white shadow-2xs' : 'bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-200'
+                              onClick={() => {
+                                const allAliases = [pKey, monthK, mId, legacyKey].filter(Boolean) as string[];
+                                onToggleMemberExemptMonth(member, primaryKey, allAliases);
+                              }}
+                              className={`py-1 px-1 rounded-lg text-[9px] transition-all text-center cursor-pointer select-none ${
+                                isBlocked
+                                  ? 'bg-rose-50 text-rose-700 border border-rose-300 font-black shadow-2xs'
+                                  : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-200 font-bold'
                               }`}
-                              title={isBlocked ? `${m.name} is exempt` : `Click to exempt ${m.name}`}
+                              title={isBlocked ? `${m.name || m.monthName} is exempt` : `Click to exempt ${m.name || m.monthName}`}
                             >
-                              {m.key} {isBlocked ? '🚫' : ''}
+                              <span className="block truncate font-black tracking-tight">{shortName} {yearTag}</span>
+                              <span className="text-[7.5px] block font-bold leading-none mt-0.5 opacity-90">
+                                {isBlocked ? '🚫 EXEMPT' : 'ACTIVE'}
+                              </span>
                             </button>
                           );
                         })}
@@ -1222,10 +1492,10 @@ export default function AdminSeasonManager({
             <div className="flex items-center justify-between border-b border-gray-100 pb-3">
               <div>
                 <h3 className="text-sm font-bold uppercase tracking-wider text-gray-900">
-                  Add Month / Schedule Target
+                  Add Month / 13th Period Target
                 </h3>
                 <p className="text-[10px] text-gray-500 mt-0.5">
-                  e.g. Ganpati Visarjan target, Navratri, or custom month
+                  Configure extra collection periods without year collisions
                 </p>
               </div>
               <button onClick={() => setShowAddMonthModal(false)} className="p-1 text-gray-400 hover:text-gray-600 cursor-pointer">
@@ -1234,26 +1504,55 @@ export default function AdminSeasonManager({
             </div>
 
             <form onSubmit={handleAddCustomMonth} className="space-y-3">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[10px] font-bold uppercase text-gray-400 block mb-1">Month Name</label>
+                  <select
+                    value={newMonthName}
+                    onChange={(e) => setNewMonthName(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-gray-200 text-xs font-bold bg-white outline-none"
+                  >
+                    {CALENDAR_MONTH_NAMES.map(m => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                    <option value="Custom">Custom Name...</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold uppercase text-gray-400 block mb-1">Target Year</label>
+                  <input
+                    type="number"
+                    required
+                    min="2020"
+                    max="2035"
+                    value={newMonthYear}
+                    onChange={(e) => setNewMonthYear(parseInt(e.target.value, 10) || 2026)}
+                    className="w-full px-3 py-2 rounded-xl border border-gray-200 text-xs font-bold bg-gray-50 outline-none"
+                  />
+                </div>
+              </div>
+
+              {newMonthName === 'Custom' && (
+                <div>
+                  <label className="text-[10px] font-bold uppercase text-gray-400 block mb-1">Custom Display Name</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Ganpati Visarjan Special"
+                    onChange={(e) => setNewMonthName(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-gray-200 text-xs font-bold bg-gray-50 outline-none"
+                  />
+                </div>
+              )}
+
               <div>
-                <label className="text-[10px] font-bold uppercase text-gray-400 block mb-1">Target Key (Short Code) *</label>
+                <label className="text-[10px] font-bold uppercase text-gray-400 block mb-1">Short Code (Optional)</label>
                 <input
                   type="text"
-                  required
-                  placeholder="e.g. GANPATI, SEPT-14, NOV-EXT"
+                  placeholder="e.g. SEPT, EXT-1"
                   value={newMonthKey}
                   onChange={(e) => setNewMonthKey(e.target.value.toUpperCase())}
                   className="w-full px-3 py-2 rounded-xl border border-gray-200 text-xs font-bold bg-gray-50 outline-none uppercase"
-                />
-              </div>
-
-              <div>
-                <label className="text-[10px] font-bold uppercase text-gray-400 block mb-1">Display Title</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Ganpati 14th Sept Target"
-                  value={newMonthName}
-                  onChange={(e) => setNewMonthName(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-gray-200 text-xs font-bold bg-gray-50 outline-none"
                 />
               </div>
 
@@ -1270,7 +1569,7 @@ export default function AdminSeasonManager({
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] font-bold uppercase text-gray-400 block mb-1">Order Index</label>
+                  <label className="text-[10px] font-bold uppercase text-gray-400 block mb-1">Schedule Order #</label>
                   <input
                     type="number"
                     min="1"
@@ -1285,7 +1584,7 @@ export default function AdminSeasonManager({
                 <label className="text-[10px] font-bold uppercase text-gray-400 block mb-1">Target Notes</label>
                 <input
                   type="text"
-                  placeholder="e.g. Sab log milke ₹250 jama karenge"
+                  placeholder="e.g. Extra festival collection ₹250"
                   value={newMonthNotes}
                   onChange={(e) => setNewMonthNotes(e.target.value)}
                   className="w-full px-3 py-2 rounded-xl border border-gray-200 text-xs font-medium bg-gray-50 outline-none"
@@ -1320,9 +1619,9 @@ export default function AdminSeasonManager({
             <div className="flex items-center justify-between border-b border-gray-100 pb-3">
               <div>
                 <h3 className="text-sm font-bold uppercase tracking-wider text-gray-900">
-                  Edit {editingMonth.monthKey} Target
+                  Edit {editingMonth.monthName || editingMonth.monthKey} Target
                 </h3>
-                <p className="text-[10px] text-gray-400">{editingMonth.monthName || editingMonth.monthKey}</p>
+                <p className="text-[10px] text-gray-400">Order #{editingMonth.monthOrder} • {editingMonth.year || ''}</p>
               </div>
               <button onClick={() => setShowEditMonthModal(false)} className="p-1 text-gray-400 hover:text-gray-600 cursor-pointer">
                 <X className="w-4 h-4" />
@@ -1353,16 +1652,43 @@ export default function AdminSeasonManager({
                 />
               </div>
 
+              {/* Global Block Toggle (Mandal Settings) */}
+              {(() => {
+                const aliases = [editingMonth.periodKey, editingMonth.monthKey, editingMonth.id].filter(Boolean) as string[];
+                const isGloballyBlocked = blockedMonths.some(m => aliases.includes(m));
+                const targetKey = editingMonth.periodKey || editingMonth.monthKey || editingMonth.id;
+
+                return (
+                  <div className="flex items-center justify-between p-2.5 bg-rose-50/50 rounded-xl border border-rose-200/70">
+                    <div>
+                      <p className="text-xs font-bold text-gray-800">Global Block (Mandal Level)</p>
+                      <p className="text-[10px] text-gray-500">Exempts all members & shows 🚫 on Dashboard</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleToggleGlobalBlock(targetKey, aliases)}
+                      className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer ${
+                        isGloballyBlocked
+                          ? 'bg-rose-600 text-white shadow-2xs hover:bg-rose-700'
+                          : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-100'
+                      }`}
+                    >
+                      {isGloballyBlocked ? 'Blocked 🚫' : 'Active 🟢'}
+                    </button>
+                  </div>
+                );
+              })()}
+
               <div className="flex items-center justify-between p-2.5 bg-gray-50 rounded-xl border border-gray-100">
                 <div>
-                  <p className="text-xs font-bold text-gray-800">Lock Month</p>
-                  <p className="text-[10px] text-gray-400">Prevent member contributions</p>
+                  <p className="text-xs font-bold text-gray-800">Season Lock</p>
+                  <p className="text-[10px] text-gray-400">Lock only for this season schedule</p>
                 </div>
                 <button
                   type="button"
                   onClick={() => handleToggleLock(editingMonth)}
                   className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer ${
-                    editingMonth.locked ? 'bg-red-100 text-red-700 border border-red-200' : 'bg-gray-200 text-gray-700'
+                    editingMonth.locked ? 'bg-amber-100 text-amber-800 border border-amber-300 font-bold' : 'bg-gray-200 text-gray-700 hover:bg-gray-300 font-bold'
                   }`}
                 >
                   {editingMonth.locked ? 'Locked 🔒' : 'Open 🟢'}
@@ -1372,7 +1698,7 @@ export default function AdminSeasonManager({
               <div className="flex items-center justify-between gap-2 pt-2">
                 <button
                   type="button"
-                  onClick={() => handleDeleteCustomMonth(editingMonth.monthKey)}
+                  onClick={() => handleDeleteCustomMonth(editingMonth)}
                   className="px-3 py-2 rounded-xl text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200 cursor-pointer"
                   title="Delete target"
                 >
@@ -1415,7 +1741,7 @@ export default function AdminSeasonManager({
 
             <form onSubmit={handleBulkUpdate} className="space-y-3">
               <p className="text-xs font-medium text-gray-600">
-                Apply this fixed amount across all 12 months in <span className="font-bold text-[#5a0000]">{selectedSeason?.name}</span>.
+                Apply this fixed amount across all configured periods in <span className="font-bold text-[#5a0000]">{selectedSeason?.name}</span>.
               </p>
 
               <div>
@@ -1489,16 +1815,20 @@ export default function AdminSeasonManager({
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-[10px] font-bold uppercase text-gray-400 block mb-1">Applicable Month</label>
+                  <label className="text-[10px] font-bold uppercase text-gray-400 block mb-1">Applicable Period</label>
                   <select
                     value={overrideMonth}
                     onChange={(e) => setOverrideMonth(e.target.value)}
                     className="w-full px-3 py-2 rounded-xl border border-gray-200 text-xs font-bold bg-gray-50 outline-none"
                   >
-                    <option value="ALL">All 12 Months</option>
-                    {MANDAL_MONTHS.map(m => (
-                      <option key={m.key} value={m.key}>{m.name} ({m.key})</option>
-                    ))}
+                    <option value="ALL">All Season Periods</option>
+                    {(dues.length > 0 ? dues : MANDAL_MONTHS).map((m: any) => {
+                      const key = m.periodKey || m.monthKey || m.key;
+                      const label = `${m.monthName || m.name || key} ${m.year ? `(${m.year})` : ''} — ₹${m.dueAmount || m.defaultAmount || 100}`;
+                      return (
+                        <option key={key} value={key}>{label}</option>
+                      );
+                    })}
                   </select>
                 </div>
 
@@ -1549,3 +1879,4 @@ export default function AdminSeasonManager({
     </div>
   );
 }
+

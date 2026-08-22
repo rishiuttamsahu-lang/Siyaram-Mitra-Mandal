@@ -5,14 +5,10 @@ import { db } from '@/lib/firebase';
 import { getTimestampMillis, commitChunkedBatches } from '@/lib/utils';
 import { collection, onSnapshot, doc, updateDoc, deleteDoc, query, orderBy, setDoc, getDoc, where, getDocs, writeBatch, addDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
 import UserProfile from '@/components/UserProfile';
-import AdminBuildingManager from '@/components/AdminBuildingManager';
-import AdminSeasonManager from '@/components/AdminSeasonManager';
-import { StatCard } from '@/components/ui/StatCard';
-import { Select } from '@/components/ui/Select';
 import {
   Shield, ShieldAlert, Ban, RefreshCcw, Key, Mail, User, Image as ImageIcon,
   BarChart2, Settings, Lock, Activity, Database, AlertTriangle, Trash2, Search, Bell, UserCircle, CheckCircle2,
-  Play, ChevronLeft, ChevronRight, X, Download, Smartphone, Unlock, ChevronDown, Coins, PlusCircle, ArrowUpRight, History, Edit3, Building2, Calendar
+  Play, ChevronLeft, ChevronRight, X, Download, Smartphone, Unlock, ChevronDown, Coins, PlusCircle, ArrowUpRight, History, Edit3
 } from 'lucide-react';
 
 // ✅ React-based confirm dialog — replaces window.confirm which is blocked in PWAs/Next.js
@@ -37,28 +33,153 @@ const ConfirmModal = ({ message, onConfirm, onCancel }: { message: string; onCon
   </div>
 );
 
-// Backward-compatible select wrappers backed by unified Select
-const CustomSelect = ({ value, onChange, options, placeholder, theme = 'light' }: { value: any, onChange: any, options: any[], placeholder?: string, theme?: 'light' | 'dark' }) => (
-  <Select value={value} onChange={onChange} options={options} placeholder={placeholder} theme={theme} />
-);
+// 🔥 THE NEW PREMIUM CUSTOM SELECT COMPONENT
+const CustomSelect = ({ value, onChange, options, placeholder, theme = 'light' }: { value: any, onChange: any, options: any[], placeholder?: string, theme?: 'light' | 'dark' }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
-const SearchableSelect = ({ value, onChange, options, placeholder }: { value: string, onChange: (v: string) => void, options: { value: string, label: string }[], placeholder?: string }) => (
-  <Select value={value} onChange={onChange} options={options} placeholder={placeholder} searchable />
-);
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const selectedOption = options.find((opt) => String(opt.value) === String(value));
+  const isDark = theme === 'dark';
+
+  const triggerDark = `bg-[#2a0808]/90 backdrop-blur-md border border-yellow-500/20 px-3 sm:px-4 py-2 sm:py-2.5 text-[9px] sm:text-[10px] font-black text-yellow-100 uppercase tracking-widest hover:bg-[#3a0a0a] ${isOpen ? 'border-yellow-400 ring-1 ring-yellow-400/50' : ''}`;
+  const triggerLight = `bg-gray-50 border border-gray-200 px-3 py-2 sm:py-2.5 text-[10px] sm:text-[11px] font-bold text-gray-800 hover:bg-gray-100 shadow-sm ${isOpen ? 'border-[#5A0000] ring-1 ring-[#5A0000]/30' : ''}`;
+  const dropdownDark = "bg-[#1a0505] border border-yellow-500/20 shadow-2xl";
+  const dropdownLight = "bg-white border border-gray-100 shadow-xl";
+
+  const getOptionClass = (isSelected: boolean) => {
+    if (isDark) return isSelected ? 'bg-yellow-500/20 text-yellow-400' : 'text-yellow-100 hover:bg-[#2a0808]';
+    return isSelected ? 'bg-red-50 text-[#5A0000]' : 'text-gray-700 hover:bg-gray-50';
+  };
+
+  return (
+    <div className={`relative w-full ${isOpen ? 'z-[100]' : 'z-10'}`} ref={dropdownRef}>
+      <div onClick={() => setIsOpen(!isOpen)} className={`flex items-center justify-between w-full cursor-pointer select-none transition-all rounded-lg sm:rounded-xl outline-none ${isDark ? triggerDark : triggerLight}`}>
+        <span className="truncate pr-4">{selectedOption ? selectedOption.label : (placeholder || 'Select...')}</span>
+        <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-300 shrink-0 ${isOpen ? 'rotate-180' : ''} ${isDark ? 'text-yellow-500/50' : 'text-gray-400'}`} />
+      </div>
+
+      {isOpen && (
+        <div className={`absolute top-[calc(100%+6px)] left-0 min-w-full w-max rounded-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200 z-[9999] ${isDark ? dropdownDark : dropdownLight}`}>
+          <div className="max-h-60 overflow-y-auto custom-scrollbar py-1">
+            {options.length === 0 ? (
+              <div className={`px-4 py-3 text-[10px] italic text-center ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>No Options</div>
+            ) : (
+              options.map((opt, idx) => {
+                const isSelected = String(value) === String(opt.value);
+                return (
+                  <div key={opt.value || `${opt.label}-${idx}`} onClick={() => { onChange(opt.value); setIsOpen(false); }} className={`px-4 py-3 cursor-pointer transition-colors text-[10px] sm:text-xs font-bold uppercase tracking-wider flex items-center justify-between ${getOptionClass(isSelected)}`}>
+                    <span className="whitespace-nowrap">{opt.label}</span>
+                    {isSelected && <CheckCircle2 className="w-3.5 h-3.5 ml-3 shrink-0" />}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const SearchableSelect = ({ value, onChange, options, placeholder }: { value: string, onChange: (v: string) => void, options: { value: string, label: string }[], placeholder?: string }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const selectedOption = options.find((opt) => String(opt.value) === String(value));
+  const filteredOptions = options.filter((opt) => opt.label.toLowerCase().includes(searchTerm.toLowerCase()));
+
+  return (
+    <div className={`relative w-full ${isOpen ? 'z-[100]' : 'z-10'}`} ref={dropdownRef}>
+      <div
+        onClick={() => {
+          setIsOpen(!isOpen);
+          setSearchTerm('');
+        }}
+        className="flex items-center justify-between w-full cursor-pointer select-none transition-all rounded-xl bg-white border border-gray-200 px-4 py-3 text-[10px] sm:text-[11px] font-bold text-black uppercase tracking-wider hover:bg-gray-100 shadow-sm"
+      >
+        <span className="truncate pr-4 text-black">{selectedOption ? selectedOption.label : (placeholder || 'Select...')}</span>
+        <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-300 shrink-0 ${isOpen ? 'rotate-180' : ''} text-gray-400`} />
+      </div>
+
+      {isOpen && (
+        <div className="absolute top-[calc(100%+6px)] left-0 min-w-full w-full bg-white border border-gray-100 shadow-2xl rounded-xl overflow-hidden z-[9999] animate-in fade-in slide-in-from-top-2 duration-150">
+          <div className="p-2 border-b border-gray-100 bg-gray-50 flex items-center gap-2">
+            <Search className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+            <input
+              type="text"
+              placeholder="Type name or email to search..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full bg-transparent text-black text-[11px] font-bold uppercase outline-none placeholder-gray-400 border-none ring-0 focus:ring-0"
+              autoFocus
+            />
+          </div>
+
+          <div className="max-h-52 overflow-y-auto custom-scrollbar py-1">
+            {filteredOptions.length === 0 ? (
+              <div className="px-4 py-3 text-[10px] font-bold text-gray-400 uppercase text-center">No matching member found</div>
+            ) : (
+              filteredOptions.map((opt, idx) => {
+                const isSelected = String(value) === String(opt.value);
+                return (
+                  <div
+                    key={opt.value || `${opt.label}-${idx}`}
+                    onClick={() => {
+                      onChange(opt.value);
+                      setIsOpen(false);
+                      setSearchTerm('');
+                    }}
+                    className={`px-4 py-2.5 cursor-pointer transition-colors text-[10px] font-bold uppercase tracking-widest flex items-center justify-between ${isSelected ? 'bg-red-50 text-[#5A0000]' : 'text-black hover:bg-gray-50'}`}
+                  >
+                    <span className="whitespace-nowrap truncate pr-2">{opt.label}</span>
+                    {isSelected && <CheckCircle2 className="w-3.5 h-3.5 text-[#5A0000] shrink-0" />}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const adminTabs = [
-  { id: "analytics", label: "Overview", icon: <BarChart2 size={14} /> },
-  { id: "finance", label: "Finance", icon: <Coins size={14} /> },
+  { id: "analytics", label: "Stats", icon: <BarChart2 size={14} /> },
   { id: "users", label: "Users", icon: <User size={14} /> },
-  { id: "buildings", label: "Buildings", icon: <Building2 size={14} /> },
+  { id: "finance", label: "Finance", icon: <Database size={14} /> },
+  { id: "chanda", label: "Chanda Management", icon: <Coins size={14} /> },
   { id: "media", label: "Vault", icon: <ImageIcon size={14} /> },
+  { id: "security", label: "Security", icon: <Shield size={14} /> },
   { id: "settings", label: "Website", icon: <Settings size={14} /> },
   { id: "profile", label: "Profile", icon: <UserCircle size={14} /> },
 ];
 
 const MONTHLY_TARGET = 100;
 const MONTHS = ["SEPT", "OCT", "NOV", "DEC", "JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG"] as const;
-type Month = string;
+type Month = (typeof MONTHS)[number];
 
 function normalizeMemberCode(value: string) { return value.trim().toLowerCase().replace(/\s+/g, ""); }
 function toIsoDateString(value: any): string {
@@ -113,7 +234,6 @@ const DEFAULT_MEMBERS = [
 export default function AdminPanel({ currentUserData, userData }: { currentUserData?: any; userData?: any }) {
   const adminUser = currentUserData ?? userData;
   const [activeTab, setActiveTab] = useState("analytics");
-  const [financeSubTab, setFinanceSubTab] = useState<'seasons' | 'danveers_ledger'>('seasons');
   // ✅ confirmModal replaces all window.confirm() calls
   const [confirmModal, setConfirmModal] = useState<{ message: string; onConfirm: () => void } | null>(null);
   const askConfirm = (message: string, onConfirm: () => void) => setConfirmModal({ message, onConfirm });
@@ -128,15 +248,6 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
   const [vaultDate, setVaultDate] = useState('all');
   const [vaultCaption, setVaultCaption] = useState('all');
   const [toastMsg, setToastMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
-
-  // Auto-dismiss toast after 3 seconds
-  useEffect(() => {
-    if (!toastMsg) return;
-    const timer = setTimeout(() => {
-      setToastMsg(null);
-    }, 3000);
-    return () => clearTimeout(timer);
-  }, [toastMsg]);
 
   const [localPasscode, setLocalPasscode] = useState("");
 
@@ -376,38 +487,44 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
   // clicks on different months never overwrite each other with stale data.
   // Also updates local state immediately (optimistic) so mobile users see the tap
   // register instantly, instead of waiting for the Firestore snapshot to come back.
-  const toggleMemberExemptMonth = async (member: any, month: string, aliases?: string[]) => {
-    const keysToCheck = aliases && aliases.length > 0 ? aliases : [month];
-    const isCurrentlyBlocked = (member.exemptMonths || []).some((m: string) => keysToCheck.includes(m));
-
-    const updatedExempt = isCurrentlyBlocked
-      ? (member.exemptMonths || []).filter((mo: string) => !keysToCheck.includes(mo))
-      : Array.from(new Set([...(member.exemptMonths || []), month]));
+  const toggleMemberExemptMonth = async (member: any, month: Month) => {
+    const isCurrentlyBlocked = (member.exemptMonths || []).includes(month);
 
     // Optimistic local update — instant visual feedback
     setMandalMembers((prev) =>
       prev.map((m) =>
         m.id === member.id
           ? {
-            ...m,
-            exemptMonths: updatedExempt,
-          }
+              ...m,
+              exemptMonths: isCurrentlyBlocked
+                ? (m.exemptMonths || []).filter((mo: Month) => mo !== month)
+                : [...(m.exemptMonths || []), month],
+            }
           : m
       )
     );
 
     try {
       await updateDoc(doc(db, "mandal_members", member.id.toString()), {
-        exemptMonths: updatedExempt,
+        exemptMonths: isCurrentlyBlocked ? arrayRemove(month) : arrayUnion(month),
       });
       showToast(isCurrentlyBlocked ? `${month} unblock ho gaya ✅` : `${month} block ho gaya 🚫`, 'success');
     } catch (error: any) {
+      // Firestore/browser sometimes cancels an in-flight request when the listener
+      // above resubscribes right after a write — this is harmless and the write
+      // still lands, so don't scare the admin with a false "failed" toast for it.
       if (error?.name === 'AbortError' || error?.code === 'cancelled') return;
       showToast("Error: Month block/unblock nahi ho paya.", 'error');
+      // revert optimistic update since the write actually failed
       setMandalMembers((prev) =>
         prev.map((m) =>
           m.id === member.id
-            ? { ...m, exemptMonths: member.exemptMonths || [] }
+            ? {
+                ...m,
+                exemptMonths: isCurrentlyBlocked
+                  ? [...(m.exemptMonths || []), month]
+                  : (m.exemptMonths || []).filter((mo: Month) => mo !== month),
+              }
             : m
         )
       );
@@ -1011,15 +1128,8 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
       )}
 
       {toastMsg && (
-        <div className={`fixed top-20 left-1/2 transform -translate-x-1/2 z-[100] px-4 py-2 rounded-full shadow-2xl text-xs font-bold text-white flex items-center gap-2.5 transition-all animate-in fade-in slide-in-from-top-4 duration-200 ${toastMsg.type === 'error' ? 'bg-red-600' : 'bg-green-600'}`}>
-          <span>{toastMsg.text}</span>
-          <button
-            type="button"
-            onClick={() => setToastMsg(null)}
-            className="w-4 h-4 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center text-[10px] font-black"
-          >
-            ✕
-          </button>
+        <div className={`fixed top-24 left-1/2 transform -translate-x-1/2 z-[100] px-4 py-2 rounded-full shadow-2xl text-xs font-bold text-white flex items-center gap-2 transition-all ${toastMsg.type === 'error' ? 'bg-red-600' : 'bg-green-600'}`}>
+          {toastMsg.text}
         </div>
       )}
 
@@ -1043,76 +1153,25 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
       </div>
 
       {/* ============================== */}
-      {/* TAB 1: OVERVIEW (ANALYTICS) */}
+      {/* TAB 1: ANALYTICS */}
       {activeTab === "analytics" && (
-        <div className="space-y-3 animate-fade-in">
-          {/* Needs Attention Card */}
-          {(pendingChandaPayments.length > 0 || bannedUsersCount > 0) && (
-            <div className="bg-gradient-to-r from-amber-500/10 via-red-500/10 to-amber-500/10 border border-amber-300/80 rounded-xl p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shadow-2xs">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-xs">
-                  <AlertTriangle className="w-4 h-4" />
-                </div>
-                <div>
-                  <h4 className="text-xs sm:text-sm font-black uppercase text-amber-950 tracking-tight">Needs Attention</h4>
-                  <p className="text-[10px] sm:text-xs text-amber-900 font-bold mt-0.5">
-                    {pendingChandaPayments.length > 0 && `${pendingChandaPayments.length} pending chanda approval(s)`}
-                    {pendingChandaPayments.length > 0 && bannedUsersCount > 0 && ' • '}
-                    {bannedUsersCount > 0 && `${bannedUsersCount} banned user(s)`}
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-1.5 self-end sm:self-auto">
-                {pendingChandaPayments.length > 0 && (
-                  <button
-                    onClick={() => { setActiveTab('finance'); setFinanceSubTab('seasons'); }}
-                    className="px-2.5 py-1 rounded-lg bg-[#5A0000] text-white text-[10px] sm:text-xs font-black uppercase tracking-wider shadow-xs hover:bg-[#7b0000] transition-colors cursor-pointer"
-                  >
-                    Review Approvals
-                  </button>
-                )}
-                {bannedUsersCount > 0 && (
-                  <button
-                    onClick={() => setActiveTab('users')}
-                    className="px-2.5 py-1 rounded-lg bg-white border border-gray-300 text-gray-800 text-[10px] sm:text-xs font-black uppercase tracking-wider hover:bg-gray-100 transition-colors cursor-pointer"
-                  >
-                    View Users
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Key Stat Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3">
-            <StatCard
-              label="Total Users"
-              value={users.length}
-              icon={<User className="w-3.5 h-3.5" />}
-              colorTheme="info"
-              onClick={() => setActiveTab('users')}
-            />
-            <StatCard
-              label="Total Media"
-              value={media.length}
-              subtext={`(${totalVideos} Vids)`}
-              icon={<ImageIcon className="w-3.5 h-3.5" />}
-              colorTheme="success"
-              onClick={() => setActiveTab('media')}
-            />
-            <StatCard
-              label="Cloud Used"
-              value={formatBytes(totalStorage)}
-              icon={<Database className="w-3.5 h-3.5" />}
-              colorTheme="maroon"
-            />
-            <StatCard
-              label="Banned Users"
-              value={bannedUsersCount}
-              icon={<Ban className="w-3.5 h-3.5" />}
-              colorTheme={bannedUsersCount > 0 ? "danger" : "neutral"}
-              onClick={() => setActiveTab('users')}
-            />
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3 animate-fade-in">
+          <div className="bg-white p-3 sm:p-4 rounded-xl border border-gray-100 shadow-sm">
+            <div className="flex justify-between items-center mb-1"><span className="text-[9px] sm:text-[10px] uppercase font-bold text-gray-400">Total Users</span><User className="w-3 h-3 text-blue-500" /></div>
+            <span className="text-xl sm:text-2xl font-black text-gray-800">{users.length}</span>
+          </div>
+          <div className="bg-white p-3 sm:p-4 rounded-xl border border-gray-100 shadow-sm">
+            <div className="flex justify-between items-center mb-1"><span className="text-[9px] sm:text-[10px] uppercase font-bold text-gray-400">Total Media</span><ImageIcon className="w-3 h-3 text-green-500" /></div>
+            <span className="text-xl sm:text-2xl font-black text-gray-800">{media.length}</span>
+            <p className="text-[8px] text-gray-400 font-bold">({totalVideos} Videos)</p>
+          </div>
+          <div className="bg-gradient-to-br from-[#5A0000] to-[#3a0000] p-3 sm:p-4 rounded-xl border border-red-900 shadow-md text-white">
+            <div className="flex justify-between items-center mb-1"><span className="text-[9px] sm:text-[10px] uppercase font-bold text-red-200">Cloud Used</span><Database className="w-3 h-3 text-yellow-400" /></div>
+            <span className="text-xl sm:text-2xl font-black text-yellow-400">{formatBytes(totalStorage)}</span>
+          </div>
+          <div className="bg-red-50 p-3 sm:p-4 rounded-xl border border-red-100 shadow-sm">
+            <div className="flex justify-between items-center mb-1"><span className="text-[9px] sm:text-[10px] uppercase font-bold text-red-400">Banned</span><Ban className="w-3 h-3 text-red-500" /></div>
+            <span className="text-xl sm:text-2xl font-black text-red-600">{bannedUsersCount}</span>
           </div>
         </div>
       )}
@@ -1123,83 +1182,52 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
         <div className="space-y-3 animate-fade-in">
           <div className="relative">
             <Search className="w-4 h-4 absolute left-3 top-2.5 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search users..."
-              value={userSearch}
-              onChange={(e) => setUserSearch(e.target.value)}
-              className="w-full bg-white border border-gray-200 text-gray-900 rounded-xl pl-9 pr-3 py-2 text-xs sm:text-sm font-bold outline-none focus:border-[#5A0000]"
-            />
+            <input type="text" placeholder="Search users..." value={userSearch} onChange={(e) => setUserSearch(e.target.value)} className="w-full bg-white border border-gray-200 text-gray-900 rounded-xl pl-9 pr-3 py-2 text-xs sm:text-sm font-bold outline-none focus:border-[#5A0000]" />
           </div>
 
           <div className="grid grid-cols-1 gap-2">
             {filteredUsers.map((user) => (
-              <div key={user.id || user.uid || user.email} className={`bg-white rounded-xl border ${user.isBanned ? 'border-red-200 bg-red-50/50' : 'border-gray-100 shadow-2xs'} p-2.5 sm:p-3 flex items-center justify-between gap-2.5`}>
-                <div className="flex items-center gap-2.5 min-w-0">
+              <div key={user.id || user.uid || user.email} className={`bg-white rounded-xl border ${user.isBanned ? 'border-red-200 bg-red-50' : 'border-gray-100 shadow-sm'} p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3`}>
+                <div className="flex items-center gap-3">
                   {(user.photoURL || user.photo) ? (
                     <img
                       src={user.photoURL || user.photo}
                       alt={user.name || 'User'}
                       onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-                      className="w-8 h-8 sm:w-9 sm:h-9 rounded-full object-cover border border-gray-200 shrink-0"
+                      className="w-8 h-8 sm:w-10 sm:h-10 rounded-full object-cover border-2 border-gray-100 shadow-sm"
                     />
                   ) : (
-                    <div className={`w-8 h-8 sm:w-9 sm:h-9 shrink-0 rounded-full flex items-center justify-center font-bold text-white text-xs ${user.role === 'Admin' ? 'bg-amber-500' : user.isBanned ? 'bg-red-500' : 'bg-[#5A0000]'}`}>
+                    <div className={`w-8 h-8 sm:w-10 sm:h-10 shrink-0 rounded-full flex items-center justify-center font-black text-white text-xs sm:text-sm ${user.role === 'Admin' ? 'bg-yellow-500' : user.isBanned ? 'bg-red-500' : 'bg-[#5A0000]'}`}>
                       {user.name?.charAt(0).toUpperCase() || 'U'}
                     </div>
                   )}
                   <div className="min-w-0">
-                    <p className="font-bold text-gray-900 text-xs sm:text-sm truncate flex items-center gap-1.5 leading-tight">
-                      {user.name || 'Unknown User'} {user.uid === adminUser?.uid && <span className="text-[9px] bg-gray-200 px-1 py-0.2 rounded text-gray-700 font-bold">YOU</span>}
+                    <p className="font-bold text-gray-900 text-xs sm:text-sm truncate flex items-center gap-1.5">
+                      {user.name || 'Unknown User'} {user.uid === adminUser?.uid && <span className="text-[7px] sm:text-[8px] bg-gray-200 px-1 py-0.5 rounded text-gray-600">YOU</span>}
                     </p>
-                    <p className="text-[10px] sm:text-xs font-medium text-gray-400 truncate flex items-center gap-1 mt-0.5"><Mail className="w-2.5 h-2.5 shrink-0" /> {user.email || 'No email'}</p>
-                    {user.lastLogin && (
-                      <p className="text-[9px] sm:text-[10px] text-gray-400 font-normal mt-0.5">
-                        Active: {new Date(user.lastLogin).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </p>
-                    )}
+                    <p className="text-[9px] sm:text-[10px] font-semibold text-gray-400 truncate flex items-center gap-1"><Mail className="w-2.5 h-2.5 shrink-0" /> {user.email || 'No email'}</p>
+                    <div className="mt-1 flex items-center gap-2">
+                      <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded ${(user.failedAttempts || 0) >= 2 ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-500'}`}>Attempts: {user.failedAttempts || 0}/3</span>
+                      {user.lastLogin && <span className="text-[8px] text-gray-400 font-medium">Last Active: {new Date(user.lastLogin).toLocaleTimeString()}</span>}
+                    </div>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-1.5 shrink-0">
-                  {/* Clean Role Selector (Member, Viewer, Admin only) */}
-                  <div className="w-[95px] sm:w-[115px]">
+                <div className="flex items-center gap-2 border-t sm:border-t-0 pt-2 sm:pt-0">
+                  <div className="w-[120px]">
                     <CustomSelect
                       value={user.role || 'Viewer'}
                       onChange={(val: string) => handleRoleChange(user.id || user.uid, val)}
                       options={[
                         { value: 'Viewer', label: 'Viewer' },
                         { value: 'Member', label: 'Member' },
-                        { value: 'Admin', label: 'Admin' }
+                        { value: 'Admin', label: 'Admin' },
+                        { value: 'Banned', label: 'Ban User' }
                       ]}
                       theme="light"
                     />
                   </div>
-
-                  {/* Dedicated Ban / Unban Direct Button */}
-                  {user.isBanned ? (
-                    <button
-                      onClick={() => {
-                        askConfirm(`${user.name || 'Is user'} ko unban karein?`, () => handleRoleChange(user.id || user.uid, 'Viewer'));
-                      }}
-                      className="p-1.5 sm:p-2 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-colors shadow-2xs cursor-pointer"
-                      title="Unban User"
-                      aria-label="Unban User"
-                    >
-                      <RefreshCcw className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => {
-                        askConfirm(`${user.name || 'Is user'} ko ban karein? Banned user portal access nahi kar sakega.`, () => handleRoleChange(user.id || user.uid, 'Banned'));
-                      }}
-                      className="p-1.5 sm:p-2 bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 rounded-lg transition-colors shadow-2xs cursor-pointer"
-                      title="Ban User"
-                      aria-label="Ban User"
-                    >
-                      <Ban className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                    </button>
-                  )}
+                  {user.isBanned && <button onClick={() => handleRoleChange(user.id || user.uid, 'Viewer')} className="p-2 bg-green-100 text-green-700 rounded-xl hover:bg-green-200 shadow-sm" title="Unban User"><RefreshCcw className="w-4 h-4" /></button>}
                 </div>
               </div>
             ))}
@@ -1208,432 +1236,509 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
       )}
 
       {/* ============================== */}
-      {/* TAB: CONSOLIDATED FINANCE HUB */}
-      {(activeTab === 'finance' || activeTab === 'seasons' || activeTab === 'chanda') && (
-        <div className="space-y-3 animate-fade-in">
-          {/* Secondary Sub-Navigation for Finance Hub */}
-          <div className="flex gap-1.5 p-1 bg-gray-100/90 rounded-2xl overflow-x-auto custom-scrollbar border border-gray-200/80">
-            <button
-              onClick={() => setFinanceSubTab('seasons')}
-              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold uppercase tracking-wider transition-all whitespace-nowrap shrink-0 cursor-pointer ${
-                financeSubTab === 'seasons'
-                  ? 'bg-[#5A0000] text-white shadow-2xs'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-white/80'
-              }`}
-            >
-              <Coins className="w-3.5 h-3.5" />
-              Chanda Seasons & Schedule
-            </button>
-            <button
-              onClick={() => setFinanceSubTab('danveers_ledger')}
-              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold uppercase tracking-wider transition-all whitespace-nowrap shrink-0 cursor-pointer ${
-                financeSubTab === 'danveers_ledger'
-                  ? 'bg-[#5A0000] text-white shadow-2xs'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-white/80'
-              }`}
-            >
-              <History className="w-3.5 h-3.5" />
-              Danveers, Manual Ledger & Payments Feed
-            </button>
+      {/* TAB: FINANCE */}
+      {activeTab === 'finance' && (
+        <div className="space-y-6 rounded-2xl border border-red-200 bg-red-50 p-4 shadow-sm md:p-6 animate-in fade-in zoom-in duration-300 mt-4">
+
+          <div className="mb-6 rounded-xl border border-yellow-400/50 bg-gradient-to-br from-yellow-50 to-orange-50 p-4 shadow-sm">
+            <h3 className="mb-4 flex items-center gap-2 text-sm font-black uppercase tracking-wide text-yellow-800">
+              <CheckCircle2 className="h-5 w-5 text-yellow-600" /> Pending Chanda Approvals
+            </h3>
+
+            <div className="custom-scrollbar max-h-[300px] space-y-3 overflow-y-auto pr-2">
+              {pendingChandaPayments.length === 0 ? (
+                <div className="rounded-lg border border-yellow-200/50 bg-white/50 py-6 text-center">
+                  <p className="text-xs font-bold uppercase tracking-widest text-yellow-700/60">No pending approvals</p>
+                </div>
+              ) : (
+                pendingChandaPayments.map((payment) => (
+                  <div key={payment.id} className="flex flex-col justify-between gap-4 rounded-xl border border-yellow-200 bg-white p-4 shadow-sm transition-shadow hover:shadow-md md:flex-row md:items-center">
+
+                    <div>
+                      <div className="mb-1 flex items-center gap-2">
+                        <span className="text-sm font-black text-gray-800">{payment.userName || 'Unknown User'}</span>
+                        <span className="rounded-full bg-gradient-to-r from-yellow-500 to-yellow-600 px-2 py-0.5 text-[10px] font-black text-white shadow-sm">₹{payment.amount || 0}</span>
+                      </div>
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500">
+                        UTR: <span className="rounded bg-gray-100 px-1 py-0.5 text-gray-900">{payment.utr_number || 'N/A'}</span>
+                      </p>
+                      {payment.message && (
+                        <p className="mt-2 rounded-lg border border-yellow-100/50 bg-yellow-50/50 p-2 text-[10px] italic text-gray-600">&quot;{payment.message}&quot;</p>
+                      )}
+                    </div>
+
+                    <div className="flex shrink-0 gap-2">
+                      <button onClick={() => handleApproveChanda(payment.id)} className="flex-1 rounded-lg bg-green-600 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-white shadow-md transition-all hover:bg-green-700 active:scale-95 md:flex-none">Approve</button>
+                      <button onClick={() => handleRejectChanda(payment.id)} className="flex-1 rounded-lg border border-red-100 bg-red-50 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-red-600 transition-all hover:bg-red-100 active:scale-95 md:flex-none">Reject</button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
 
-          {/* Sub-view 1: Seasons Manager */}
-          {financeSubTab === 'seasons' && (
-            <AdminSeasonManager
-              currentUserData={adminUser}
-              onShowToast={setToastMsg}
-              askConfirm={askConfirm}
-              pendingChandaPayments={pendingChandaPayments}
-              onApproveChanda={handleApproveChanda}
-              onRejectChanda={handleRejectChanda}
-              mandalMembers={mandalMembers}
-              onAddMember={handleAddMember}
-              newMemberName={newMemberName}
-              setNewMemberName={setNewMemberName}
-              isNewMemberHonorary={isNewMemberHonorary}
-              setIsNewMemberHonorary={setIsNewMemberHonorary}
-              onRemoveMember={handleRemoveMember}
-              onRestoreMember={handleRestoreMember}
-              onToggleMemberExemptMonth={toggleMemberExemptMonth}
-            />
-          )}
+          <div className="flex flex-col gap-4 border-b border-red-100 pb-4 md:flex-row md:items-center">
+            <span className="text-xs font-bold uppercase tracking-wider text-red-700">Manage Active Months:</span>
+            <div className="flex flex-wrap gap-2">
+              {MONTHS.map((month) => {
+                const isBlocked = blockedMonths.includes(month);
+                return (
+                  <button key={month} type="button" onClick={() => toggleBlockMonth(month)} className={`rounded-full px-3 py-1 text-[10px] font-bold transition-colors md:text-xs ${isBlocked ? "bg-red-600 text-white shadow-inner" : "border border-red-200 bg-white text-red-600 hover:bg-red-100"}`}>
+                    {month} {isBlocked ? "🚫" : ""}
+                  </button>
+                );
+              })}
+            </div>
 
-          {/* Sub-view 2: Combined Danveers Board, Manual Ledger Entry & Payments Feed */}
-          {financeSubTab === 'danveers_ledger' && (
-            <div className="space-y-4 animate-in fade-in duration-200">
-              {/* Row 1: Add Entry Form (Left) + Danveers Board Control (Right) */}
-              <div className="grid grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-3">
-                {/* Form: Add Manual Contribution */}
-                <div className="rounded-2xl border border-gray-200/90 bg-white p-3.5 sm:p-4 shadow-xs lg:col-span-1 h-fit space-y-3">
-                  <div className="flex items-center gap-2 border-b border-gray-100 pb-2.5">
-                    <div className="w-7 h-7 rounded-xl bg-red-50 text-[#5a0000] flex items-center justify-center">
-                      <PlusCircle className="h-4 w-4" />
-                    </div>
-                    <div>
-                      <h3 className="text-xs sm:text-sm font-semibold uppercase tracking-wide text-gray-900">Add Manual Entry</h3>
-                      <p className="text-[10px] text-gray-500 font-normal">Directly record cash/offline chanda</p>
-                    </div>
-                  </div>
+            {mandalMembers.length === 0 && (
+              <button onClick={handleRestoreOldData} disabled={isRestoring} className="ml-auto flex items-center gap-2 rounded-xl bg-yellow-500 px-4 py-2 text-xs font-bold text-yellow-900 shadow-sm hover:bg-yellow-400 disabled:opacity-50">
+                {isRestoring ? 'Restoring...' : '📥 Restore Data'}
+              </button>
+            )}
+            <p className="ml-auto hidden text-xs font-bold text-red-800 md:block">Paying Members: {payingMembersCount}</p>
+          </div>
 
-                  <form onSubmit={handleAddChanda} className="space-y-2.5">
-                    <div>
-                      <label className="mb-1 ml-0.5 block text-[10px] font-semibold uppercase tracking-wider text-gray-500">Registered User</label>
-                      <SearchableSelect
-                        value={selectedUserUid}
-                        onChange={setSelectedUserUid}
-                        options={userSelectOptions}
-                        placeholder="Select Registered User"
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="mb-1 ml-0.5 block text-[10px] font-semibold uppercase tracking-wider text-gray-500">Amount (₹) *</label>
-                        <input
-                          type="number"
-                          required
-                          min="1"
-                          value={chandaAmount}
-                          onChange={(e) => setChandaAmount(e.target.value)}
-                          placeholder="101"
-                          className="w-full rounded-xl border border-gray-200 bg-gray-50/80 px-3 py-2 text-xs font-bold text-gray-900 outline-none transition-all focus:border-[#5a0000] focus:bg-white"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="mb-1 ml-0.5 block text-[10px] font-semibold uppercase tracking-wider text-gray-500">Remark / Note</label>
-                        <input
-                          type="text"
-                          value={chandaMessage}
-                          onChange={(e) => setChandaMessage(e.target.value)}
-                          placeholder="Note..."
-                          className="w-full rounded-xl border border-gray-200 bg-gray-50/80 px-3 py-2 text-xs font-medium text-gray-900 outline-none transition-all focus:border-[#5a0000] focus:bg-white"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="mb-1 ml-0.5 block text-[10px] font-semibold uppercase tracking-wider text-gray-500">Date & Time</label>
-                      <input
-                        type="datetime-local"
-                        value={chandaDate}
-                        onChange={(e) => setChandaDate(e.target.value)}
-                        className="w-full rounded-xl border border-gray-200 bg-gray-50/80 px-3 py-2 text-xs font-semibold text-gray-900 outline-none transition-all focus:border-[#5a0000] focus:bg-white"
-                        required
-                      />
-                    </div>
-
-                    <button
-                      type="submit"
-                      disabled={isChandaSubmitting}
-                      className="mt-1.5 flex w-full items-center justify-center gap-1.5 rounded-xl bg-[#5a0000] px-3.5 py-2.5 text-xs font-semibold uppercase tracking-wider text-white shadow-2xs transition-all hover:bg-[#7b0000] disabled:opacity-50 active:scale-95 cursor-pointer"
-                    >
-                      <ArrowUpRight className="h-3.5 w-3.5" />
-                      {isChandaSubmitting ? 'Saving...' : 'Save Contribution'}
-                    </button>
-                  </form>
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+            <div className="relative z-50 rounded-xl border border-red-100 bg-white p-4 shadow-sm">
+              <h3 className="mb-3 text-sm font-bold uppercase tracking-wide text-red-800">Add / Update Payment</h3>
+              <form onSubmit={handleLogPayment} className="flex flex-col gap-3">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {/* 🔥 FINANCE SELECTS */}
+                  <CustomSelect
+                    value={paymentMemberId}
+                    onChange={setPaymentMemberId}
+                    options={activeMandalMembers.map(m => ({ value: m.id, label: m.name }))}
+                    placeholder="Select Member"
+                    theme="light"
+                  />
+                  <CustomSelect
+                    value={paymentMonth}
+                    onChange={setPaymentMonth}
+                    options={MONTHS.map(month => ({ value: month, label: month }))}
+                    theme="light"
+                  />
                 </div>
+                <div className="flex gap-2 mt-1">
+                  <input min="1" className="w-full rounded-xl border border-gray-200 bg-gray-50 text-gray-900 p-2 text-sm outline-none focus:ring-1 focus:ring-[#5A0000] shadow-sm" placeholder="Amount" required type="number" value={paymentAmount} onChange={(e) => setPaymentAmount(e.target.value)} />
+                  <button type="submit" className="w-full rounded-xl bg-[#5a0000] px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-[#7b0000] shadow-sm">Log Payment</button>
+                </div>
+              </form>
+            </div>
 
-                {/* Danveers Board Control */}
-                <div className="rounded-2xl border border-yellow-200/90 bg-gradient-to-br from-yellow-50/50 to-orange-50/30 shadow-xs lg:col-span-2 overflow-hidden flex flex-col">
-                  <div className="flex flex-row items-center justify-between gap-2 border-b border-yellow-100 bg-yellow-100/50 px-3.5 py-2.5">
-                    <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 rounded-lg bg-yellow-500/20 text-yellow-800 flex items-center justify-center">
-                        <Coins className="h-3.5 w-3.5" />
-                      </div>
-                      <div>
-                        <h3 className="text-xs font-semibold uppercase tracking-wider text-yellow-900">Danveers Board Control</h3>
-                        <p className="text-[10px] text-yellow-700/80 font-normal">All-time donor leaderboard</p>
-                      </div>
-                    </div>
-                    <span className="text-[10px] font-semibold text-yellow-800 bg-yellow-200/60 px-2 py-0.5 rounded-full border border-yellow-300/60">
-                      {mergedChandaList.length} Donors
-                    </span>
-                  </div>
+            <div className="rounded-xl border border-red-100 bg-white p-4 shadow-sm">
+              <h3 className="mb-3 text-sm font-bold uppercase tracking-wide text-red-800">Add New Member</h3>
+              <form onSubmit={handleAddMember} className="flex flex-col gap-3">
+                <input className="w-full rounded-xl border border-gray-200 bg-gray-50 text-gray-900 p-2.5 text-sm outline-none focus:ring-1 focus:ring-[#5A0000] shadow-sm" placeholder="Enter Name (e.g. RAHUL)" required type="text" value={newMemberName} onChange={(e) => setNewMemberName(e.target.value)} />
+                <label className="flex items-center gap-2 text-xs font-semibold text-gray-600 mt-1">
+                  <input className="h-4 w-4 rounded border-gray-300 text-[#5A0000] focus:ring-[#5A0000]" type="checkbox" checked={isNewMemberHonorary} onChange={(e) => setIsNewMemberHonorary(e.target.checked)} />
+                  Mark as Honorary member
+                </label>
+                <button type="submit" className="mt-auto rounded-xl bg-green-700 px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-green-800 shadow-sm">Add to Mandal</button>
+              </form>
+              <p className="mt-3 text-[10px] font-semibold leading-relaxed text-gray-500">
+                💡 Naye member ne pehle se hi kuch paisa diya hai? Pehle usse yahan add karein, phir left side wale &quot;Add / Update Payment&quot; form se uska pehle se diya hua amount uske naam par jis mahine ka hai us mahine me log kar dein.
+              </p>
+            </div>
+          </div>
 
-                  <div className="max-h-[320px] flex-1 overflow-y-auto custom-scrollbar p-2.5 sm:p-3 space-y-1.5">
-                    {mergedChandaList.length === 0 ? (
-                      <div className="py-8 text-center text-xs font-semibold uppercase tracking-wider text-yellow-600/60">No donors recorded yet.</div>
-                    ) : (
-                      mergedChandaList.map((donor: any, idx: number) => (
-                        <div key={donor.email || idx} className="flex items-center justify-between gap-2 rounded-xl border border-yellow-100 bg-white px-3 py-2 shadow-2xs hover:shadow-xs transition-shadow">
-                          <div className="flex items-center gap-2.5 min-w-0">
-                            <span className={`shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white ${idx === 0 ? 'bg-yellow-500' : idx === 1 ? 'bg-gray-400' : idx === 2 ? 'bg-amber-700' : 'bg-gray-300'}`}>
-                              {idx + 1}
-                            </span>
-                            <div className="min-w-0">
-                              <p className="text-xs font-semibold text-gray-900 truncate">{donor.name || 'Anonymous'}</p>
-                              <p className="text-[10px] text-gray-400 font-normal truncate">{donor.email}</p>
+          <div className="rounded-xl border border-red-100 bg-white p-4 shadow-sm">
+            <h3 className="mb-3 flex items-center justify-between text-sm font-bold uppercase tracking-wide text-red-800">
+              <span>All Members</span>
+              <span className="text-[10px] font-semibold text-gray-400">{activeMandalMembers.length} active</span>
+            </h3>
+            <p className="mb-3 text-[10px] font-semibold leading-relaxed text-gray-500">
+              💡 Naam par click karke uske individual mahine block/unblock karein — jaise agar member baad me (mid-year) join hua ho, to uske pichle mahino ko block kar dein taaki usse un mahino ka paisa na maanga jaye.
+            </p>
+            <div className="custom-scrollbar max-h-[420px] space-y-2 overflow-y-auto pr-1">
+              {activeMandalMembers.length === 0 ? (
+                <p className="py-4 text-center text-xs font-bold uppercase tracking-widest text-gray-400">No members yet</p>
+              ) : (
+                activeMandalMembers.map((member) => {
+                  const isExpanded = expandedMemberForMonths === member.id;
+                  const memberExempt: Month[] = member.exemptMonths || [];
+                  return (
+                    <div key={member.id} className="rounded-lg border border-gray-100 bg-gray-50 overflow-hidden">
+                      <div className="flex items-center justify-between gap-3 px-3 py-2">
+                        <button type="button" onClick={() => setExpandedMemberForMonths(isExpanded ? null : member.id)} className="flex min-w-0 flex-1 items-center gap-2 text-left">
+                          <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                          <div className="min-w-0">
+                            <p className="truncate text-xs font-bold text-gray-800">{member.name}</p>
+                            <div className="flex items-center gap-1.5">
+                              {member.isHonorary && <span className="text-[9px] font-bold uppercase tracking-wider text-yellow-600">Honorary</span>}
+                              {memberExempt.length > 0 && <span className="text-[9px] font-bold uppercase tracking-wider text-blue-600">{memberExempt.length} month(s) blocked</span>}
                             </div>
                           </div>
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            <span className="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-2 py-0.5 rounded-lg">
-                              ₹{Number(donor.totalAmount || 0).toLocaleString('en-IN')}
-                            </span>
-                            <button
-                              onClick={() => setLedgerModalUser(donor)}
-                              className="p-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors cursor-pointer"
-                              title="View / Edit / Adjust"
-                            >
-                              <Edit3 className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={() => {
-                                const targetEmail = String(donor.email || '').trim().toLowerCase();
-                                if (!targetEmail) { showToast('No email found for this donor.', 'error'); return; }
-                                askConfirm(`${donor.name} ko Danveers board se delete karein? Yeh wapas nahi aayega.`, async () => {
-                                  try {
-                                    await deleteDoc(doc(db, 'mandal_chanda', targetEmail));
-                                    const [s1, s2] = await Promise.all([
-                                      getDocs(query(collection(db, 'chanda_payments'), where('userEmail', '==', targetEmail))),
-                                      getDocs(query(collection(db, 'chanda_payments'), where('userId', '==', targetEmail))),
-                                    ]);
-                                    const allDocs = new Map<string, any>();
-                                    s1.docs.forEach((d) => allDocs.set(d.id, d));
-                                    s2.docs.forEach((d) => allDocs.set(d.id, d));
-                                    if (allDocs.size > 0) {
-                                      const b = writeBatch(db);
-                                      allDocs.forEach((d) => b.delete(d.ref));
-                                      await b.commit();
-                                    }
-                                    showToast(`${donor.name} removed from Danveers board! 🗑️`, 'success');
-                                  } catch (e) {
-                                    showToast('Delete failed. Try again.', 'error');
-                                  }
-                                });
-                              }}
-                              className="p-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors cursor-pointer"
-                              title="Delete from Danveers board"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveMember(member.id, member.name)}
+                          title="Remove member"
+                          className="shrink-0 rounded-lg border border-red-100 bg-red-50 p-2 text-red-600 transition-colors hover:bg-red-100"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                      {isExpanded && (
+                        <div className="border-t border-gray-200 bg-white px-3 py-2.5">
+                          <p className="mb-2 text-[9px] font-bold uppercase tracking-wider text-gray-400">Is member ke liye mahine block karein:</p>
+                          <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap sm:gap-1.5">
+                            {MONTHS.map((month) => {
+                              const isMemberBlocked = memberExempt.includes(month);
+                              return (
+                                <button
+                                  key={month}
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); toggleMemberExemptMonth(member, month); }}
+                                  className={`min-h-[38px] rounded-full px-3 py-2 text-[11px] font-bold transition-colors active:scale-95 ${isMemberBlocked ? "bg-blue-600 text-white shadow-inner" : "border border-gray-300 bg-gray-50 text-gray-700 hover:bg-gray-100"}`}
+                                >
+                                  {month} {isMemberBlocked ? "🚫" : ""}
+                                </button>
+                              );
+                            })}
                           </div>
                         </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Row 2: Chanda Payments Real-Time Feed (Full width) */}
-              <div className="rounded-2xl border border-gray-200/90 bg-white shadow-xs overflow-hidden flex flex-col">
-                <div className="flex flex-row items-center justify-between gap-2 border-b border-gray-100 bg-gray-50/60 px-3.5 py-2.5">
-                  <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded-lg bg-gray-100 text-gray-700 flex items-center justify-center">
-                      <ArrowUpRight className="h-3.5 w-3.5" />
+                      )}
                     </div>
-                    <div>
-                      <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-900">Real-Time Payments Feed</h3>
-                      <p className="text-[10px] text-gray-500 font-normal">Approved chanda transaction history</p>
-                    </div>
-                  </div>
-                  <span className="text-[10px] font-semibold text-gray-600 bg-gray-100 px-2.5 py-0.5 rounded-full border border-gray-200">
-                    Total: {chandaPayments.filter(p => p.status === 'Approved').length} Approved
-                  </span>
-                </div>
-
-                <div className="max-h-[360px] flex-1 overflow-y-auto custom-scrollbar p-2.5 sm:p-0">
-                  {chandaPayments.filter(p => p.status === 'Approved').length === 0 ? (
-                    <div className="py-8 text-center text-xs font-semibold uppercase tracking-wider text-gray-400">No payments recorded yet.</div>
-                  ) : (
-                    <>
-                      {/* Mobile View: Stacked Cards (sm:hidden) */}
-                      <div className="space-y-2 sm:hidden">
-                        {chandaPayments.filter(p => p.status === 'Approved').map((payment) => (
-                          <div key={payment.id} className="p-3 rounded-xl border border-gray-100 bg-gray-50/70 space-y-1.5 shadow-2xs">
-                            <div className="flex items-center justify-between gap-2">
-                              <div className="min-w-0">
-                                <span className="text-xs font-semibold text-gray-900 block truncate">{payment.userName || payment.userId || 'N/A'}</span>
-                                <span className="text-[10px] text-gray-400 truncate block">{payment.userEmail || payment.email || 'Email missing'}</span>
-                              </div>
-                              <span className="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-lg shrink-0">
-                                ₹{Number(payment.amount || 0).toLocaleString('en-IN')}
-                              </span>
-                            </div>
-
-                            <div className="flex items-center justify-between text-[10px] font-normal text-gray-500 pt-1.5 border-t border-gray-100">
-                              <span>
-                                {payment.timestamp?.toDate ? payment.timestamp.toDate().toLocaleDateString('en-IN') + ' ' + payment.timestamp.toDate().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : 'N/A'}
-                              </span>
-                              <div className="flex items-center gap-1.5">
-                                <button
-                                  onClick={() => { setEditingPaymentId(payment.id); setTempPaymentAmount(Number(payment.amount || 0)); }}
-                                  className="px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-md text-[10px] font-semibold hover:bg-blue-100 cursor-pointer"
-                                >
-                                  Edit
-                                </button>
-                                <button
-                                  onClick={() => handleDeletePayment(payment.id)}
-                                  className="px-2 py-0.5 bg-red-50 text-red-700 border border-red-200 rounded-md text-[10px] font-semibold hover:bg-red-100 cursor-pointer"
-                                >
-                                  Delete
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* Desktop View: Table (hidden sm:table) */}
-                      <table className="hidden sm:table w-full border-collapse text-left text-xs">
-                        <thead>
-                          <tr className="border-b border-gray-200 bg-gray-50/80 text-[10px] font-semibold uppercase tracking-wider text-gray-500">
-                            <th className="p-2.5 w-8">#</th>
-                            <th className="p-2.5">User</th>
-                            <th className="p-2.5">Email</th>
-                            <th className="p-2.5 text-right">Amount</th>
-                            <th className="p-2.5 text-right">Date & Time</th>
-                            <th className="p-2.5 text-right">Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100">
-                          {chandaPayments.filter(p => p.status === 'Approved').map((payment, idx) => (
-                            <tr key={payment.id} className="hover:bg-gray-50/80 transition-colors">
-                              <td className="p-2.5 text-[10px] font-mono text-gray-400">{idx + 1}</td>
-                              <td className="p-2.5 text-xs font-semibold text-gray-900 truncate">{payment.userName || payment.userId || 'N/A'}</td>
-                              <td className="p-2.5 text-xs text-gray-500 truncate">{payment.userEmail || payment.email || 'Email missing'}</td>
-                              <td className="p-2.5 text-right">
-                                {editingPaymentId === payment.id ? (
-                                  <div className="flex items-center justify-end gap-1">
-                                    <input
-                                      type="number"
-                                      value={tempPaymentAmount}
-                                      onChange={(e) => setTempPaymentAmount(Number(e.target.value))}
-                                      className="w-20 px-2 py-0.5 bg-white border border-gray-300 rounded text-xs font-bold text-gray-900 outline-none focus:border-[#5a0000]"
-                                    />
-                                    <button
-                                      onClick={() => handleEditPayment(payment.id, tempPaymentAmount)}
-                                      disabled={isEditingPayment}
-                                      className="p-1 bg-green-100 text-green-700 rounded hover:bg-green-200 disabled:opacity-50 cursor-pointer"
-                                      aria-label="Confirm"
-                                    >
-                                      <CheckCircle2 className="w-3.5 h-3.5" />
-                                    </button>
-                                    <button
-                                      onClick={() => setEditingPaymentId(null)}
-                                      className="p-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 cursor-pointer"
-                                      aria-label="Cancel"
-                                    >
-                                      <X className="w-3.5 h-3.5" />
-                                    </button>
-                                  </div>
-                                ) : (
-                                  <span className="font-bold text-emerald-700 text-xs">₹{Number(payment.amount || 0).toLocaleString('en-IN')}</span>
-                                )}
-                              </td>
-                              <td className="p-2.5 text-right">
-                                <div className="text-xs font-medium text-gray-700">
-                                  {payment.timestamp?.toDate ? (
-                                    <>
-                                      {payment.timestamp.toDate().toLocaleDateString('en-IN')}<br />
-                                      <span className="text-[10px] text-gray-400 font-normal">
-                                        {payment.timestamp.toDate().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
-                                      </span>
-                                    </>
-                                  ) : (
-                                    'N/A'
-                                  )}
-                                </div>
-                              </td>
-                              <td className="p-2.5 text-right space-x-1.5">
-                                {editingPaymentId !== payment.id && (
-                                  <>
-                                    <button
-                                      onClick={() => { setEditingPaymentId(payment.id); setTempPaymentAmount(Number(payment.amount || 0)); }}
-                                      className="inline-flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg text-[10px] font-semibold hover:bg-blue-100 transition-colors cursor-pointer"
-                                    >
-                                      <Edit3 className="w-3 h-3" /> Edit
-                                    </button>
-                                    <button
-                                      onClick={() => handleDeletePayment(payment.id)}
-                                      className="inline-flex items-center gap-1 px-2 py-1 bg-red-50 text-red-700 border border-red-200 rounded-lg text-[10px] font-semibold hover:bg-red-100 transition-colors cursor-pointer"
-                                    >
-                                      <Trash2 className="w-3 h-3" /> Delete
-                                    </button>
-                                  </>
-                                )}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </>
-                  )}
-                </div>
-              </div>
+                  );
+                })
+              )}
             </div>
-          )}
+
+            {removedMandalMembers.length > 0 && (
+              <div className="mt-4 border-t border-red-100 pt-3">
+                <h4 className="mb-2 text-[10px] font-bold uppercase tracking-widest text-gray-400">Removed Members ({removedMandalMembers.length})</h4>
+                <div className="custom-scrollbar max-h-[200px] space-y-2 overflow-y-auto pr-1">
+                  {removedMandalMembers.map((member) => (
+                    <div key={member.id} className="flex items-center justify-between gap-3 rounded-lg border border-gray-100 bg-gray-100 px-3 py-2 opacity-70">
+                      <p className="truncate text-xs font-bold text-gray-600">{member.name}</p>
+                      <button
+                        type="button"
+                        onClick={() => handleRestoreMember(member.id, member.name)}
+                        title="Restore member"
+                        className="shrink-0 flex items-center gap-1 rounded-lg border border-green-200 bg-green-50 px-2 py-1.5 text-[9px] font-bold uppercase tracking-wider text-green-700 transition-colors hover:bg-green-100"
+                      >
+                        <RefreshCcw className="h-3 w-3" /> Restore
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
       {/* ============================== */}
-      {/* TAB: BUILDING MANAGEMENT */}
-      {activeTab === 'buildings' && (
-        <AdminBuildingManager onShowToast={setToastMsg} askConfirm={askConfirm} />
+      {/* TAB: CHANDA MANAGEMENT */}
+      {activeTab === 'chanda' && (
+        <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-3 animate-in fade-in zoom-in duration-300 mt-4">
+
+          {/* Add / Update Form Section (Appears above table on Mobile, left on Desktop) */}
+          <div className="rounded-2xl sm:rounded-3xl border border-gray-200 bg-white p-4 sm:p-5 shadow-sm lg:col-span-1 h-fit">
+            <div className="mb-3 sm:mb-4 flex items-center gap-1.5 sm:gap-2 border-b border-gray-100 pb-2 sm:pb-3">
+              <PlusCircle className="h-4 w-4 sm:h-5 sm:w-5 text-[#5a0000]" />
+              <h3 className="text-xs sm:text-sm font-black uppercase tracking-wide text-gray-800">Add Entry</h3>
+            </div>
+
+            <form onSubmit={handleAddChanda} className="space-y-3 sm:space-y-4">
+              <div>
+                <label className="mb-1 ml-1 block text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-gray-400">Registered User</label>
+                <SearchableSelect
+                  value={selectedUserUid}
+                  onChange={setSelectedUserUid}
+                  options={userSelectOptions}
+                  placeholder="Select Registered User"
+                />
+              </div>
+
+              <div className="flex flex-row gap-3 sm:flex-col sm:gap-4">
+                <div className="flex-[1]">
+                  <label className="mb-1 ml-1 block text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-gray-400">Amount (₹)</label>
+                  <input
+                    type="number"
+                    required
+                    min="1"
+                    value={chandaAmount}
+                    onChange={(e) => setChandaAmount(e.target.value)}
+                    placeholder="101"
+                    className="w-full rounded-lg sm:rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 sm:px-4 sm:py-3 text-[11px] sm:text-xs font-bold text-black outline-none transition-all focus:border-[#5a0000] focus:bg-white"
+                  />
+                </div>
+
+                <div className="flex-[1.5]">
+                  <label className="mb-1 ml-1 block text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-gray-400">Remark</label>
+                  <input
+                    type="text"
+                    value={chandaMessage}
+                    onChange={(e) => setChandaMessage(e.target.value)}
+                    placeholder="Note..."
+                    className="w-full rounded-lg sm:rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 sm:px-4 sm:py-3 text-[11px] sm:text-xs font-bold text-black outline-none transition-all focus:border-[#5a0000] focus:bg-white"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-1 ml-1 block text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-gray-400">Date & Time</label>
+                <input
+                  type="datetime-local"
+                  value={chandaDate}
+                  onChange={(e) => setChandaDate(e.target.value)}
+                  className="w-full rounded-lg sm:rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 sm:px-4 sm:py-3 text-[11px] sm:text-xs font-bold text-black outline-none transition-all focus:border-[#5a0000] focus:bg-white"
+                  required
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={isChandaSubmitting}
+                className="mt-1 sm:mt-2 flex w-full items-center justify-center gap-1.5 sm:gap-2 rounded-xl bg-[#5a0000] px-4 py-3 sm:py-3.5 text-[10px] sm:text-xs font-black uppercase tracking-widest text-white shadow-sm transition-colors hover:bg-[#7b0000] disabled:opacity-50 active:scale-95"
+              >
+                <ArrowUpRight className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                {isChandaSubmitting ? 'Saving...' : 'Save Contribution'}
+              </button>
+            </form>
+          </div>
+
+          {/* ===== DANVEERS LEADERBOARD CONTROL ===== */}
+          <div className="rounded-2xl sm:rounded-3xl border border-yellow-200 bg-gradient-to-br from-yellow-50 to-orange-50 shadow-sm col-span-full overflow-hidden flex flex-col mt-4">
+            <div className="flex flex-row items-center justify-between gap-2 border-b border-yellow-100 bg-yellow-100/60 px-3 py-3 sm:px-4">
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <Coins className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-yellow-600" />
+                <h3 className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-yellow-800">Danveers Board Control</h3>
+              </div>
+              <span className="text-[9px] sm:text-[10px] font-bold text-yellow-600">{mergedChandaList.length} donors</span>
+            </div>
+
+            <div className="max-h-[400px] flex-1 overflow-y-auto custom-scrollbar p-3 sm:p-4 space-y-2">
+              {mergedChandaList.length === 0 ? (
+                <div className="py-10 text-center text-[10px] sm:text-xs font-bold uppercase tracking-widest text-yellow-500/60">No donors yet.</div>
+              ) : (
+                mergedChandaList.map((donor: any, idx: number) => (
+                  <div key={donor.email || idx} className="flex items-center justify-between gap-3 rounded-xl border border-yellow-100 bg-white px-3 py-2.5 shadow-sm hover:shadow-md transition-shadow">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <span className={`shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-black text-white ${idx === 0 ? 'bg-yellow-500' : idx === 1 ? 'bg-gray-400' : idx === 2 ? 'bg-amber-700' : 'bg-gray-300'}`}>
+                        {idx + 1}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-[11px] sm:text-xs font-black text-gray-900 truncate">{donor.name || 'Anonymous'}</p>
+                        <p className="text-[9px] text-gray-400 font-bold truncate">{donor.email}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-xs sm:text-sm font-black text-green-700">₹{Number(donor.totalAmount || 0).toLocaleString('en-IN')}</span>
+                      <button
+                        onClick={() => setLedgerModalUser(donor)}
+                        className="p-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
+                        title="View / Edit / Adjust"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => {
+                          const targetEmail = String(donor.email || '').trim().toLowerCase();
+                          if (!targetEmail) { showToast('No email found for this donor.', 'error'); return; }
+                          askConfirm(`${donor.name} ko Danveers board se delete karein? Yeh wapas nahi aayega.`, async () => {
+                            try {
+                              await deleteDoc(doc(db, 'mandal_chanda', targetEmail));
+                              const [s1, s2] = await Promise.all([
+                                getDocs(query(collection(db, 'chanda_payments'), where('userEmail', '==', targetEmail))),
+                                getDocs(query(collection(db, 'chanda_payments'), where('userId', '==', targetEmail))),
+                              ]);
+                              const allDocs = new Map<string, any>();
+                              s1.docs.forEach((d) => allDocs.set(d.id, d));
+                              s2.docs.forEach((d) => allDocs.set(d.id, d));
+                              if (allDocs.size > 0) {
+                                const b = writeBatch(db);
+                                allDocs.forEach((d) => b.delete(d.ref));
+                                await b.commit();
+                              }
+                              showToast(`${donor.name} removed from Danveers board! 🗑️`, 'success');
+                            } catch (e) {
+                              showToast('Delete failed. Try again.', 'error');
+                            }
+                          });
+                        }}
+                        className="p-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
+                        title="Delete from Danveers board"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Chanda Payments Live Feed (Raw Transactions) */}
+          <div className="rounded-2xl sm:rounded-3xl border border-gray-200 bg-white shadow-sm col-span-full overflow-hidden flex flex-col mt-4">
+            <div className="flex flex-row items-center justify-between gap-2 border-b border-gray-100 bg-gray-50/50 px-3 py-3 sm:px-4">
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <ArrowUpRight className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-gray-500" />
+                <h3 className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-gray-700">Payments Feed (Real-Time)</h3>
+              </div>
+              <span className="text-[9px] sm:text-[10px] font-bold text-gray-400">Total: {chandaPayments.filter(p => p.status === 'Approved').length} approved</span>
+            </div>
+
+            <div className="max-h-[350px] sm:max-h-[400px] flex-1 overflow-x-auto custom-scrollbar">
+              {chandaPayments.filter(p => p.status === 'Approved').length === 0 ? (
+                <div className="py-10 sm:py-14 text-center text-[10px] sm:text-xs font-bold uppercase tracking-widest text-gray-400">No payments yet.</div>
+              ) : (
+                <table className="w-full border-collapse text-left text-xs">
+                  <thead>
+                    <tr className="border-b border-gray-200 bg-gray-50 text-[8px] sm:text-[9px] font-black uppercase tracking-wider text-gray-400">
+                      <th className="p-2 sm:p-3 w-6 sm:w-8">#</th>
+                      <th className="p-2 sm:p-3">User</th>
+                      <th className="p-2 sm:p-3">Email</th>
+                      <th className="p-2 sm:p-3 text-right">Amount</th>
+                      <th className="p-2 sm:p-3 text-right">Date & Time</th>
+                      <th className="p-2 sm:p-3 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {chandaPayments.filter(p => p.status === 'Approved').map((payment, idx) => {
+                      // 🔥 DEBUG LOG: show what fields are in the payment document
+                      if (idx === 0) {
+                        console.log('[AdminPanel Payments Feed] Sample payment doc:', payment);
+                      }
+                      return (
+                        <tr key={payment.id} className="hover:bg-gray-50 transition-colors">
+                          <td className="p-2 sm:p-3 text-[8px] sm:text-[10px] font-mono text-gray-400 truncate max-w-[60px]">{idx + 1}</td>
+                          <td className="p-2 sm:p-3 text-[10px] sm:text-xs font-bold text-gray-900 truncate">{payment.userName || payment.userId || 'N/A'}</td>
+                          <td className="p-2 sm:p-3 text-[10px] text-gray-500 truncate">{payment.userEmail || payment.email || 'Email missing'}</td>
+                          <td className="p-2 sm:p-3 text-right">
+                            {editingPaymentId === payment.id ? (
+                              <div className="flex items-center justify-end gap-1.5">
+                                <input
+                                  type="number"
+                                  value={tempPaymentAmount}
+                                  onChange={(e) => setTempPaymentAmount(Number(e.target.value))}
+                                  className="w-16 sm:w-20 px-2 py-1 bg-white border border-gray-300 rounded text-[10px] font-bold text-gray-900 outline-none focus:border-[#5a0000]"
+                                />
+                                <button
+                                  onClick={() => handleEditPayment(payment.id, tempPaymentAmount)}
+                                  disabled={isEditingPayment}
+                                  className="p-1 bg-green-100 text-green-700 rounded hover:bg-green-200 disabled:opacity-50"
+                                  aria-label="Confirm"
+                                >
+                                  <CheckCircle2 className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => setEditingPaymentId(null)}
+                                  className="p-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+                                  aria-label="Cancel"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ) : (
+                              <span className="font-black text-gray-900">₹{Number(payment.amount || 0).toLocaleString('en-IN')}</span>
+                            )}
+                          </td>
+                          <td className="p-2 sm:p-3 text-right">
+                            <div className="text-[10px] font-bold text-gray-700">
+                              {payment.timestamp?.toDate ? (
+                                <>
+                                  {payment.timestamp.toDate().toLocaleDateString('en-IN')}<br />
+                                  <span className="text-[9px] text-gray-400 font-medium">
+                                    {payment.timestamp.toDate().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                                  </span>
+                                </>
+                              ) : (
+                                'N/A'
+                              )}
+                            </div>
+                          </td>
+                          <td className="p-2 sm:p-3 text-right space-x-1.5">
+                            {editingPaymentId !== payment.id && (
+                              <>
+                                <button
+                                  onClick={() => { setEditingPaymentId(payment.id); setTempPaymentAmount(Number(payment.amount || 0)); }}
+                                  className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 rounded text-[9px] font-bold hover:bg-blue-200 transition-colors"
+                                >
+                                  <Edit3 className="w-3 h-3" /> Edit
+                                </button>
+                                <button
+                                  onClick={() => handleDeletePayment(payment.id)}
+                                  className="inline-flex items-center gap-1 px-2 py-1 bg-red-100 text-red-700 rounded text-[9px] font-bold hover:bg-red-200 transition-colors"
+                                >
+                                  <Trash2 className="w-3 h-3" /> Delete
+                                </button>
+                              </>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ============================== */}
-      {/* TAB: MEDIA / VAULT */}
+      {/* TAB 3: MEDIA / VAULT */}
       {activeTab === 'media' && (
-        <div className="animate-in fade-in duration-300 space-y-3.5">
-          <div className="relative z-50 bg-[#1a0505]/80 backdrop-blur-xl border border-yellow-500/30 p-3 rounded-xl shadow-lg">
-            <div className="flex flex-col gap-2.5">
-              <div className="relative">
+        <div className="animate-in fade-in zoom-in duration-300 space-y-6">
+          <div className="relative z-50 bg-[#1a0505]/80 backdrop-blur-xl border border-yellow-500/30 p-4 rounded-2xl shadow-lg">
+            <div className="flex flex-col md:flex-row gap-4">
+              <div className="flex-1 relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-yellow-500/50" />
-                <input type="text" placeholder="Search by email or caption..." value={vaultSearch} onChange={(e) => setVaultSearch(e.target.value)} className="w-full bg-black/40 border border-yellow-500/20 rounded-lg py-2 pl-9 pr-3 text-xs text-yellow-100 placeholder-yellow-100/30 outline-none focus:border-yellow-400 transition-all shadow-inner" />
+                <input type="text" placeholder="Search by email or caption..." value={vaultSearch} onChange={(e) => setVaultSearch(e.target.value)} className="w-full bg-black/40 border border-yellow-500/20 rounded-xl py-2.5 pl-10 pr-4 text-sm text-yellow-100 placeholder-yellow-100/30 outline-none focus:border-yellow-400 transition-all shadow-inner" />
               </div>
 
-              {/* VAULT FILTERS (Responsive Grid on Mobile) */}
-              <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-1.5 sm:gap-2">
-                <div className="min-w-0">
-                  <CustomSelect value={vaultType} onChange={setVaultType} options={[{ value: 'all', label: 'All Media' }, { value: 'image', label: 'Images' }, { value: 'video', label: 'Videos' }]} theme="dark" />
+              {/* 🔥 VAULT PREMIUM SELECTS (DARK MODE) */}
+              <div className="flex flex-wrap gap-2 md:gap-3">
+                <div className="flex-1 sm:flex-none min-w-[120px]">
+                  <CustomSelect value={vaultType} onChange={setVaultType} options={[{ value: 'all', label: 'All Media' }, { value: 'image', label: 'Images Only' }, { value: 'video', label: 'Videos Only' }]} theme="dark" />
                 </div>
-                <div className="min-w-0">
+                <div className="flex-1 sm:flex-none min-w-[120px]">
                   <CustomSelect value={vaultPrivacy} onChange={setVaultPrivacy} options={[{ value: 'all', label: 'All Privacy' }, { value: 'public', label: 'Public' }, { value: 'private', label: 'Private' }]} theme="dark" />
                 </div>
-                <div className="min-w-0">
+                <div className="flex-1 sm:flex-none min-w-[120px]">
                   <CustomSelect value={vaultSort} onChange={setVaultSort} options={[{ value: 'newest', label: 'Newest' }, { value: 'oldest', label: 'Oldest' }]} theme="dark" />
                 </div>
-                <div className="min-w-0">
+                <div className="flex-1 sm:flex-none min-w-[130px]">
                   <CustomSelect value={vaultUploader} onChange={setVaultUploader} options={[{ value: 'all', label: 'All Uploaders' }, ...uniqueUploaders.map(email => ({ value: email, label: email?.split('@')[0] }))]} theme="dark" />
                 </div>
-                <div className="col-span-2 sm:col-span-1 min-w-0">
-                  <CustomSelect value={vaultDate} onChange={setVaultDate} options={[{ value: 'all', label: 'All Time' }, { value: '7days', label: '7 Days' }, { value: '30days', label: '30 Days' }]} theme="dark" />
+                <div className="flex-1 sm:flex-none min-w-[130px]">
+                  <CustomSelect value={vaultDate} onChange={setVaultDate} options={[{ value: 'all', label: 'All Time' }, { value: '7days', label: 'Last 7 Days' }, { value: '30days', label: 'Last 30 Days' }]} theme="dark" />
                 </div>
               </div>
             </div>
           </div>
 
-          {/* 2-col on Mobile, 3-5 col on Desktop */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 sm:gap-3">
+          <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 sm:gap-4">
             {filteredVaultMedia.length === 0 ? (
-              <div className="col-span-full py-10 text-center border border-white/5 rounded-xl bg-white/5 backdrop-blur-sm">
-                <p className="text-yellow-100/50 text-xs font-bold uppercase tracking-widest">No media matches your filters</p>
-                <button onClick={() => { setVaultSearch(''); setVaultType('all'); setVaultPrivacy('all'); setVaultSort('newest'); setVaultUploader('all'); setVaultDate('all'); setVaultCaption('all'); }} className="mt-3 text-xs text-yellow-500 hover:text-yellow-400 underline underline-offset-4 cursor-pointer">
+              <div className="col-span-full py-12 text-center border border-white/5 rounded-2xl bg-white/5 backdrop-blur-sm">
+                <p className="text-yellow-100/50 text-sm font-bold uppercase tracking-widest">No media matches your filters</p>
+                <button onClick={() => { setVaultSearch(''); setVaultType('all'); setVaultPrivacy('all'); setVaultSort('newest'); setVaultUploader('all'); setVaultDate('all'); setVaultCaption('all'); }} className="mt-4 text-xs text-yellow-500 hover:text-yellow-400 underline underline-offset-4">
                   Clear All Filters
                 </button>
               </div>
             ) : (
               filteredVaultMedia.slice(0, visibleCount).map((item: any, index: number) => (
-                <div key={item.id} onClick={() => setSelectedIndex(index)} className="relative group rounded-xl overflow-hidden border border-yellow-500/20 aspect-square bg-black shadow-md hover:shadow-[0_0_15px_rgba(202,138,4,0.3)] transition-all cursor-pointer">
+                <div key={item.id} onClick={() => setSelectedIndex(index)} className="relative group rounded-xl overflow-hidden border border-yellow-500/20 aspect-square bg-black shadow-lg hover:shadow-[0_0_15px_rgba(202,138,4,0.3)] transition-all cursor-pointer">
                   {item.type?.startsWith('video') ? (
                     <>
                       <img src={getOptimizedMediaUrl(item.url, item.type)} className="w-full h-full object-cover" alt="video" loading="lazy" />
-                      <div className="absolute inset-0 flex items-center justify-center bg-black/20"><div className="rounded-full bg-black/40 backdrop-blur-md p-1.5"><Play className="w-3.5 h-3.5 sm:w-5 sm:h-5 fill-white text-white" /></div></div>
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/20"><div className="rounded-full bg-black/40 backdrop-blur-md p-2"><Play className="w-4 h-4 sm:w-6 sm:h-6 fill-white text-white" /></div></div>
                     </>
                   ) : (
                     <img src={getOptimizedMediaUrl(item.url, item.type)} alt="Vault Media" className="w-full h-full object-cover" loading="lazy" />
                   )}
 
-                  <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-between p-2 backdrop-blur-[2px]">
-                    <div className="flex justify-between items-start gap-1 w-full">
-                      <div className="flex flex-col gap-0.5">
-                        <span className="text-[9px] sm:text-[10px] bg-black/60 text-yellow-400 px-1 py-0.5 rounded backdrop-blur-md border border-yellow-500/30 truncate max-w-[70px] sm:max-w-[90px]" title={item.uploaderEmail}>{item.uploaderEmail?.split('@')[0]}</span>
-                        {item.caption && <span className="text-[9px] text-white/70 truncate max-w-[80px] italic">&quot;{item.caption}&quot;</span>}
+                  <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-between p-2 sm:p-3 backdrop-blur-[2px]">
+                    <div className="flex justify-between items-start gap-2 w-full">
+                      <div className="flex flex-col gap-1">
+                        <span className="text-[8px] sm:text-[10px] bg-black/60 text-yellow-400 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded backdrop-blur-md border border-yellow-500/30 truncate max-w-[80px] sm:max-w-[100px]" title={item.uploaderEmail}>{item.uploaderEmail?.split('@')[0]}</span>
+                        {item.caption && <span className="text-[8px] text-white/70 truncate max-w-[100px] italic">&quot;{item.caption}&quot;</span>}
                       </div>
-                      <button onClick={(e) => deleteMedia(item.id, e)} className="bg-red-500/80 hover:bg-red-600 text-white p-1 rounded border border-red-400/50 transition-colors shadow-sm cursor-pointer" aria-label="Delete media"><Trash2 className="w-3.5 h-3.5" /></button>
+                      <button onClick={(e) => deleteMedia(item.id, e)} className="bg-red-500/80 hover:bg-red-600 text-white p-1.5 rounded border border-red-400/50 transition-colors shadow-sm"><Trash2 className="w-4 h-4" /></button>
                     </div>
-                    {item.isPrivate && <div className="self-end bg-gradient-to-r from-yellow-600 to-yellow-400 text-black text-[9px] font-black px-1.5 py-0.5 rounded flex items-center gap-0.5 shadow-md"><Lock className="w-2.5 h-2.5" /> Private</div>}
+                    {item.isPrivate && <div className="self-end bg-gradient-to-r from-yellow-600 to-yellow-400 text-black text-[8px] sm:text-[10px] font-black px-1.5 sm:px-2 py-0.5 sm:py-1 rounded flex items-center gap-1 shadow-md"><Lock className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Private</div>}
                   </div>
                 </div>
               ))
@@ -1835,25 +1940,55 @@ export default function AdminPanel({ currentUserData, userData }: { currentUserD
       )}
 
       {/* ============================== */}
-      {/* TAB: WEBSITE SETTINGS */}
-      {activeTab === "settings" && (
-        <div className="space-y-3 animate-fade-in max-w-2xl">
-          <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-gray-100 shadow-2xs space-y-4">
-            <h3 className="font-bold text-gray-800 flex items-center gap-2 border-b border-gray-100 pb-2 text-xs sm:text-sm">
-              <Shield className="w-4 h-4 text-[#5A0000]" /> Anti-Leak & Downloads
-            </h3>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs sm:text-sm font-bold text-gray-800">Allow HD Downloads</p>
-                <p className="text-[10px] text-gray-400 mt-0.5">Members can download original high quality media files</p>
+      {/* TAB 4 & 5 (Security & Settings) untouched as they don't have dropdowns */}
+      {activeTab === "security" && (
+        <div className="space-y-3 animate-fade-in">
+          <div className="bg-white p-3 sm:p-4 rounded-xl border border-gray-100 shadow-sm">
+            <h3 className="font-black text-gray-800 flex items-center gap-2 mb-3 text-sm"><AlertTriangle className="w-4 h-4 text-orange-500" /> Security Monitors</h3>
+            <div className="space-y-2">
+              <div className="flex justify-between items-center p-2.5 bg-gray-50 rounded-lg border border-gray-100">
+                <div>
+                  <p className="text-xs font-bold text-gray-800">Auto-Ban System</p>
+                  <p className="text-[9px] text-gray-500">Blocks after 3 failed passcodes</p>
+                </div>
+                <span className="px-2 py-0.5 bg-green-100 text-green-700 text-[8px] font-bold rounded uppercase">Active</span>
               </div>
-              <button
-                onClick={() => saveSettings('hdDownloads', !settings.hdDownloads)}
-                className={`w-9 h-5 rounded-full transition-colors relative cursor-pointer ${settings.hdDownloads ? 'bg-emerald-500' : 'bg-gray-300'}`}
-                aria-label="Toggle HD downloads"
-              >
-                <div className={`w-3.5 h-3.5 bg-white rounded-full absolute top-0.5 transition-transform ${settings.hdDownloads ? 'translate-x-4.5' : 'translate-x-0.5'}`} />
-              </button>
+
+              <div className="flex justify-between items-center p-2.5 bg-gray-50 rounded-lg border border-gray-100">
+                <div>
+                  <p className="text-xs font-bold text-gray-800">Security Override</p>
+                  <p className="text-[9px] text-gray-500">Reset failed attempt counters</p>
+                </div>
+                <button onClick={resetAllAttempts} className="px-2 py-1.5 bg-gray-800 text-white text-[9px] font-bold rounded hover:bg-black">Reset</button>
+              </div>
+            </div>
+          </div>
+          <div className="bg-[#1a0505] p-3 sm:p-4 rounded-xl shadow-xl border border-red-900/50 max-h-60 overflow-y-auto">
+            <p className="text-red-400 font-bold mb-2 flex items-center gap-1.5 text-xs"><Activity className="w-3 h-3" /> Real Activity Stream</p>
+            <div className="space-y-1.5 font-mono text-[9px] sm:text-[10px]">
+              {activeUsers.map((user) => <p key={user.id || user.uid || user.email || user.lastLogin} className="text-gray-300"><span className="text-green-500">[{new Date(user.lastLogin).toLocaleTimeString()}]</span> {user.name} logged into the portal.</p>)}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === "settings" && (
+        <div className="space-y-3 animate-fade-in">
+          <div className="bg-white p-3 sm:p-4 rounded-xl border border-gray-100 shadow-sm space-y-3">
+            <h3 className="font-black text-gray-800 flex items-center gap-2 border-b border-gray-100 pb-2 text-sm"><Lock className="w-4 h-4 text-[#5A0000]" /> Access Rules</h3>
+            <div>
+              <label className="text-[10px] font-bold text-gray-500 uppercase">Secret Mandal Passcode</label>
+              <div className="flex mt-1 gap-2">
+                <input type="text" value={localPasscode} onChange={(e) => setLocalPasscode(e.target.value)} className="flex-1 bg-gray-50 border border-gray-200 text-gray-900 rounded-lg px-2 py-1.5 text-xs font-bold outline-none focus:border-[#5A0000]" />
+                <button onClick={() => saveSettings('secretPasscode', localPasscode)} className="px-3 py-1.5 bg-[#5A0000] text-white font-bold text-[10px] rounded-lg shadow-md hover:bg-red-900">Update</button>
+              </div>
+            </div>
+          </div>
+          <div className="bg-white p-3 sm:p-4 rounded-xl border border-gray-100 shadow-sm space-y-4">
+            <h3 className="font-black text-gray-800 flex items-center gap-2 border-b border-gray-100 pb-2 text-sm"><Shield className="w-4 h-4 text-[#5A0000]" /> Anti-Leak & Downloads</h3>
+            <div className="flex items-center justify-between">
+              <div><p className="text-xs font-bold text-gray-800">Allow HD Downloads</p></div>
+              <button onClick={() => saveSettings('hdDownloads', !settings.hdDownloads)} className={`w-8 h-4 rounded-full transition-colors relative ${settings.hdDownloads ? 'bg-green-500' : 'bg-gray-300'}`}><div className={`w-3 h-3 bg-white rounded-full absolute top-0.5 transition-transform ${settings.hdDownloads ? 'translate-x-4' : 'translate-x-0.5'}`}></div></button>
             </div>
           </div>
         </div>
