@@ -8,7 +8,7 @@ import { Bell, ChevronDown, CheckCircle2, Building2, Users, IndianRupee, Layers,
 import { Building, Wing, Flat } from "@/lib/types/building";
 import { subscribeBuildings, subscribeWings, subscribeFlats, createOrUpdateFlat, calculateWingMetrics, WingMetricsSummary } from "@/lib/buildingService";
 import { ChandaSeason, MonthlyDue } from "@/lib/types/season";
-import { subscribeSeasons, subscribeMonthlyDues, resolveEffectivePeriodStatus, MANDAL_MONTHS } from "@/lib/seasonService";
+import { subscribeSeasons, subscribeMonthlyDues, resolveEffectivePeriodStatus, MANDAL_MONTHS, formatPeriodKey, getPeriodMatchingAliases } from "@/lib/seasonService";
 
 type BuildingPayment = {
   id: string;
@@ -522,11 +522,12 @@ export default function Dashboard({ userData }: { userData: any }) {
       setSeasonMonthlyDues([]);
       return;
     }
+    const currentSeason = dynSeasons.find(s => s.id === selectedDashboardSeasonId);
     const unsub = subscribeMonthlyDues(selectedDashboardSeasonId, (dList) => {
       setSeasonMonthlyDues(dList);
-    });
+    }, currentSeason?.startDate);
     return () => unsub();
-  }, [selectedDashboardSeasonId]);
+  }, [selectedDashboardSeasonId, dynSeasons]);
 
   // Dynamic Schedule
   const activeSchedule: MonthlyDue[] = useMemo(() => {
@@ -535,11 +536,13 @@ export default function Dashboard({ userData }: { userData: any }) {
     const startYear = parseInt((currentSeason?.startDate || '2025-09-01').split('-')[0], 10) || 2025;
     return MANDAL_MONTHS.map((m, idx) => {
       const calculatedYear = idx < 4 ? startYear : startYear + 1;
+      const calMonth = idx < 4 ? idx + 9 : idx - 3;
+      const pKey = formatPeriodKey(calculatedYear, calMonth);
       return {
         id: m.key,
         seasonId: selectedDashboardSeasonId || 'default',
         monthKey: m.key,
-        periodKey: m.key,
+        periodKey: pKey,
         monthName: m.name,
         year: calculatedYear,
         monthOrder: m.order,
@@ -552,12 +555,11 @@ export default function Dashboard({ userData }: { userData: any }) {
 
   const getMemberPaymentForDue = (payments: Record<string, number> | undefined, due: MonthlyDue): number => {
     if (!payments) return 0;
-    const pKey = due.periodKey;
-    const mKey = due.monthKey;
-    const id = due.id;
-    if (pKey && payments[pKey] !== undefined) return Number(payments[pKey]) || 0;
-    if (mKey && payments[mKey] !== undefined) return Number(payments[mKey]) || 0;
-    if (id && payments[id] !== undefined) return Number(payments[id]) || 0;
+    const aliases = getPeriodMatchingAliases(due.periodKey || due.monthKey || due.id, due);
+    for (const k of aliases) {
+      if (payments[k] !== undefined) return Number(payments[k]) || 0;
+      if (payments[k.toLowerCase()] !== undefined) return Number(payments[k.toLowerCase()]) || 0;
+    }
     return 0;
   };
 
@@ -997,7 +999,8 @@ export default function Dashboard({ userData }: { userData: any }) {
   // --- INLINE EDITING LOGIC ---
   const handleCellClick = (memberId: number, due: MonthlyDue, currentValue: number | undefined) => {
     const pKey = due.periodKey || due.monthKey || due.id;
-    const status = resolveEffectivePeriodStatus(pKey, due, blockedMonths, []);
+    const targetMember = members.find(m => m.id === memberId);
+    const status = resolveEffectivePeriodStatus(pKey, due, blockedMonths, targetMember?.exemptMonths || []);
     if (isAdmin && !status.isBlocked) {
       setEditCell({ id: memberId, dueKey: pKey });
       setEditValue(String(currentValue || ""));

@@ -94,6 +94,173 @@ export const normalizeMonthlyDue = (due: MonthlyDue, seasonStartDate?: string): 
 };
 
 /**
+ * Maps any month representation to its calendar month number (1-12)
+ */
+export const getMonthNumberFromNameOrKey = (keyOrName: string): number | null => {
+  if (!keyOrName) return null;
+  const s = keyOrName.toUpperCase().trim();
+
+  // Direct number e.g. "9", "09"
+  if (/^\d{1,2}$/.test(s)) {
+    const n = parseInt(s, 10);
+    if (n >= 1 && n <= 12) return n;
+  }
+
+  // Period format "YYYY-MM" or "YYYY-M"
+  const ymMatch = s.match(/^\d{4}-(\d{1,2})$/);
+  if (ymMatch) {
+    const n = parseInt(ymMatch[1], 10);
+    if (n >= 1 && n <= 12) return n;
+  }
+
+  // Check against month names / keys
+  if (s.startsWith('SEPT') || s.startsWith('SEP')) return 9;
+  if (s.startsWith('OCT')) return 10;
+  if (s.startsWith('NOV')) return 11;
+  if (s.startsWith('DEC')) return 12;
+  if (s.startsWith('JAN')) return 1;
+  if (s.startsWith('FEB')) return 2;
+  if (s.startsWith('MAR')) return 3;
+  if (s.startsWith('APR')) return 4;
+  if (s.startsWith('MAY')) return 5;
+  if (s.startsWith('JUN')) return 6;
+  if (s.startsWith('JUL')) return 7;
+  if (s.startsWith('AUG')) return 8;
+
+  return null;
+};
+
+/**
+ * Returns all possible uppercase alias keys for a given month/due period
+ */
+export const getPeriodMatchingAliases = (
+  periodKeyOrMonthKey: string,
+  monthlyDue?: MonthlyDue
+): string[] => {
+  const aliases = new Set<string>();
+  const add = (v: any) => {
+    if (v !== undefined && v !== null) {
+      const str = String(v).trim().toUpperCase();
+      if (str) aliases.add(str);
+    }
+  };
+
+  add(periodKeyOrMonthKey);
+
+  const normDue = monthlyDue ? normalizeMonthlyDue(monthlyDue) : undefined;
+  if (normDue) {
+    add(normDue.periodKey);
+    add(normDue.monthKey);
+    add(normDue.id);
+    add(normDue.monthName);
+    add((normDue as any).key);
+  }
+
+  let calMonth: number | null = null;
+  let year: number | null = normDue?.year || null;
+
+  const rawKey = (periodKeyOrMonthKey || '').toUpperCase().trim();
+  const ymMatch = rawKey.match(/^(\d{4})-(\d{1,2})$/);
+  if (ymMatch) {
+    year = year || parseInt(ymMatch[1], 10);
+    calMonth = parseInt(ymMatch[2], 10);
+  } else {
+    calMonth = getMonthNumberFromNameOrKey(normDue?.monthKey || normDue?.monthName || rawKey || '');
+  }
+
+  if (calMonth !== null && calMonth >= 1 && calMonth <= 12) {
+    const fullNames = [
+      'JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE',
+      'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER'
+    ];
+    const mandalKeys = [
+      'JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN',
+      'JUL', 'AUG', 'SEPT', 'OCT', 'NOV', 'DEC'
+    ];
+    const short3Keys = [
+      'JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN',
+      'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'
+    ];
+
+    const fullName = fullNames[calMonth - 1];
+    const mandalKey = mandalKeys[calMonth - 1];
+    const short3 = short3Keys[calMonth - 1];
+
+    add(fullName);
+    add(mandalKey);
+    add(short3);
+    add(`MONTH_${calMonth}`);
+
+    if (year) {
+      const yy = String(year).slice(-2);
+      const mm = String(calMonth).padStart(2, '0');
+      add(`${year}-${mm}`);
+      add(`${year}-${calMonth}`);
+      add(`${year}_${mm}`);
+      add(`${year}_${calMonth}`);
+      add(`${mandalKey}-${year}`);
+      add(`${mandalKey} ${year}`);
+      add(`${mandalKey}'${yy}`);
+      add(`${mandalKey} ${yy}`);
+      add(`${short3}-${year}`);
+      add(`${short3} ${year}`);
+      add(`${short3}'${yy}`);
+      add(`${short3} ${yy}`);
+      add(`${fullName}-${year}`);
+      add(`${fullName} ${year}`);
+      add(`${fullName}'${yy}`);
+      add(`${fullName} ${yy}`);
+      add(`${yy}-${mm}`);
+      add(`${yy}-${calMonth}`);
+    }
+  }
+
+  return Array.from(aliases);
+};
+
+export const isMonthMatching = (
+  target: { periodKeyOrMonthKey: string; due?: MonthlyDue },
+  item: string
+): boolean => {
+  if (!item) return false;
+  const uItem = item.trim().toUpperCase();
+  if (uItem === 'ALL') return true;
+
+  const aliases = getPeriodMatchingAliases(target.periodKeyOrMonthKey, target.due);
+  if (aliases.includes(uItem)) return true;
+
+  const itemYearMatch = uItem.match(/^(\d{4})[-_](\d{1,2})$/);
+  const targetYear = target.due?.year;
+  const targetMonth = getMonthNumberFromNameOrKey(target.due?.monthKey || target.due?.monthName || target.periodKeyOrMonthKey);
+
+  if (itemYearMatch) {
+    const itemYear = parseInt(itemYearMatch[1], 10);
+    const itemMonth = parseInt(itemYearMatch[2], 10);
+    if (targetYear && targetMonth) {
+      return itemYear === targetYear && itemMonth === targetMonth;
+    }
+  }
+
+  const itemNamedYearMatch = uItem.match(/^([A-Z]+)[-\s']+(\d{2,4})$/);
+  if (itemNamedYearMatch) {
+    const itemMonthName = itemNamedYearMatch[1];
+    let itemYear = parseInt(itemNamedYearMatch[2], 10);
+    if (itemYear < 100) itemYear += 2000;
+    const itemCalMonth = getMonthNumberFromNameOrKey(itemMonthName);
+    if (itemCalMonth && targetYear && targetMonth) {
+      return itemYear === targetYear && itemCalMonth === targetMonth;
+    }
+  }
+
+  const itemCalMonthOnly = getMonthNumberFromNameOrKey(uItem);
+  if (itemCalMonthOnly !== null && targetMonth !== null) {
+    return itemCalMonthOnly === targetMonth;
+  }
+
+  return false;
+};
+
+/**
  * ==========================================
  * EFFECTIVE BLOCK RESOLVER
  * ==========================================
@@ -111,16 +278,11 @@ export const resolveEffectivePeriodStatus = (
   globalBlockedMonths: string[] = [],
   memberExemptPeriods: string[] = []
 ): EffectivePeriodStatus => {
-  const normalizedKey = (periodKeyOrMonthKey || '').toUpperCase().trim();
   const normalizedDue = monthlyDue ? normalizeMonthlyDue(monthlyDue) : undefined;
-  const canonicalPeriodKey = normalizedDue?.periodKey || periodKeyOrMonthKey;
-  const legacyKey = normalizedDue?.monthKey || periodKeyOrMonthKey;
+  const target = { periodKeyOrMonthKey, due: normalizedDue };
 
   // 1. Check Global Block
-  const isGloballyBlocked = globalBlockedMonths.some(gm => {
-    const ugm = gm.toUpperCase().trim();
-    return ugm === normalizedKey || ugm === canonicalPeriodKey.toUpperCase() || (legacyKey && ugm === legacyKey.toUpperCase());
-  });
+  const isGloballyBlocked = globalBlockedMonths.some(gm => isMonthMatching(target, gm));
 
   if (isGloballyBlocked) {
     return {
@@ -142,10 +304,7 @@ export const resolveEffectivePeriodStatus = (
   }
 
   // 3. Check Member Exemption
-  const isMemberExempt = memberExemptPeriods.some(em => {
-    const uem = em.toUpperCase().trim();
-    return uem === 'ALL' || uem === normalizedKey || uem === canonicalPeriodKey.toUpperCase() || (legacyKey && uem === legacyKey.toUpperCase());
-  });
+  const isMemberExempt = memberExemptPeriods.some(em => isMonthMatching(target, em));
 
   if (isMemberExempt) {
     return {

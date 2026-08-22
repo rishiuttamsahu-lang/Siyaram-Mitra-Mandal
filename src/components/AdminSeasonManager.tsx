@@ -34,7 +34,9 @@ import {
   cleanupDuplicateSeasons,
   formatPeriodKey,
   CALENDAR_MONTH_NAMES,
-  MANDAL_MONTHS
+  MANDAL_MONTHS,
+  isMonthMatching,
+  getPeriodMatchingAliases
 } from '@/lib/seasonService';
 import { db } from '@/lib/firebase';
 import { doc, setDoc, onSnapshot } from 'firebase/firestore';
